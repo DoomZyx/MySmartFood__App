@@ -16,6 +16,7 @@ export class TranscriptionHandler {
   constructor(streamSid, callLogger) {
     this.streamSid = streamSid;
     this.callLogger = callLogger;
+    this.processed = false;
   }
 
   setStreamSid(streamSid) {
@@ -27,6 +28,8 @@ export class TranscriptionHandler {
    * @param {string} transcription - Transcription de l'appel
    */
   async process(transcription) {
+    if (this.processed) return;
+    this.processed = true;
     const startTime = Date.now();
 
     try {

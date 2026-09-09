@@ -1,155 +1,118 @@
 /**
- * Service d'alertes pour erreurs critiques
- * Détecte les problèmes et envoie des alertes (email, Slack, webhook)
+ * Alertes critiques : seuils sur extraction, circuit breaker, échecs consécutifs.
+ * Canal actuel : logs structurés + tampon mémoire (pas d'email / Slack).
  */
 
 import { getAllMetrics, getErrorRates } from "../monitoring/extractionMetrics.js";
 import { callLogger } from "../logging/logger.js";
 import circuitBreaker from "../gptServices/circuitBreaker.js";
 
-/**
- * Configuration des seuils d'alerte
- */
 const ALERT_THRESHOLDS = {
-  errorRate: 5.0, // % d'erreur maximum acceptable
-  consecutiveFailures: 10, // Nombre d'échecs consécutifs
-  circuitBreakerOpen: true, // Alerter si circuit breaker ouvert
+  errorRate: 5.0,
+  consecutiveFailures: 10,
 };
 
-/**
- * Cooldown pour éviter spam d'alertes (en ms)
- */
-const ALERT_COOLDOWN = {
-  errorRate: 300000, // 5 minutes
-  circuitBreaker: 600000, // 10 minutes
-  consecutiveFailures: 300000, // 5 minutes
+const ALERT_COOLDOWN_MS = {
+  errorRate: 300000,
+  circuitBreaker: 600000,
+  consecutiveFailures: 300000,
 };
 
-// Timestamps des dernières alertes
-const lastAlerts = {
+const MAX_RECENT_ALERTS = 50;
+
+const lastAlertsAt = {
   errorRate: 0,
   circuitBreaker: 0,
   consecutiveFailures: 0,
 };
 
-/**
- * Vérifie si une alerte peut être envoyée (cooldown)
- * @param {string} alertType - Type d'alerte
- * @returns {boolean} - True si alerte peut être envoyée
- */
+const recentAlerts = [];
+let monitoringInterval = null;
+
 function canSendAlert(alertType) {
   const now = Date.now();
-  const lastAlert = lastAlerts[alertType] || 0;
-  const cooldown = ALERT_COOLDOWN[alertType] || 300000;
-
+  const lastAlert = lastAlertsAt[alertType] || 0;
+  const cooldown = ALERT_COOLDOWN_MS[alertType] || 300000;
   if (now - lastAlert < cooldown) {
     return false;
   }
-
-  lastAlerts[alertType] = now;
+  lastAlertsAt[alertType] = now;
   return true;
 }
 
-/**
- * Envoie une alerte (pour l'instant, logging uniquement)
- * En production, intégrer email/Slack/webhook
- * @param {string} type - Type d'alerte
- * @param {string} message - Message d'alerte
- * @param {Object} details - Détails supplémentaires
- */
+function pushRecentAlert(entry) {
+  recentAlerts.unshift(entry);
+  if (recentAlerts.length > MAX_RECENT_ALERTS) {
+    recentAlerts.length = MAX_RECENT_ALERTS;
+  }
+}
+
 async function sendAlert(type, message, details = {}) {
-  // Logging de l'alerte
+  const entry = {
+    type,
+    message,
+    details,
+    timestamp: new Date().toISOString(),
+  };
+
+  pushRecentAlert(entry);
+
   callLogger.error("SYSTEM", new Error(`ALERTE: ${message}`), {
     source: "alertService",
     alertType: type,
     ...details,
     event: "critical_alert",
   });
-
-  // TODO: En production, ajouter :
-  // - Envoi email via nodemailer
-  // - Envoi Slack via webhook
-  // - Envoi webhook personnalisé
-  // - Notification dans dashboard
-
-  console.error(`🚨 ALERTE [${type}]: ${message}`, details);
 }
 
-/**
- * Vérifie le taux d'erreur et envoie une alerte si nécessaire
- */
 export async function checkErrorRate() {
   const rates = getErrorRates();
-  const errorRate = parseFloat(rates.successRate.replace('%', ''));
+  if (rates.totalCalls === 0) return;
 
-  // Calculer taux d'erreur (100 - taux de succès)
-  const actualErrorRate = 100 - errorRate;
-
-  if (actualErrorRate > ALERT_THRESHOLDS.errorRate) {
-    if (canSendAlert('errorRate')) {
-      await sendAlert(
-        'errorRate',
-        `Taux d'erreur élevé: ${actualErrorRate.toFixed(2)}% (seuil: ${ALERT_THRESHOLDS.errorRate}%)`,
-        {
-          errorRate: actualErrorRate,
-          threshold: ALERT_THRESHOLDS.errorRate,
-          metrics: rates,
-        }
-      );
-    }
+  if (rates.errorRate > ALERT_THRESHOLDS.errorRate && canSendAlert("errorRate")) {
+    await sendAlert(
+      "errorRate",
+      `Taux d'erreur eleve: ${rates.errorRate}% (seuil: ${ALERT_THRESHOLDS.errorRate}%)`,
+      {
+        errorRate: rates.errorRate,
+        threshold: ALERT_THRESHOLDS.errorRate,
+        metrics: rates,
+      }
+    );
   }
 }
 
-/**
- * Vérifie l'état du circuit breaker et envoie une alerte si ouvert
- */
 export async function checkCircuitBreaker() {
   const state = circuitBreaker.getState();
-
-  if (state.state === 'OPEN') {
-    if (canSendAlert('circuitBreaker')) {
-      await sendAlert(
-        'circuitBreaker',
-        'Circuit breaker ouvert - OpenAI semble indisponible',
-        {
-          circuitState: state,
-          failures: state.failures,
-          nextAttempt: state.nextAttempt,
-        }
-      );
-    }
+  if (state.state === "OPEN" && canSendAlert("circuitBreaker")) {
+    await sendAlert(
+      "circuitBreaker",
+      "Circuit breaker ouvert - OpenAI semble indisponible",
+      {
+        circuitState: state,
+        failures: state.failures,
+        nextAttempt: state.nextAttempt,
+      }
+    );
   }
 }
 
-/**
- * Vérifie les échecs consécutifs et envoie une alerte si nécessaire
- */
 export async function checkConsecutiveFailures() {
   const metrics = getAllMetrics();
-  const totalCalls = metrics.totalCalls || 0;
-  const successfulExtractions = metrics.successfulExtractions || 0;
-  const failures = totalCalls - successfulExtractions;
-
-  // Si beaucoup plus d'échecs que de succès récents
-  if (failures > ALERT_THRESHOLDS.consecutiveFailures && totalCalls > 0) {
-    if (canSendAlert('consecutiveFailures')) {
-      await sendAlert(
-        'consecutiveFailures',
-        `Nombre élevé d'échecs consécutifs: ${failures} sur ${totalCalls} appels`,
-        {
-          failures,
-          totalCalls,
-          successRate: ((successfulExtractions / totalCalls) * 100).toFixed(2) + '%',
-        }
-      );
-    }
+  const failures = metrics.consecutiveFailures || 0;
+  if (failures > ALERT_THRESHOLDS.consecutiveFailures && canSendAlert("consecutiveFailures")) {
+    await sendAlert(
+      "consecutiveFailures",
+      `Nombre eleve d'echecs consecutifs: ${failures}`,
+      {
+        failures,
+        totalCalls: metrics.totalCalls,
+        successRate: metrics.rates?.successRate,
+      }
+    );
   }
 }
 
-/**
- * Vérifie toutes les conditions d'alerte
- * À appeler périodiquement (ex: toutes les minutes)
- */
 export async function checkAllAlerts() {
   try {
     await Promise.all([
@@ -165,25 +128,41 @@ export async function checkAllAlerts() {
   }
 }
 
-/**
- * Démarre le monitoring périodique des alertes
- * @param {number} interval - Intervalle en ms (défaut: 60000 = 1 minute)
- */
 export function startAlertMonitoring(interval = 60000) {
-  // Vérifier immédiatement
-  checkAllAlerts();
+  if (monitoringInterval) return;
 
-  // Puis vérifier périodiquement
-  setInterval(() => {
+  checkAllAlerts();
+  monitoringInterval = setInterval(() => {
     checkAllAlerts();
   }, interval);
+  if (typeof monitoringInterval.unref === "function") {
+    monitoringInterval.unref();
+  }
 
-  callLogger.info("SYSTEM", "Monitoring d'alertes démarré", {
+  callLogger.info("SYSTEM", "Monitoring d'alertes demarre", {
     interval: `${interval}ms`,
     event: "alert_monitoring_started",
   });
 }
 
+export function stopAlertMonitoring() {
+  if (!monitoringInterval) return;
+  clearInterval(monitoringInterval);
+  monitoringInterval = null;
+}
 
+export function isAlertMonitoringActive() {
+  return monitoringInterval != null;
+}
 
+export function getRecentAlerts(limit = 20) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), MAX_RECENT_ALERTS);
+  return recentAlerts.slice(0, safeLimit);
+}
 
+export function resetAlertState() {
+  lastAlertsAt.errorRate = 0;
+  lastAlertsAt.circuitBreaker = 0;
+  lastAlertsAt.consecutiveFailures = 0;
+  recentAlerts.length = 0;
+}

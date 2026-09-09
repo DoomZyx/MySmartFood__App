@@ -1,4 +1,5 @@
 import OrderModel from "../models/order.js";
+import { OrderService } from "../Business/services/OrderService.js";
 import logger from "../Services/logging/logger.js";
 
 const DEFAULT_INSTANCE_ID = "inst_default";
@@ -453,6 +454,20 @@ export async function createOrderFromAI(request, reply) {
     }
 
     const instanceId = getInstanceId(request);
+    const existing = await OrderService.findRecentOrder({
+      instanceId,
+      telephone: rawPhone,
+      date: orderDate,
+      heure: heureNormalized,
+    });
+    if (existing) {
+      return reply.code(200).send({
+        success: true,
+        data: existing,
+        message: "Commande déjà créée",
+      });
+    }
+
     const orderToCreate = {
       instanceId,
       nom: (orderData.name || "Client").trim() || null,

@@ -1,10 +1,61 @@
 import OrderModel from "../../models/order.js";
 import ReservationModel from "../../models/reservation.js";
 
+const RECENT_DUPLICATE_WINDOW_MS = 30 * 60 * 1000;
+
 /**
  * Service de gestion des commandes et réservations
  */
 export class OrderService {
+  static digitsOnly(phone) {
+    if (phone == null || phone === "") return "";
+    return String(phone).replace(/\D/g, "");
+  }
+
+  static dayRange(date) {
+    const startDate = new Date(date);
+    if (isNaN(startDate.getTime())) return null;
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 1);
+    return { startDate, endDate };
+  }
+
+  /**
+   * Evite un doublon systeme (tool live + process-call, ou tool relance).
+   */
+  static async findRecentReservation({ instanceId, telephone, date, heure }) {
+    const phone = this.digitsOnly(telephone);
+    const range = this.dayRange(date);
+    if (!phone || phone.length < 10 || !heure || !range) return null;
+    const since = new Date(Date.now() - RECENT_DUPLICATE_WINDOW_MS);
+    const candidates = await ReservationModel.find({
+      instanceId: instanceId || "inst_default",
+      date: { $gte: range.startDate, $lt: range.endDate },
+      heure,
+      createdBy: "system",
+      statut: { $nin: ["annule"] },
+      createdAt: { $gte: since },
+    }).sort({ createdAt: -1 }).limit(20);
+    return candidates.find((row) => this.digitsOnly(row.telephone) === phone) || null;
+  }
+
+  static async findRecentOrder({ instanceId, telephone, date, heure }) {
+    const phone = this.digitsOnly(telephone);
+    const range = this.dayRange(date);
+    if (!phone || phone.length < 10 || !heure || !range) return null;
+    const since = new Date(Date.now() - RECENT_DUPLICATE_WINDOW_MS);
+    const candidates = await OrderModel.find({
+      instanceId: instanceId || "inst_default",
+      date: { $gte: range.startDate, $lt: range.endDate },
+      heure,
+      createdBy: "system",
+      statut: { $nin: ["annule"] },
+      createdAt: { $gte: since },
+    }).sort({ createdAt: -1 }).limit(20);
+    return candidates.find((row) => this.digitsOnly(row.telephone) === phone) || null;
+  }
+
   /**
    * Crée une réservation depuis les données extraites (structure modèle Reservation)
    * @param {Object} reservationData - Données réservation (nom, telephone, date, heure, description, nombrePersonnes, etc.)
@@ -18,6 +69,13 @@ export class OrderService {
       reservationData.date,
       reservationData.heure
     );
+    const existing = await this.findRecentReservation({
+      instanceId: id,
+      telephone: reservationData.telephone,
+      date: orderDate,
+      heure: orderHeure,
+    });
+    if (existing) return existing;
     const created = await ReservationModel.create({
       instanceId: id,
       nom: reservationData.nom || "Client inconnu",
@@ -47,6 +105,13 @@ export class OrderService {
       orderData.date,
       orderData.heure
     );
+    const existing = await this.findRecentOrder({
+      instanceId: id,
+      telephone: telephone || orderData.telephone,
+      date: orderDate,
+      heure: orderHeure,
+    });
+    if (existing) return existing;
     const createdOrder = await OrderModel.create({
       instanceId: id,
       nom: !client ? (nom || orderData.nom || "Client Inconnu") : null,

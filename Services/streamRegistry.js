@@ -25,6 +25,10 @@ export function getCallSid(streamSid) {
   return entry ? entry.callSid : null;
 }
 
+export function getActiveStreamCount() {
+  return activeStreams.size;
+}
+
 export function stopStream(streamSid, reason = "Stopped by API") {
   const entry = activeStreams.get(streamSid);
   if (!entry) return false;
@@ -43,6 +47,7 @@ export default {
   unregisterStream,
   stopStream,
   getCallSid,
+  getActiveStreamCount,
 };
 
 

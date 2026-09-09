@@ -25,6 +25,16 @@ export class FunctionCallHandler {
    */
   async handleFunctionCallCompleted(data) {
     try {
+      if (!this.state.handledFunctionCallIds) {
+        this.state.handledFunctionCallIds = new Set();
+      }
+      if (data.call_id && this.state.handledFunctionCallIds.has(data.call_id)) {
+        return;
+      }
+      if (data.call_id) {
+        this.state.handledFunctionCallIds.add(data.call_id);
+      }
+
       // Log brut de la payload JSON envoyée par le modèle
       this.callLogger.info(this.streamSid, "Function call completed (raw payload)", {
         name: data.name,

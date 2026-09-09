@@ -1,9 +1,10 @@
 /**
- * Service de métriques pour le monitoring du pipeline STT + extraction
- * Suit les taux d'erreur et les performances
+ * Métriques in-memory du pipeline STT + extraction GPT.
+ * Perdues au redémarrage ; suffisantes pour un process unique.
  */
 
-// Compteurs en mémoire (en production, utiliser Redis ou une base de données)
+const startedAt = Date.now();
+
 const metrics = {
   totalCalls: 0,
   sttErrors: 0,
@@ -13,89 +14,83 @@ const metrics = {
   successfulExtractions: 0,
 };
 
-/**
- * Enregistre une métrique
- * @param {string} metricName - Nom de la métrique
- * @param {number} value - Valeur à ajouter (défaut: 1)
- */
-export function recordMetric(metricName, value = 1) {
-  if (metrics.hasOwnProperty(metricName)) {
+let consecutiveFailures = 0;
+
+function increment(metricName, value = 1) {
+  if (Object.prototype.hasOwnProperty.call(metrics, metricName)) {
     metrics[metricName] += value;
   }
 }
 
-/**
- * Enregistre une erreur STT
- */
+/** @deprecated préférer les helpers typés */
+export function recordMetric(metricName, value = 1) {
+  increment(metricName, value);
+}
+
 export function recordSTTError() {
-  recordMetric("sttErrors");
-  recordMetric("totalCalls");
+  increment("sttErrors");
+  increment("totalCalls");
+  consecutiveFailures += 1;
 }
 
-/**
- * Enregistre une erreur de parsing JSON
- */
 export function recordParsingError() {
-  recordMetric("parsingErrors");
-  recordMetric("totalCalls");
+  increment("parsingErrors");
+  increment("totalCalls");
+  consecutiveFailures += 1;
 }
 
-/**
- * Enregistre un numéro de téléphone invalide
- */
 export function recordInvalidPhone() {
-  recordMetric("invalidPhones");
+  increment("invalidPhones");
 }
 
-/**
- * Enregistre une heure invalide
- */
 export function recordInvalidTime() {
-  recordMetric("invalidTimes");
+  increment("invalidTimes");
 }
 
-/**
- * Enregistre une extraction réussie
- */
 export function recordSuccessfulExtraction() {
-  recordMetric("successfulExtractions");
-  recordMetric("totalCalls");
+  increment("successfulExtractions");
+  increment("totalCalls");
+  consecutiveFailures = 0;
 }
 
-/**
- * Calcule les taux d'erreur
- * @returns {Object} - Taux d'erreur calculés
- */
+function rate(part, total) {
+  if (!total) return 0;
+  return Number(((part / total) * 100).toFixed(2));
+}
+
 export function getErrorRates() {
-  const total = metrics.totalCalls || 1; // Éviter division par zéro
+  const total = metrics.totalCalls;
+  const failures = metrics.sttErrors + metrics.parsingErrors;
 
   return {
-    sttErrorRate: ((metrics.sttErrors / total) * 100).toFixed(2) + "%",
-    parsingErrorRate: ((metrics.parsingErrors / total) * 100).toFixed(2) + "%",
-    invalidPhoneRate: ((metrics.invalidPhones / total) * 100).toFixed(2) + "%",
-    invalidTimeRate: ((metrics.invalidTimes / total) * 100).toFixed(2) + "%",
-    successRate: ((metrics.successfulExtractions / total) * 100).toFixed(2) + "%",
-    totalCalls: metrics.totalCalls,
+    sttErrorRate: rate(metrics.sttErrors, total),
+    parsingErrorRate: rate(metrics.parsingErrors, total),
+    invalidPhoneRate: rate(metrics.invalidPhones, total),
+    invalidTimeRate: rate(metrics.invalidTimes, total),
+    successRate: rate(metrics.successfulExtractions, total),
+    errorRate: rate(failures, total),
+    totalCalls: total,
+    consecutiveFailures,
+    collectedSince: new Date(startedAt).toISOString(),
   };
 }
 
-/**
- * Récupère toutes les métriques brutes
- * @returns {Object} - Toutes les métriques
- */
 export function getAllMetrics() {
   return {
     ...metrics,
+    consecutiveFailures,
+    collectedSince: new Date(startedAt).toISOString(),
     rates: getErrorRates(),
   };
 }
 
-/**
- * Réinitialise les métriques (utile pour les tests)
- */
+export function getConsecutiveFailures() {
+  return consecutiveFailures;
+}
+
 export function resetMetrics() {
   Object.keys(metrics).forEach((key) => {
     metrics[key] = 0;
   });
+  consecutiveFailures = 0;
 }
-

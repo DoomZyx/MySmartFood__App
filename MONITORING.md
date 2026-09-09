@@ -1,122 +1,64 @@
-# 📊 Guide de Monitoring - HandleHome
+# Monitoring backend
 
-## 🚀 Système de Logs Avancé
+Observabilite du process Node : logs stdout, sondes publiques, snapshot admin, alertes en memoire.
 
-Votre application dispose maintenant d'un système de monitoring professionnel avec Winston.
+## Sondes publiques (sans auth)
 
-### 📁 Structure des Logs
+| Endpoint | Role | Codes |
+|---|---|---|
+| `GET /api/ping` | Process vivant + uptime | 200 |
+| `GET /api/health` | Readiness MongoDB | 200 / 503 |
+| `GET /api/status` | Runtime (env, uptime, heap, rss, etat DB) | 200 |
 
-```
-Backend/
-├── logs/
-│   ├── combined.log    # Tous les logs
-│   └── error.log       # Erreurs uniquement
-└── scripts/
-    └── monitor.js      # Script de monitoring
-```
+`/api/status` reste 200 si MongoDB est down (le champ `db` le signale). `/api/health` renvoie 503.
 
-### 🎯 Types de Logs
+## Snapshot admin (JWT admin)
 
-#### 📞 Logs d'Appels
-- **Début d'appel** : `📞 Appel démarré`
-- **Transcription** : `🎤 Transcription reçue`
-- **Extraction GPT-4** : `🔍 Extraction GPT-4 démarrée`
-- **Sauvegarde API** : `🌐 Appel API démarré`
-- **Succès** : `✅ Appel terminé avec succès`
+| Endpoint | Role |
+|---|---|
+| `GET /api/monitoring` | Etat global : process, HTTP, extraction, circuit breaker, streams, queue, alertes |
+| `GET /api/monitoring/metrics` | Compteurs HTTP + extraction + circuit breaker |
+| `GET /api/monitoring/alerts` | Dernieres alertes (`?limit=1-50`) |
 
-#### ⏱️ Métriques de Performance
-- Durée d'extraction GPT-4
-- Durée d'appel API
-- Durée totale de traitement
+Header : `Authorization: Bearer <token>`.
 
-#### ❌ Gestion d'Erreurs
-- Erreurs de parsing JSON
-- Erreurs d'API
-- Erreurs WebSocket
-- Erreurs de validation
+Les metriques HTTP, extraction et alertes sont **in-memory** : elles se reinitialisent au redemarrage.
 
-### 🛠️ Utilisation
+## Signaux collectes
 
-#### 1. Lancer le serveur
+- Process : uptime, pid, heap, rss, lag event-loop
+- HTTP : volume, 2xx/4xx/5xx, latence avg/p95/max (hors sondes `/ping` `/health` `/status`)
+- Extraction GPT : succes, erreurs STT/parsing, telephones/heures invalides, echecs consecutifs
+- OpenAI : etat du circuit breaker
+- Runtime : streams media actifs, sockets notifications, taille de la queue transcription
+- Persistance : extractions en echec sur 24 h (MongoDB)
+
+## Alertes
+
+`startAlertMonitoring()` tourne au demarrage (`server.js`), toutes les 60 s :
+
+- taux d'erreur extraction > 5 %
+- circuit breaker OPEN
+- plus de 10 echecs d'extraction consecutifs
+
+Canal actuel : logs structures + tampon des 50 dernieres alertes. Pas d'email / Slack.
+
+## CLI local
+
 ```bash
-cd Backend
-pnpm run dev
-```
-
-#### 2. Lancer le monitoring (nouveau terminal)
-```bash
-cd Backend
+cd backend
 pnpm run monitor
 ```
 
-#### 3. Tester un appel
-Appelez votre numéro Twilio et observez les logs en temps réel !
+Interroge `/api/health` et `/api/status` toutes les 5 s (`MONITOR_HOST`, `MONITOR_INTERVAL_MS` optionnels).
 
-### 📊 Exemple de Logs
+## Logs
 
-```
-2024-01-15 10:30:15 📞 [INFO] 📞 Appel démarré
-  📞 StreamSid: MS1234567890abcdef
-  🎯 Événement: call_started
+Stdout/stderr uniquement (`Services/logging/logger.js`). Les secrets sont masques. Plus de fichiers Winston.
 
-2024-01-15 10:30:20 🎤 [INFO] 🎤 Transcription reçue
-  📞 StreamSid: MS1234567890abcdef
-  🎯 Événement: transcription_received
+## Hors scope actuel
 
-2024-01-15 10:30:25 🔍 [INFO] 🔍 Extraction GPT-4 démarrée
-  📞 StreamSid: MS1234567890abcdef
-  🎯 Événement: extraction_started
-
-2024-01-15 10:30:30 ✅ [INFO] ✅ Extraction GPT-4 terminée
-  📞 StreamSid: MS1234567890abcdef
-  🎯 Événement: extraction_completed
-
-2024-01-15 10:30:35 🌐 [INFO] 🌐 Appel API démarré
-  📞 StreamSid: MS1234567890abcdef
-  🎯 Événement: api_call_started
-
-2024-01-15 10:30:40 ✅ [INFO] ✅ Appel API terminé
-  📞 StreamSid: MS1234567890abcdef
-  🎯 Événement: api_call_completed
-
-2024-01-15 10:30:45 ⏱️ [INFO] ⏱️ Performance
-  📞 StreamSid: MS1234567890abcdef
-  ⏱️ Durée: 5000ms
-
-2024-01-15 10:30:50 🎉 [INFO] 🎉 Appel terminé avec succès
-  📞 StreamSid: MS1234567890abcdef
-  ⏱️ Durée: 35000ms
-```
-
-### 🔍 Surveillance des Erreurs
-
-Les erreurs sont automatiquement :
-- ✅ Affichées en rouge dans la console
-- ✅ Sauvegardées dans `logs/error.log`
-- ✅ Incluent le contexte et la stack trace
-
-### 📈 Métriques Disponibles
-
-- **Temps de réponse** : Extraction GPT-4 + API
-- **Taux de succès** : Appels traités vs erreurs
-- **Performance** : Durée par étape
-- **Erreurs** : Types et fréquences
-
-### 🎯 Avantages
-
-1. **Monitoring en temps réel** : Voir les appels en direct
-2. **Debugging facile** : Logs structurés avec contexte
-3. **Performance tracking** : Métriques détaillées
-4. **Alertes automatiques** : Erreurs visibles immédiatement
-5. **Historique complet** : Logs persistants
-
-### 🚀 Pour votre prototype
-
-Ce système vous permet de :
-- ✅ Voir si les appels fonctionnent
-- ✅ Identifier les erreurs rapidement
-- ✅ Mesurer les performances
-- ✅ Déboguer facilement
-- ✅ Impressionner lors de la présentation !
-
-**Votre prototype est maintenant équipé d'un monitoring professionnel !** 🎉 
+- CallMonitor / quota minutes : modele et routes existent, le cycle de vie appel n'est pas cable ici
+- Routes orphelines `Routes/Auth/stats.js` et `maintenance.js` : non enregistrees, chiffres simules
+- Gateway (`gateway.js`) : process separe, pas de healthcheck
+- Prometheus / Sentry / Grafana : non integres

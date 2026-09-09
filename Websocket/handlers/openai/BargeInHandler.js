@@ -268,13 +268,20 @@ export class BargeInHandler {
     // GESTION MANUELLE : Créer la réponse manuellement après committed
     if (this.openAiWs && this.openAiWs.readyState === 1) {
       try {
-        if (this.speedManager) {
-          await this.speedManager.updateSpeedForContext();
+        const now = Date.now();
+        const lastCreate = this.state._lastManualResponseCreateAt || 0;
+        if (now - lastCreate < 1000) {
+          this.callLogger.debug(this.streamSid, "response.create ignore (debounce VAD)");
+        } else {
+          if (this.speedManager) {
+            await this.speedManager.updateSpeedForContext();
+          }
+          this.state._lastManualResponseCreateAt = Date.now();
+          this.openAiWs.send(JSON.stringify({
+            type: "response.create"
+          }));
+          this.callLogger.debug(this.streamSid, "Réponse créée manuellement après committed");
         }
-        this.openAiWs.send(JSON.stringify({
-          type: "response.create"
-        }));
-        this.callLogger.debug(this.streamSid, "Réponse créée manuellement après committed");
       } catch (error) {
         this.callLogger.error(this.streamSid, error, {
           context: "manual_response_create"

@@ -23,9 +23,15 @@ import pricingRoutes from "./Routes/Pricing/pricing.js";
 import phoneLineRoutes from "./Routes/PhoneLine/phoneLine.js";
 import callMinutesRoutes from "./Routes/CallMinutes/callMinutes.js";
 import pingRoutes from "./Routes/Ping/ping.js";
+import monitoringRoutes from "./Routes/Monitoring/monitoring.js";
 import { multiTenantAuth } from "./API/middleware/multiTenantAuth.js";
 import { AuthService } from "./Business/services/AuthService.js";
 import mongoose from "mongoose";
+import {
+  beginHttpRequest,
+  isProbePath,
+  recordHttpRequest,
+} from "./Services/monitoring/httpMetrics.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,6 +64,22 @@ await AuthService.createDefaultAdmin();
 
 
 const fastify = Fastify();
+
+fastify.addHook("onRequest", async (request) => {
+  request._monitorStartedAt = Date.now();
+  beginHttpRequest();
+});
+
+fastify.addHook("onResponse", async (request, reply) => {
+  const startedAt = request._monitorStartedAt;
+  const url = request.raw?.url || request.url || "";
+  recordHttpRequest({
+    statusCode: reply.statusCode,
+    durationMs: startedAt != null ? Date.now() - startedAt : 0,
+    path: url,
+    isProbe: isProbePath(url),
+  });
+});
 
 /**
  * CORS : avec credentials: true, il faut renvoyer l'origine exacte (pas *).
@@ -195,6 +217,7 @@ fastify.register(notificationRoutes);
 
 // Routes ping publiques (pour maintenir le backend actif)
 fastify.register(pingRoutes, { prefix: "/api" });
+fastify.register(monitoringRoutes, { prefix: "/api/monitoring" });
 
 // Routes orders et réservations (système custom)
 fastify.register(orderRoutes, { prefix: "/api" });

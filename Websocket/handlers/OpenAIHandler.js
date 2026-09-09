@@ -70,11 +70,11 @@ export class OpenAIHandler {
         this.responseHandler.handleResponseCancelled();
         break;
 
-      case "response.audio.delta":
+      case "response.output_audio.delta":
         this.audioHandler.handleAudioDelta(data);
         break;
 
-      case "response.audio.done":
+      case "response.output_audio.done":
         this.responseHandler.handleAudioDone();
         break;
 
@@ -86,16 +86,12 @@ export class OpenAIHandler {
         this.bargeInHandler.handleConversationTruncated(data);
         break;
 
-      case "response.audio_transcript.delta":
+      case "response.output_audio_transcript.delta":
         this.transcriptionHandler.handleAudioTranscriptDelta(data);
         break;
 
-      case "response.text.delta":
+      case "response.output_text.delta":
         this.transcriptionHandler.handleTextDelta(data);
-        break;
-
-      case "response.text.completed":
-        this.transcriptionHandler.handleTextCompleted();
         break;
 
       case "input_audio_buffer.speech_started":

@@ -1,4 +1,5 @@
 import ReservationModel from "../models/reservation.js";
+import { OrderService } from "../Business/services/OrderService.js";
 import logger from "../Services/logging/logger.js";
 
 const DEFAULT_INSTANCE_ID = "inst_default";
@@ -413,6 +414,20 @@ export async function createReservationFromAI(request, reply) {
         : parseInt(data.nombrePersonnes, 10) || 1;
 
     const instanceId = getInstanceId(request);
+    const existing = await OrderService.findRecentReservation({
+      instanceId,
+      telephone: rawPhone,
+      date: reservationDate,
+      heure: heureNormalized,
+    });
+    if (existing) {
+      return reply.code(200).send({
+        success: true,
+        data: existing,
+        message: "Réservation déjà créée",
+      });
+    }
+
     // Vérification capacité (max couverts) : toujours appliquée si maxCouverts configuré
     const PricingModel = (await import("../models/pricing.js")).default;
     const pricing = await PricingModel.findOne({ instanceId });

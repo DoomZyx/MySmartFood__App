@@ -34,7 +34,7 @@ export class SessionHandler {
         type: "response.create",
         response: {
           instructions: greetingInstruction,
-          modalities: ["audio", "text"]
+          output_modalities: ["audio"]
         }
       }));
     }

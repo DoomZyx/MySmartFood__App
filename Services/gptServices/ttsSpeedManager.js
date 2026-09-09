@@ -59,7 +59,12 @@ export class TTSSpeedManager {
       const sessionUpdate = {
         type: 'session.update',
         session: {
-          speed: targetSpeed
+          type: 'realtime',
+          audio: {
+            output: {
+              speed: targetSpeed
+            }
+          }
         }
       };
 

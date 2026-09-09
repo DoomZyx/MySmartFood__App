@@ -37,8 +37,7 @@ export async function getVoiceRuntimeConfig(instanceId) {
     gptPricing,
   );
   const voice = process.env.OPENAI_VOICE?.trim() || "ballad";
-  const model =
-    process.env.OPENAI_MODEL?.trim() || "gpt-realtime-mini-2025-12-15";
+  const model = process.env.OPENAI_MODEL?.trim() || "gpt-realtime-1.5";
   const apiKey = process.env.OPENAI_API_KEY;
   const sessionUpdatePayload = {
     type: "session.update",

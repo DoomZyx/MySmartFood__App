@@ -10,6 +10,7 @@
   ],
   "tags": [
     { "name": "Santé", "description": "Vérifications de disponibilité" },
+    { "name": "Monitoring", "description": "Observabilité admin (JWT)" },
     { "name": "Auth", "description": "Authentification utilisateurs" }
   ],
   "components": {
@@ -69,6 +70,7 @@
             "properties": {
               "used": { "type": "integer" },
               "total": { "type": "integer" },
+              "rss": { "type": "integer" },
               "unit": { "type": "string" }
             }
           }
@@ -129,6 +131,95 @@
                 "schema": { "$ref": "#/components/schemas/StatusResponse" }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/monitoring": {
+      "get": {
+        "summary": "Snapshot d'observabilité",
+        "tags": ["Monitoring"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Etat process, HTTP, extraction, runtime",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Non authentifié",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin requis",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/monitoring/metrics": {
+      "get": {
+        "summary": "Métriques HTTP et extraction",
+        "tags": ["Monitoring"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Compteurs in-memory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Non authentifié"
+          }
+        }
+      }
+    },
+    "/api/monitoring/alerts": {
+      "get": {
+        "summary": "Alertes récentes",
+        "tags": ["Monitoring"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 50 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tampon des dernières alertes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Non authentifié"
           }
         }
       }

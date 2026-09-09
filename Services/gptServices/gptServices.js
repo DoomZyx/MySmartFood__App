@@ -140,7 +140,7 @@ function resolveRealtimeModel(rawModel) {
 }
 
 /**
- * Construit l'objet session pour session.update (sans type ni wrapper).
+ * Construit l'objet session pour session.update (API Realtime GA).
  * Utilisé par voiceRuntimeConfig pour construire session.update (session Realtime).
  */
 export function getSessionUpdatePayload(voice = "ballad", instructions = "") {
@@ -149,26 +149,32 @@ export function getSessionUpdatePayload(voice = "ballad", instructions = "") {
       ? OPENAI_TRANSCRIPTION_PROMPT.substring(0, 1024)
       : OPENAI_TRANSCRIPTION_PROMPT;
   return {
-    turn_detection: {
-      type: "server_vad",
-      threshold: 0.4,
-      prefix_padding_ms: 100,
-      silence_duration_ms: 150,
-      create_response: false,
-      interrupt_response: true,
-    },
-    input_audio_format: "g711_ulaw",
-    output_audio_format: "g711_ulaw",
-    voice,
-    speed: 1.3,
+    type: "realtime",
+    output_modalities: ["audio"],
     instructions,
-    modalities: ["text", "audio"],
-    temperature: 0.8,
-    max_response_output_tokens: 812,
-    input_audio_transcription: {
-      model: "whisper-1",
-      language: "fr",
-      prompt: transcriptionPrompt,
+    max_output_tokens: 812,
+    audio: {
+      input: {
+        format: { type: "audio/pcmu" },
+        turn_detection: {
+          type: "server_vad",
+          threshold: 0.4,
+          prefix_padding_ms: 100,
+          silence_duration_ms: 150,
+          create_response: false,
+          interrupt_response: true,
+        },
+        transcription: {
+          model: "whisper-1",
+          language: "fr",
+          prompt: transcriptionPrompt,
+        },
+      },
+      output: {
+        format: { type: "audio/pcmu" },
+        voice,
+        speed: 1.3,
+      },
     },
     tools: OPENAI_TOOLS,
   };
@@ -193,7 +199,6 @@ export function createOpenAiSession(instanceConfig) {
     {
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        "OpenAI-Beta": "realtime=v1",
       },
     },
   );

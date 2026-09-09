@@ -149,7 +149,7 @@ export async function handleWebSocketConnection(connection, request, instanceId,
                 type: "response.create",
                 response: {
                   instructions: "Dis exactement cette phrase, rien d'autre : L'appel sera terminé dans 1 minute.",
-                  modalities: ["audio", "text"]
+                  output_modalities: ["audio"]
                 }
               }));
             }

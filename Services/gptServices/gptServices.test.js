@@ -12,16 +12,26 @@ describe("gptService", () => {
   });
 
   it("devrait créer une connexion WebSocket avec les bons headers", () => {
-    createOpenAiSession("fake-api-key", "alloy");
+    createOpenAiSession({
+      openAi: {
+        apiKey: "fake-api-key",
+        model: "gpt-realtime-1.5",
+        sessionUpdatePayload: {
+          type: "session.update",
+          session: { type: "realtime" },
+        },
+      },
+    });
 
     expect(WebSocket).toHaveBeenCalledWith(
-      expect.stringContaining("wss://api.openai.com/v1/realtime"),
+      expect.stringContaining("wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5"),
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: "Bearer fake-api-key",
-          "OpenAI-Beta": "realtime=v1",
         }),
       })
     );
+    const [, options] = WebSocket.mock.calls[0];
+    expect(options.headers["OpenAI-Beta"]).toBeUndefined();
   });
 });
