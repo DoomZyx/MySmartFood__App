@@ -1,17 +1,12 @@
-import { getApiKey } from "../apiKey.js";
-const VITE_API_URL = import.meta.env.VITE_API_URL;
+import { apiFetch } from "../http.js";
 
-// Mettre à jour les informations d'un client (lié à un appel)
 export async function updateClient(id, clientData) {
   if (!id) throw new Error("ID manquant pour la mise à jour");
   if (!clientData) throw new Error("Données client manquantes");
 
-  const res = await fetch(`${VITE_API_URL}api/calls/${id}/client`, {
+  const res = await apiFetch(`api/calls/${id}/client`, {
     method: "PUT",
-    headers: {
-      "x-api-key": getApiKey(),
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(clientData),
   });
   if (!res.ok) throw new Error("Erreur lors de la mise à jour du client");

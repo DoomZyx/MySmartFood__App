@@ -1,5 +1,6 @@
-import { getApiKey } from "../apiKey.js";
-const VITE_API_URL = import.meta.env.VITE_API_URL;
+import { apiFetch } from "../http.js";
+
+const jsonHeaders = { "Content-Type": "application/json" };
 
 async function readErrorBody(res) {
   try {
@@ -11,12 +12,7 @@ async function readErrorBody(res) {
 }
 
 export async function getPhoneLineStatus() {
-  const res = await fetch(`${VITE_API_URL}api/phone-line`, {
-    headers: {
-      "x-api-key": getApiKey(),
-      "Content-Type": "application/json",
-    },
-  });
+  const res = await apiFetch("api/phone-line", { headers: jsonHeaders });
   if (!res.ok) {
     const msg = await readErrorBody(res);
     throw new Error(msg);
@@ -25,12 +21,9 @@ export async function getPhoneLineStatus() {
 }
 
 export async function updatePhoneLineEnabled(enabled) {
-  const res = await fetch(`${VITE_API_URL}api/phone-line`, {
+  const res = await apiFetch("api/phone-line", {
     method: "PATCH",
-    headers: {
-      "x-api-key": getApiKey(),
-      "Content-Type": "application/json",
-    },
+    headers: jsonHeaders,
     body: JSON.stringify({ enabled }),
   });
   if (!res.ok) {

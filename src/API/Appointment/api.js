@@ -1,10 +1,6 @@
-import { getApiKey } from "../apiKey.js";
-const VITE_API_URL = import.meta.env.VITE_API_URL;
+import { apiFetch, sessionHeaders } from "../http.js";
 
-const defaultHeaders = () => ({
-  "x-api-key": getApiKey(),
-  "Content-Type": "application/json",
-});
+const defaultHeaders = () => sessionHeaders({ "Content-Type": "application/json" });
 
 // --- Réservations (collection séparée) ---
 
@@ -15,7 +11,7 @@ export async function fetchReservations(page = 1, limit = 50, filters = {}) {
   if (filters.date) params.append("date", filters.date);
   if (filters.statut) params.append("statut", filters.statut);
 
-  const res = await fetch(`${VITE_API_URL}api/reservations?${params.toString()}`, {
+  const res = await apiFetch(`api/reservations?${params.toString()}`, {
     headers: defaultHeaders(),
   });
   if (!res.ok) throw new Error("Erreur API");
@@ -23,7 +19,7 @@ export async function fetchReservations(page = 1, limit = 50, filters = {}) {
 }
 
 export async function fetchTodayReservations() {
-  const res = await fetch(`${VITE_API_URL}api/reservations/today`, {
+  const res = await apiFetch("api/reservations/today", {
     headers: defaultHeaders(),
   });
   if (!res.ok) throw new Error("Erreur API");
@@ -32,7 +28,7 @@ export async function fetchTodayReservations() {
 
 export async function fetchReservation(id) {
   if (!id) throw new Error("ID manquant pour la requête");
-  const res = await fetch(`${VITE_API_URL}api/reservations/${id}`, {
+  const res = await apiFetch(`api/reservations/${id}`, {
     headers: defaultHeaders(),
   });
   if (!res.ok) throw new Error("Erreur API");
@@ -40,7 +36,7 @@ export async function fetchReservation(id) {
 }
 
 export async function createReservation(data) {
-  const res = await fetch(`${VITE_API_URL}api/reservations`, {
+  const res = await apiFetch("api/reservations", {
     method: "POST",
     headers: defaultHeaders(),
     body: JSON.stringify(data),
@@ -53,7 +49,7 @@ export async function createReservation(data) {
 }
 
 export async function updateReservation(id, data) {
-  const res = await fetch(`${VITE_API_URL}api/reservations/${id}`, {
+  const res = await apiFetch(`api/reservations/${id}`, {
     method: "PUT",
     headers: defaultHeaders(),
     body: JSON.stringify(data),
@@ -63,7 +59,7 @@ export async function updateReservation(id, data) {
 }
 
 export async function updateReservationStatus(id, statut) {
-  const res = await fetch(`${VITE_API_URL}api/reservations/${id}/status`, {
+  const res = await apiFetch(`api/reservations/${id}/status`, {
     method: "PATCH",
     headers: defaultHeaders(),
     body: JSON.stringify({ statut }),
@@ -73,9 +69,8 @@ export async function updateReservationStatus(id, statut) {
 }
 
 export async function deleteReservation(id) {
-  const res = await fetch(`${VITE_API_URL}api/reservations/${id}`, {
+  const res = await apiFetch(`api/reservations/${id}`, {
     method: "DELETE",
-    headers: { "x-api-key": getApiKey() },
   });
   if (!res.ok) throw new Error("Erreur lors de la suppression de la réservation");
   return res.json();
@@ -83,7 +78,7 @@ export async function deleteReservation(id) {
 
 export async function checkReservationAvailability(date, heure, duree) {
   const params = new URLSearchParams({ date, heure, duree: duree.toString() });
-  const res = await fetch(`${VITE_API_URL}api/reservations/availability?${params.toString()}`, {
+  const res = await apiFetch(`api/reservations/availability?${params.toString()}`, {
     headers: defaultHeaders(),
   });
   if (!res.ok) throw new Error("Erreur lors de la vérification de disponibilité");
@@ -92,7 +87,7 @@ export async function checkReservationAvailability(date, heure, duree) {
 
 export async function fetchReservationAvailableSlots(date) {
   const params = new URLSearchParams({ date });
-  const res = await fetch(`${VITE_API_URL}api/reservations/ai/available-slots?${params.toString()}`, {
+  const res = await apiFetch(`api/reservations/ai/available-slots?${params.toString()}`, {
     headers: defaultHeaders(),
   });
   if (!res.ok) {
@@ -113,7 +108,7 @@ export async function fetchOrders(page = 1, limit = 50, filters = {}) {
   if (filters.type) params.append("type", filters.type);
   if (filters.modalite) params.append("modalite", filters.modalite);
 
-  const res = await fetch(`${VITE_API_URL}api/orders?${params.toString()}`, {
+  const res = await apiFetch(`api/orders?${params.toString()}`, {
     headers: defaultHeaders(),
   });
   if (!res.ok) throw new Error("Erreur API");
@@ -121,7 +116,7 @@ export async function fetchOrders(page = 1, limit = 50, filters = {}) {
 }
 
 export async function fetchTodayOrders() {
-  const res = await fetch(`${VITE_API_URL}api/orders/today`, {
+  const res = await apiFetch("api/orders/today", {
     headers: defaultHeaders(),
   });
   if (!res.ok) throw new Error("Erreur API");
@@ -130,7 +125,7 @@ export async function fetchTodayOrders() {
 
 export async function fetchOrder(id) {
   if (!id) throw new Error("ID manquant pour la requête");
-  const res = await fetch(`${VITE_API_URL}api/orders/${id}`, {
+  const res = await apiFetch(`api/orders/${id}`, {
     headers: defaultHeaders(),
   });
   if (!res.ok) throw new Error("Erreur API");
@@ -138,7 +133,7 @@ export async function fetchOrder(id) {
 }
 
 export async function createOrder(data) {
-  const res = await fetch(`${VITE_API_URL}api/orders`, {
+  const res = await apiFetch("api/orders", {
     method: "POST",
     headers: defaultHeaders(),
     body: JSON.stringify(data),
@@ -151,7 +146,7 @@ export async function createOrder(data) {
 }
 
 export async function updateOrder(id, data) {
-  const res = await fetch(`${VITE_API_URL}api/orders/${id}`, {
+  const res = await apiFetch(`api/orders/${id}`, {
     method: "PUT",
     headers: defaultHeaders(),
     body: JSON.stringify(data),
@@ -161,7 +156,7 @@ export async function updateOrder(id, data) {
 }
 
 export async function updateOrderStatus(id, statut) {
-  const res = await fetch(`${VITE_API_URL}api/orders/${id}/status`, {
+  const res = await apiFetch(`api/orders/${id}/status`, {
     method: "PATCH",
     headers: defaultHeaders(),
     body: JSON.stringify({ statut }),
@@ -171,9 +166,8 @@ export async function updateOrderStatus(id, statut) {
 }
 
 export async function deleteOrder(id) {
-  const res = await fetch(`${VITE_API_URL}api/orders/${id}`, {
+  const res = await apiFetch(`api/orders/${id}`, {
     method: "DELETE",
-    headers: { "x-api-key": getApiKey() },
   });
   if (!res.ok) throw new Error("Erreur lors de la suppression de la commande");
   return res.json();
@@ -181,7 +175,7 @@ export async function deleteOrder(id) {
 
 export async function checkOrderAvailability(date, heure, duree) {
   const params = new URLSearchParams({ date, heure, duree: duree.toString() });
-  const res = await fetch(`${VITE_API_URL}api/orders/availability?${params.toString()}`, {
+  const res = await apiFetch(`api/orders/availability?${params.toString()}`, {
     headers: defaultHeaders(),
   });
   if (!res.ok) throw new Error("Erreur lors de la vérification de disponibilité");
