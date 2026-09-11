@@ -1,23 +1,10 @@
-import { getApiKey, getStoredWebsiteUser, clearTenantApiKey, clearWebsiteUser } from "./apiKey.js";
+import { getApiKey, clearTenantApiKey, clearWebsiteUser } from "./apiKey.js";
+import { apiFetch, clearSession, persistSession, sessionHeaders } from "./http.js";
 const VITE_API_URL = import.meta.env.VITE_API_URL;
-
-/** Utilisateur connecté via le site (pas de token app) : on mappe vers le format attendu par l'app (menu utilise .username). */
-function websiteUserToAppUser(w) {
-  if (!w) return null;
-  const displayName = w.name || w.email || "";
-  return {
-    id: w.id,
-    email: w.email || "",
-    name: displayName,
-    username: displayName,
-    avatar: w.avatar || null,
-    role: w.appRole === "admin" ? "admin" : "user",
-  };
-}
 
 // Connexion utilisateur
 export async function loginUser(email, password) {
-  const res = await fetch(`${VITE_API_URL}api/auth/login`, {
+  const res = await apiFetch("api/auth/login", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -26,27 +13,76 @@ export async function loginUser(email, password) {
   });
 
   if (!res.ok) {
-    const error = await res.json();
+    const error = await res.json().catch(() => ({}));
     throw new Error(error.error || "Erreur de connexion");
   }
 
   const data = await res.json();
+  persistSession(data);
+  return data;
+}
 
-  // Sauvegarder le token dans localStorage
-  if (data.data?.token) {
-    localStorage.setItem("token", data.data.token);
-    localStorage.setItem("user", JSON.stringify(data.data.user));
+export async function registerUser({ email, password, name }) {
+  const res = await apiFetch("api/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password, name }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.error || error.message || "Erreur d'inscription");
   }
 
+  const data = await res.json();
+  persistSession(data);
+  return data;
+}
+
+export async function redeemAccessToken(token) {
+  const res = await apiFetch("api/auth/redeem-access", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.error || error.message || "Jeton invalide");
+  }
+
+  const data = await res.json();
+  persistSession(data);
+  return data;
+}
+
+export async function resendAccessEmail() {
+  const res = await apiFetch("api/auth/resend-access", { method: "POST" });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.error || error.message || "Impossible d'envoyer le lien");
+  }
+  return res.json();
+}
+
+export async function fetchSession() {
+  const res = await apiFetch("api/auth/me");
+  if (!res.ok) {
+    if (res.status === 401) clearSession();
+    return null;
+  }
+  const data = await res.json();
+  persistSession(data);
   return data;
 }
 
 // Déconnexion utilisateur (app + session website si présente)
 export function logoutUser() {
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
+  apiFetch("api/auth/logout", { method: "POST" }).catch(() => {});
+  clearSession();
   clearWebsiteUser();
   clearTenantApiKey();
+  localStorage.removeItem("smartcrm_user");
 }
 
 // Obtenir le token stocké
@@ -54,208 +90,106 @@ export function getToken() {
   return localStorage.getItem("token");
 }
 
-// Obtenir l'utilisateur connecté (token app ou, à défaut, utilisateur site mappé)
 export function getCurrentUser() {
   const user = localStorage.getItem("user");
-  if (user) {
-    try {
-      return JSON.parse(user);
-    } catch {
-      // fallthrough
-    }
+  if (!user) return null;
+  try {
+    return JSON.parse(user);
+  } catch {
+    return null;
   }
-  if (isAuthenticatedViaWebsite()) {
-    return websiteUserToAppUser(getStoredWebsiteUser());
-  }
-  return null;
 }
 
-// Authentifié via le site (clé tenant + user /me) sans login app
-export function isAuthenticatedViaWebsite() {
-  const key = getApiKey();
-  const websiteUser = getStoredWebsiteUser();
-  return !!(key && websiteUser && (websiteUser.email || websiteUser.id));
-}
-
-// Vérifier si l'utilisateur est connecté (app ou via le site)
 export function isAuthenticated() {
-  const token = getToken();
-  const userFromStorage = localStorage.getItem("user");
-
-  if (token && userFromStorage) {
-    if (token === "null" || token === "undefined") {
-      logoutUser();
-      return false;
-    }
-    try {
-      const user = JSON.parse(userFromStorage);
-      if (user && user.email) return true;
-    } catch {
-      // fallthrough
-    }
-    logoutUser();
-    return false;
-  }
-
-  return isAuthenticatedViaWebsite();
+  return Boolean(getCurrentUser()?.email);
 }
 
 // Vérifier si l'utilisateur est admin
 export function isAdmin() {
   const user = getCurrentUser();
-  return user?.role === "admin";
+  if (!user) return false;
+  if (user.isPlatformAdmin || user.role === "admin" || user.role === "owner") return true;
+  return false;
 }
 
-/**
- * En-têtes d'authentification : Bearer token ou x-website-user-email (connexion via le site).
- */
-function getAuthHeaders(extra = {}) {
-  const headers = { "x-api-key": getApiKey(), ...extra };
-  const token = getToken();
-  if (!token || token === "null" || token === "undefined") {
-    throw new Error("Session expirée, veuillez vous reconnecter");
-  }
-  headers.Authorization = `Bearer ${token}`;
-  return headers;
+export function hasDashboardAccess(session) {
+  const user = session?.user || session || getCurrentUser();
+  if (!user) return false;
+  if (user.isPlatformAdmin || user.role === "admin") return true;
+  return Boolean(user.hasActiveSubscription && user.accessUnlocked);
 }
 
 function requireAuth() {
-  const token = getToken();
-  if (token && token !== "null" && token !== "undefined") return;
-  throw new Error("Non authentifié");
+  if (!getCurrentUser()?.email) {
+    throw new Error("Non authentifié");
+  }
 }
 
-// Obtenir le profil utilisateur
-export async function getProfile() {
-  requireAuth();
+function getAuthHeaders(extra = {}) {
+  return sessionHeaders(extra);
+}
 
-  const res = await fetch(`${VITE_API_URL}api/auth/profile`, {
-    headers: getAuthHeaders(),
-  });
-
+async function authJson(path, options = {}) {
+  const res = await apiFetch(path, options);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    const msg = err.hint ? `${err.error || "Erreur"}. ${err.hint}` : (err.error || "Erreur lors de la récupération du profil");
+    const msg = err.hint
+      ? `${err.error || "Erreur"}. ${err.hint}`
+      : err.error || err.message || "Erreur";
     throw new Error(msg);
   }
-
   return res.json();
 }
 
-// Mettre à jour le profil utilisateur
-export async function updateUserProfile(profileData) {
-  requireAuth();
+export async function getProfile() {
+  return authJson("api/auth/account");
+}
 
-  const res = await fetch(`${VITE_API_URL}api/auth/profile`, {
+export async function updateUserProfile(profileData) {
+  return authJson("api/auth/account", {
     method: "PUT",
-    headers: getAuthHeaders({ "Content-Type": "application/json" }),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(profileData),
   });
-
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.error || "Erreur lors de la mise à jour du profil");
-  }
-
-  return res.json();
 }
 
-// Uploader l'avatar utilisateur
 export async function uploadAvatar(file) {
-  requireAuth();
-
   const formData = new FormData();
   formData.append("avatar", file);
-
-  const res = await fetch(`${VITE_API_URL}api/auth/profile/avatar`, {
+  return authJson("api/auth/account/avatar", {
     method: "POST",
-    headers: getAuthHeaders(),
     body: formData,
   });
-
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.error || "Erreur lors de l'upload de l'avatar");
-  }
-
-  return res.json();
 }
 
 // Créer un nouvel utilisateur (admin seulement)
 export async function createUser(userData) {
-  requireAuth();
-
-  const res = await fetch(`${VITE_API_URL}api/auth/register`, {
+  return authJson("api/auth/users", {
     method: "POST",
-    headers: getAuthHeaders({ "Content-Type": "application/json" }),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(userData),
   });
-
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(
-      error.error || "Erreur lors de la création de l'utilisateur"
-    );
-  }
-
-  return res.json();
 }
 
 // Lister tous les utilisateurs (admin seulement)
 export async function getAllUsers() {
-  requireAuth();
-
-  const res = await fetch(`${VITE_API_URL}api/auth/users`, {
-    headers: getAuthHeaders(),
-  });
-
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(
-      error.error || "Erreur lors de la récupération des utilisateurs"
-    );
-  }
-
-  return res.json();
+  return authJson("api/auth/users");
 }
 
 // Modifier un utilisateur (admin seulement)
 export async function updateUser(id, userData) {
-  requireAuth();
-
-  const res = await fetch(`${VITE_API_URL}api/auth/users/${id}`, {
+  return authJson(`api/auth/users/${id}`, {
     method: "PUT",
-    headers: getAuthHeaders({ "Content-Type": "application/json" }),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(userData),
   });
-
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(
-      error.error || "Erreur lors de la mise à jour de l'utilisateur"
-    );
-  }
-
-  return res.json();
 }
 
 // Supprimer un utilisateur (admin seulement)
 export async function deleteUser(id) {
-  requireAuth();
-
-  const res = await fetch(`${VITE_API_URL}api/auth/users/${id}`, {
+  return authJson(`api/auth/users/${id}`, {
     method: "DELETE",
-    headers: getAuthHeaders(),
   });
-
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(
-      error.error || "Erreur lors de la suppression de l'utilisateur"
-    );
-  }
-
-  return res.json();
 }
 
 // Récupérer les statistiques système (admin seulement)
@@ -298,17 +232,7 @@ export async function getSystemLogs(type = "all", limit = 50) {
 
 // Récupérer les statistiques de maintenance (admin seulement)
 export async function getMaintenanceStats() {
-  const token = getToken();
-  if (!token) {
-    throw new Error("Non authentifié");
-  }
-
-  const res = await fetch(`${VITE_API_URL}api/auth/maintenance/stats`, {
-    headers: {
-      "x-api-key": getApiKey(),
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const res = await apiFetch("api/auth/maintenance/stats");
 
   if (!res.ok) {
     const error = await res.json();

@@ -1,17 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { loginUser, isAuthenticated } from "../../API/auth";
-
-/** Chemin interne uniquement (évite redirection ouverte). */
-function safePathFromLocation(from) {
-  if (!from || typeof from.pathname !== "string") return "/";
-  const p = from.pathname;
-  if (!p.startsWith("/") || p.startsWith("//")) return "/";
-  if (p === "/login") return "/";
-  return `${p}${from.search || ""}`;
-}
+import { useTranslation } from "react-i18next";
+import { loginUser, isAuthenticated, getCurrentUser } from "../../API/auth";
+import { postAuthPath } from "../../utils/postAuthPath";
 
 export function useLogin() {
+ const { t } = useTranslation();
  const [formData, setFormData] = useState({
   email: "",
   password: "",
@@ -22,10 +16,21 @@ const navigate = useNavigate();
 const location = useLocation();
 
 useEffect(() => {
+  if (new URLSearchParams(location.search).get("error") === "auth_failed") {
+    setError(t("login.googleFailed"));
+  }
+}, [location.search, t]);
+
+useEffect(() => {
   if (isAuthenticated()) {
-    navigate(safePathFromLocation(location.state?.from), { replace: true });
+    navigate(postAuthPath(getCurrentUser(), location.state?.from), { replace: true });
   }
 }, [navigate, location.state, location.key]);
+
+const handleGoogle = () => {
+  const base = import.meta.env.VITE_API_URL || "/";
+  window.location.href = `${base}api/auth/google?return=site`;
+};
 
 const handleInputChange = (e) => {
   const { name, value } = e.target;
@@ -41,8 +46,8 @@ const handleSubmit = async (e) => {
   setError(null);
 
   try {
-    await loginUser(formData.email, formData.password);
-    navigate(safePathFromLocation(location.state?.from), { replace: true });
+    const session = await loginUser(formData.email, formData.password);
+    navigate(postAuthPath(session, location.state?.from), { replace: true });
   } catch (err) {
     setError(err.message);
   } finally {
@@ -60,6 +65,7 @@ return {
 // Fonctions
  handleInputChange,
  handleSubmit,
+ handleGoogle,
 
 }
 }

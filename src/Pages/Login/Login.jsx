@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useLogin } from "../../Hooks/Login/useLogin";
 import fd from "../../assets/fd.jpg";
@@ -15,6 +16,7 @@ function Login() {
 
     handleInputChange,
     handleSubmit,
+    handleGoogle,
   } = useLogin();
 
   return (
@@ -75,7 +77,18 @@ function Login() {
               </>
             )}
           </button>
+          <div className="form-group">
+            <button type="button" className="login-btn" disabled={loading} onClick={handleGoogle}>
+              <i className="bi bi-google"></i>
+              {t("login.googleButton")}
+            </button>
+          </div>
         </form>
+        <p>
+          <Link to="/register">{t("login.createAccount")}</Link>
+          {" · "}
+          <Link to="/">{t("login.backToSite")}</Link>
+        </p>
       </div>
     </div>
   );
