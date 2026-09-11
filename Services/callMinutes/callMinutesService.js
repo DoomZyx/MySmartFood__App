@@ -42,7 +42,8 @@ export const SUBSCRIPTIONS = {
   mise_en_place: { nom: "La Mise en Place", prix: 180, quotaMax: 500 },
   coup_de_feu: { nom: "Le Coup de Feu", prix: 260, quotaMax: 800 },
   service_continu: { nom: "Le Service Continu", prix: 380, quotaMax: 1250 },
-  carte_blanche: { nom: "La Carte Blanche", prix: 570, quotaMax: 2000 }
+  carte_blanche: { nom: "La Carte Blanche", prix: 570, quotaMax: 2000 },
+  developpeur: { nom: "Développeur", prix: 0, quotaMax: 999999 }
 };
 
 const SUBSCRIPTION_KEYS = Object.keys(SUBSCRIPTIONS);

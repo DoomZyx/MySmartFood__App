@@ -1,8 +1,9 @@
 import { PricingController } from "../../API/controllers/PricingController.js";
+import { requireTenantAccess } from "../../middleware/tenantAccess.js";
 
-export default async function pricingRoutes(fastify, options) {
-  
-  // Récupérer la configuration des tarifs
+export default async function pricingRoutes(fastify) {
+  fastify.addHook("preHandler", requireTenantAccess);
+
   fastify.get("/pricing", PricingController.getPricing);
 
   // Créer ou mettre à jour la configuration des tarifs

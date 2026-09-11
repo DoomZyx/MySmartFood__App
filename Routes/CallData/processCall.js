@@ -4,6 +4,7 @@ import notificationService from "../../Services/notificationService.js";
 import { callLogger } from "../../Services/logging/logger.js";
 import { notifDebugLog } from "../../Services/logging/notifDebugLog.js";
 import { retryWithBackoff } from "../../Services/utils/retryWithBackoff.js";
+import { resolveRuntimeTenantId } from "../../utils/runtimeTenant.js";
 
 function logStep(streamSid, step, detail = "") {
   const msg = `[process-call] ${step}${detail ? " " + detail : ""}`;
@@ -86,7 +87,7 @@ export default async function processCallRoutes(fastify, options) {
       const saveStartTime = Date.now();
       callLogger.apiCallStarted(streamSid, "ProcessCallService.process");
 
-      const instanceId = request.instanceId || "inst_default";
+      const instanceId = resolveRuntimeTenantId(request.instanceId);
       let result;
       try {
         result = await retryWithBackoff(

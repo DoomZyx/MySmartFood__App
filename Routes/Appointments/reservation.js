@@ -1,3 +1,4 @@
+import { requireTenantAccess } from "../../middleware/tenantAccess.js";
 import {
   createReservation,
   getReservations,
@@ -11,7 +12,15 @@ import {
   createReservationFromAI,
 } from "../../Controller/reservationController.js";
 
-export default async function reservationRoutes(fastify, options) {
+const idParam = {
+  type: "string",
+  minLength: 8,
+  maxLength: 36,
+};
+
+export default async function reservationRoutes(fastify) {
+  fastify.addHook("preHandler", requireTenantAccess);
+
   fastify.post("/reservations", {
     schema: {
       body: {
@@ -95,7 +104,7 @@ export default async function reservationRoutes(fastify, options) {
       params: {
         type: "object",
         properties: {
-          id: { type: "string", minLength: 24, maxLength: 24 },
+          id: idParam,
         },
         required: ["id"],
       },
@@ -108,7 +117,7 @@ export default async function reservationRoutes(fastify, options) {
       params: {
         type: "object",
         properties: {
-          id: { type: "string", minLength: 24, maxLength: 24 },
+          id: idParam,
         },
         required: ["id"],
       },
@@ -140,7 +149,7 @@ export default async function reservationRoutes(fastify, options) {
       params: {
         type: "object",
         properties: {
-          id: { type: "string", minLength: 24, maxLength: 24 },
+          id: idParam,
         },
         required: ["id"],
       },

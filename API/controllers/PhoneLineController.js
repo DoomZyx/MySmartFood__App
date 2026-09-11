@@ -12,7 +12,7 @@ export class PhoneLineController {
    */
   static async getStatus(request, reply) {
     try {
-      const instanceId = request.instanceId || "inst_default";
+      const instanceId = request.tenant?.id || request.instanceId;
       const enabled = await PricingService.getPhoneLineEnabled(instanceId);
       return reply.send(
         PricingTransformer.successResponse({ phoneLineEnabled: enabled })
@@ -38,7 +38,7 @@ export class PhoneLineController {
           PricingTransformer.errorResponse("Le champ 'enabled' (boolean) est requis")
         );
       }
-      const instanceId = request.instanceId || "inst_default";
+      const instanceId = request.tenant?.id || request.instanceId;
       await PricingService.updatePhoneLineEnabled(enabled, instanceId);
       return reply.send(
         PricingTransformer.successResponse(

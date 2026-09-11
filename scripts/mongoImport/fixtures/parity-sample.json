@@ -1,0 +1,152 @@
+{
+  "instanceId": "inst_default",
+  "pricing": {
+    "_id": "aaaaaaaaaaaaaaaaaaaaaaaa",
+    "instanceId": "inst_default",
+    "phoneLineEnabled": true,
+    "restaurantInfo": {
+      "nom": "Chez Test",
+      "adresse": "1 rue des Tacos",
+      "telephone": "0612345678",
+      "email": "chez@test.fr",
+      "nombreCouverts": 20,
+      "horairesOuverture": {
+        "lundi": {
+          "ouvert": true,
+          "midi": { "ouverture": "11:00", "fermeture": "14:30" },
+          "soir": { "ouverture": "18:00", "fermeture": "22:30" }
+        },
+        "mardi": { "ouvert": false },
+        "mercredi": { "ouvert": false },
+        "jeudi": { "ouvert": false },
+        "vendredi": { "ouvert": false },
+        "samedi": { "ouvert": false },
+        "dimanche": { "ouvert": false }
+      }
+    },
+    "menuPricing": {
+      "tacos": {
+        "nom": "Tacos",
+        "produits": [
+          {
+            "_id": "bbbbbbbbbbbbbbbbbbbbbbbb",
+            "nom": "Tacos M",
+            "description": "Tacos personnalisable",
+            "prixBase": 8.5,
+            "disponible": true,
+            "personnalisable": true,
+            "maxViandes": 2,
+            "options": {
+              "viandes": {
+                "nom": "Viandes",
+                "type": "multiple",
+                "obligatoire": true,
+                "max": 2,
+                "choix": ["Poulet", "Viande hachée"]
+              },
+              "sauces": {
+                "nom": "Sauces",
+                "type": "single",
+                "obligatoire": true,
+                "choix": ["Algérienne", "Blanche"]
+              }
+            }
+          }
+        ]
+      },
+      "menus": {
+        "nom": "Menus",
+        "produits": [
+          {
+            "_id": "cccccccccccccccccccccccc",
+            "nom": "Menu Burger",
+            "prixBase": 12,
+            "disponible": true,
+            "composition": { "platPrincipal": "USA Beef Burger" },
+            "options": {
+              "boisson": {
+                "nom": "Boisson",
+                "type": "single",
+                "obligatoire": true,
+                "choix": ["Coca-Cola", "Sprite"]
+              }
+            }
+          }
+        ]
+      },
+      "pizzas": {
+        "nom": "Pizzas",
+        "produits": [
+          {
+            "_id": "dddddddddddddddddddddddd",
+            "nom": "Pizza Margherita",
+            "prixBase": 11,
+            "disponible": true,
+            "taille": "M"
+          }
+        ]
+      },
+      "boissons": {
+        "nom": "Boissons",
+        "produits": [
+          {
+            "_id": "eeeeeeeeeeeeeeeeeeeeeeee",
+            "nom": "Coca-Cola",
+            "prixBase": 2.5,
+            "disponible": true,
+            "taille": "33cl"
+          }
+        ]
+      }
+    }
+  },
+  "clients": [
+    {
+      "_id": "111111111111111111111111",
+      "prenom": "Ada",
+      "nom": "Lovelace",
+      "telephone": "0611223344",
+      "email": "ada@test.fr",
+      "adresse": "2 rue Ada",
+      "entrepriseName": "",
+      "type": "client"
+    }
+  ],
+  "orders": [
+    {
+      "_id": "222222222222222222222222",
+      "nom": "Ada Lovelace",
+      "telephone": "0611223344",
+      "date": "2026-03-02",
+      "heure": "12:30",
+      "statut": "confirme",
+      "createdBy": "system",
+      "commandes": [
+        {
+          "nom": "Tacos M",
+          "categorie": "tacos",
+          "quantite": 1,
+          "prixUnitaire": 8.5,
+          "composition": "Poulet, sauce algérienne",
+          "options": { "viandes": "Poulet", "sauces": "Algérienne" }
+        }
+      ]
+    }
+  ],
+  "reservations": [
+    {
+      "_id": "333333333333333333333333",
+      "nom": "Ada Lovelace",
+      "telephone": "0611223344",
+      "date": "2026-03-02",
+      "heure": "19:30",
+      "nombrePersonnes": 2,
+      "description": "près de la fenêtre",
+      "statut": "confirme",
+      "createdBy": "system"
+    }
+  ],
+  "quotas": [],
+  "calls": [],
+  "failedExtractions": []
+}

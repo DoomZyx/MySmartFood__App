@@ -1,6 +1,8 @@
 import { PhoneLineController } from "../../API/controllers/PhoneLineController.js";
+import { requireTenantAccess } from "../../middleware/tenantAccess.js";
 
 export default async function phoneLineRoutes(fastify) {
+  fastify.addHook("preHandler", requireTenantAccess);
   fastify.get("/phone-line", {
     schema: {
       tags: ["PhoneLine"],

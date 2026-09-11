@@ -13,7 +13,7 @@ export class PricingController {
    */
   static async getPricing(request, reply) {
     try {
-      const instanceId = request.instanceId;
+      const instanceId = request.tenant?.id || request.instanceId;
       const pricing = await PricingService.getPricing(instanceId);
 
       return reply.send(
@@ -37,7 +37,7 @@ export class PricingController {
    */
   static async createOrUpdatePricing(request, reply) {
     try {
-      const instanceId = request.instanceId || "inst_default";
+      const instanceId = request.tenant?.id || request.instanceId;
       const pricing = await PricingService.createOrUpdatePricing(request.body, instanceId);
 
       return reply.send(
@@ -65,7 +65,7 @@ export class PricingController {
   static async getAvailableProducts(request, reply) {
     try {
       const { categorie } = request.params;
-      const instanceId = request.instanceId || "inst_default";
+      const instanceId = request.tenant?.id || request.instanceId;
       const products = await PricingService.getAvailableProducts(categorie, instanceId);
 
       return reply.send(
@@ -95,7 +95,7 @@ export class PricingController {
    */
   static async checkRestaurantAvailability(request, reply) {
     try {
-      const instanceId = request.instanceId || "inst_default";
+      const instanceId = request.tenant?.id || request.instanceId;
       const availability = await PricingService.checkAvailability(instanceId);
 
       return reply.send(
@@ -126,7 +126,7 @@ export class PricingController {
   static async addProduct(request, reply) {
     try {
       const { categorie, produit } = request.body;
-      const instanceId = request.instanceId || "inst_default";
+      const instanceId = request.tenant?.id || request.instanceId;
       const product = await ProductService.addProduct(categorie, produit, instanceId);
 
       return reply.send(
@@ -168,7 +168,7 @@ export class PricingController {
   static async updateProduct(request, reply) {
     try {
       const { categorie, produitId, produitData } = request.body;
-      const instanceId = request.instanceId || "inst_default";
+      const instanceId = request.tenant?.id || request.instanceId;
       const product = await ProductService.updateProduct(categorie, produitId, produitData, instanceId);
 
       return reply.send(
@@ -208,7 +208,7 @@ export class PricingController {
   static async deleteProduct(request, reply) {
     try {
       const { categorie, produitId } = request.params;
-      const instanceId = request.instanceId || "inst_default";
+      const instanceId = request.tenant?.id || request.instanceId;
       await ProductService.deleteProduct(categorie, produitId, instanceId);
 
       return reply.send(
@@ -241,7 +241,7 @@ export class PricingController {
    */
   static async getPricingForGPT(request, reply) {
     try {
-      const instanceId = request.instanceId || "inst_default";
+      const instanceId = request.tenant?.id || request.instanceId;
       const gptData = await PricingService.getPricingForGPT(instanceId);
 
       return reply.send(

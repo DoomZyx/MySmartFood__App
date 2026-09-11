@@ -1,3 +1,4 @@
+import { requireTenantAccess } from "../../middleware/tenantAccess.js";
 import {
   createOrder,
   getOrders,
@@ -11,7 +12,15 @@ import {
   createOrderFromAI,
 } from "../../Controller/orderController.js";
 
-export default async function orderRoutes(fastify, options) {
+const idParam = {
+  type: "string",
+  minLength: 8,
+  maxLength: 36,
+};
+
+export default async function orderRoutes(fastify) {
+  fastify.addHook("preHandler", requireTenantAccess);
+
   fastify.post("/orders", {
     schema: {
       body: {
@@ -115,7 +124,7 @@ export default async function orderRoutes(fastify, options) {
       params: {
         type: "object",
         properties: {
-          id: { type: "string", minLength: 24, maxLength: 24 },
+          id: idParam,
         },
         required: ["id"],
       },
@@ -128,7 +137,7 @@ export default async function orderRoutes(fastify, options) {
       params: {
         type: "object",
         properties: {
-          id: { type: "string", minLength: 24, maxLength: 24 },
+          id: idParam,
         },
         required: ["id"],
       },
@@ -174,7 +183,7 @@ export default async function orderRoutes(fastify, options) {
       params: {
         type: "object",
         properties: {
-          id: { type: "string", minLength: 24, maxLength: 24 },
+          id: idParam,
         },
         required: ["id"],
       },
@@ -204,7 +213,7 @@ export default async function orderRoutes(fastify, options) {
       params: {
         type: "object",
         properties: {
-          id: { type: "string", minLength: 24, maxLength: 24 },
+          id: idParam,
         },
         required: ["id"],
       },

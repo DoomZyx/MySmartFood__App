@@ -1,10 +1,7 @@
-import PricingModel from "../../models/pricing.js";
+import { withTenant } from "../../database/transaction.js";
+import * as TenantSettings from "../../models/pg/TenantSettings.js";
+import * as EstablishmentProfile from "../../models/pg/EstablishmentProfile.js";
 
-/**
- * Normalise un numéro pour E.164 / Twilio (ex: "06 72 88 62 55" -> "+33672886255")
- * @param {string} phone
- * @returns {string|null}
- */
 function normalizePhoneE164(phone) {
   if (!phone || typeof phone !== "string") return null;
   const digits = phone.replace(/\D/g, "");
@@ -23,27 +20,19 @@ function normalizePhoneE164(phone) {
   return null;
 }
 
-const DEFAULT_INSTANCE_ID = "inst_default";
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function resolveInstanceId(instanceId) {
-  return instanceId != null && String(instanceId).trim() !== "" ? String(instanceId).trim() : DEFAULT_INSTANCE_ID;
-}
-
-/**
- * Service téléphonie : numéro de transfert quand la ligne est désactivée.
- * Lit le numéro depuis la config restaurant (infos du restaurant) par instance.
- */
 export class PhoneLineService {
-  /**
-   * Retourne le numéro du restaurant pour transfert d'appel (E.164), ou null.
-   * @param {string} [instanceId] - ID instance (défaut: inst_default)
-   * @returns {Promise<string|null>}
-   */
   static async getTransferNumber(instanceId) {
-    const id = resolveInstanceId(instanceId);
-    const pricing = await PricingModel.findOne({ instanceId: id });
-    const phone = pricing?.restaurantInfo?.telephone;
-    if (!phone) return null;
-    return normalizePhoneE164(String(phone).trim());
+    const id = String(instanceId || "").trim();
+    if (!UUID_PATTERN.test(id)) return null;
+    return withTenant(id, async (client) => {
+      const settings = await TenantSettings.find(client, id);
+      const profile = await EstablishmentProfile.findByTenantId(id, client);
+      const phone = settings?.transferPhone || profile?.phone;
+      if (!phone) return null;
+      return normalizePhoneE164(String(phone).trim());
+    });
   }
 }

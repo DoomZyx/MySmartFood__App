@@ -1,4 +1,8 @@
 import PricingModel from "../../models/pricing.js";
+import { PricingService } from "../../Business/services/PricingService.js";
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Même format que getPricingForGPT mais à partir d'un document pricing (ex. déjà filtré par instanceId).
@@ -32,7 +36,14 @@ export function buildGptPricingFromDoc(pricing) {
 // Récupérer les tarifs et les intégrer dans le prompt GPT
 export async function getPricingForGPT(instanceId) {
   try {
-    const filter = instanceId != null && String(instanceId).trim() !== "" ? { instanceId: String(instanceId).trim() } : {};
+    const id =
+      instanceId != null && String(instanceId).trim() !== ""
+        ? String(instanceId).trim()
+        : String(process.env.INSTANCE_ID || "").trim();
+    if (UUID_PATTERN.test(id)) {
+      return await PricingService.getPricingForGPT(id);
+    }
+    const filter = id ? { instanceId: id } : {};
     const pricing = await PricingModel.findOne(filter);
     if (!pricing) return null;
     return buildGptPricingFromDoc(pricing);
