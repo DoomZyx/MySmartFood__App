@@ -1,0 +1,19 @@
+.site-access {
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+  }
+
+  a {
+    color: #fff;
+    font-weight: 700;
+  }
+}
+
+.site-access__error {
+  background: rgba(255, 255, 255, 0.55);
+  color: #3b0d0d;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+}

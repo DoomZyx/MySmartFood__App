@@ -53,6 +53,7 @@
     "configuration": "CONFIGURATION",
     "myAccount": "MY ACCOUNT",
     "adminPanel": "ADMIN",
+    "serviceMonitoring": "VOICE SERVICES",
     "logout": "LOGOUT",
     "openMenu": "Open menu",
     "closeMenu": "Close menu"
@@ -66,9 +67,62 @@
     "passwordPlaceholder": "Your password",
     "loginButton": "Login",
     "loggingIn": "Logging in...",
+    "googleButton": "Continue with Google",
+    "googleFailed": "Google sign-in failed",
+    "createAccount": "Create an account",
+    "backToSite": "Back to site",
     "defaultAccount": "Default account:",
     "defaultEmail": "Email: admin@handlehome.com",
     "defaultPassword": "Password: admin123"
+  },
+  "site": {
+    "brand": "MySmartFood",
+    "nav": {
+      "pricing": "Pricing",
+      "login": "Log in",
+      "register": "Create an account",
+      "account": "My account",
+      "dashboard": "Dashboard"
+    },
+    "landing": {
+      "title": "Phone reception for your restaurant",
+      "subtitle": "Sign in, choose a plan, then open the email link once payment is confirmed.",
+      "seePlans": "See plans",
+      "login": "Log in"
+    },
+    "tarifs": {
+      "title": "Plans",
+      "subtitle": "Choose the subscription that fits your restaurant.",
+      "cancelled": "Payment cancelled. You can try again.",
+      "subscribe": "Subscribe",
+      "redirecting": "Redirecting...",
+      "minutes": "{{count}} call minutes / month"
+    },
+    "account": {
+      "title": "My account",
+      "needLogin": "Sign in to manage your subscription.",
+      "hello": "Signed in as {{name}}.",
+      "checkoutSuccess": "Payment received. An access link has been sent to your email. Open it to unlock the dashboard.",
+      "activePlan": "Active plan: {{plan}}.",
+      "planFallback": "active",
+      "waitingToken": "Subscription confirmed. Open the email link to unlock the dashboard.",
+      "resend": "Resend access link",
+      "resending": "Sending...",
+      "resendOk": "A new access link has been sent to your email.",
+      "noPlan": "No active subscription. Choose a plan to receive your access link."
+    },
+    "access": {
+      "title": "Access activation",
+      "checking": "Checking your token..."
+    },
+    "register": {
+      "title": "Create an account",
+      "subtitle": "An account is required to subscribe and receive your access link.",
+      "name": "Name",
+      "submit": "Create my account",
+      "submitting": "Creating...",
+      "hasAccount": "Already registered?"
+    }
   },
   "homepage": {
     "title": "Dashboard"
@@ -425,6 +479,74 @@
     "roles": {
       "user": "User",
       "admin": "Administrator"
+    }
+  },
+  "monitoring": {
+    "title": "Voice services monitoring",
+    "subtitle": "Real-time health of the voice pipeline and its dependencies",
+    "loading": "Loading monitoring data...",
+    "refreshing": "Refreshing...",
+    "errorTitle": "Monitoring unavailable",
+    "globalStatus": "Global status",
+    "lastUpdated": "Last updated",
+    "fresh": "Up to date",
+    "stale": "Stale data",
+    "fallbackOpenAI": "OpenAI fallback active",
+    "infrastructure": "Infrastructure",
+    "servicesTitle": "Service health",
+    "liveActivity": "Live activity",
+    "activeCalls": "Active calls",
+    "events": "Events",
+    "recentAlerts": "Recent alerts",
+    "noActiveCalls": "No active calls",
+    "noRecentAlerts": "No recent alerts",
+    "emptyPayload": "The server returned no usable monitoring data.",
+    "callId": "Call ID",
+    "route": "Route",
+    "step": "Step",
+    "duration": "Duration",
+    "lastError": "Last error",
+    "latency": "Latency",
+    "provider": "Provider",
+    "model": "Model",
+    "system": "System",
+    "alertWithoutMessage": "No details available",
+    "notAvailable": "Not available",
+    "status": {
+      "healthy": "Operational",
+      "degraded": "Degraded",
+      "down": "Unavailable",
+      "unknown": "Unknown"
+    },
+    "reasons": {
+      "openai-fallback-active": "OpenAI is temporarily replacing the Scaleway LLM.",
+      "voice-server-pool-partially-unavailable": "At least one voice server is unavailable.",
+      "voice-server-pool-unavailable": "All voice servers are unavailable.",
+      "voice-server-unavailable": "The voice service is unavailable.",
+      "voice-server-disabled": "The voice service is not configured.",
+      "voice_context_unavailable": "The restaurant menu could not be loaded.",
+      "vad_unavailable": "Voice activity detection is not ready.",
+      "stt_unavailable": "Speech transcription is not ready.",
+      "llm_unavailable": "The language model is not ready.",
+      "tts_unavailable": "Speech synthesis is not ready.",
+      "vad_failed": "Voice activity detection failed.",
+      "stt_failed": "Speech transcription failed.",
+      "llm_failed": "The language model failed.",
+      "tts_failed": "Speech synthesis failed.",
+      "turn_failed": "The conversation turn failed."
+    },
+    "services": {
+      "backend": "Backend",
+      "mongo": "MongoDB",
+      "gateway": "Gateway",
+      "voice": "Voice service",
+      "stt": "Speech recognition",
+      "llm": "Language model",
+      "tts": "Speech synthesis"
+    },
+    "errors": {
+      "unauthenticated": "Your session has expired. Please sign in again.",
+      "fetchFailed": "Unable to retrieve service health."
     }
   },
   "graphs": {

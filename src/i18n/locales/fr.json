@@ -53,6 +53,7 @@
     "configuration": "CONFIGURATION",
     "myAccount": "MON COMPTE",
     "adminPanel": "ADMIN",
+    "serviceMonitoring": "SERVICES VOCAUX",
     "logout": "DECONNEXION",
     "openMenu": "Ouvrir le menu",
     "closeMenu": "Fermer le menu"
@@ -65,7 +66,60 @@
     "emailPlaceholder": "votre@email.com",
     "passwordPlaceholder": "Votre mot de passe",
     "loginButton": "Se connecter",
-    "loggingIn": "Connexion..."
+    "loggingIn": "Connexion...",
+    "googleButton": "Continuer avec Google",
+    "googleFailed": "Connexion Google impossible",
+    "createAccount": "Créer un compte",
+    "backToSite": "Retour au site"
+  },
+  "site": {
+    "brand": "MySmartFood",
+    "nav": {
+      "pricing": "Tarifs",
+      "login": "Connexion",
+      "register": "Créer un compte",
+      "account": "Mon espace",
+      "dashboard": "Tableau de bord"
+    },
+    "landing": {
+      "title": "L'accueil téléphonique de votre établissement",
+      "subtitle": "Connectez-vous, choisissez une offre, puis ouvrez le lien reçu par e-mail une fois le paiement confirmé.",
+      "seePlans": "Voir les offres",
+      "login": "Se connecter"
+    },
+    "tarifs": {
+      "title": "Offres",
+      "subtitle": "Choisissez l'abonnement adapté à votre établissement.",
+      "cancelled": "Paiement annulé. Vous pouvez réessayer.",
+      "subscribe": "Souscrire",
+      "redirecting": "Redirection...",
+      "minutes": "{{count}} minutes d'appels / mois"
+    },
+    "account": {
+      "title": "Mon espace",
+      "needLogin": "Connectez-vous pour gérer votre abonnement.",
+      "hello": "Connecté en tant que {{name}}.",
+      "checkoutSuccess": "Paiement reçu. Un lien d'accès vient d'être envoyé à votre adresse e-mail. Ouvrez-le pour activer le tableau de bord.",
+      "activePlan": "Abonnement actif : {{plan}}.",
+      "planFallback": "en cours",
+      "waitingToken": "Abonnement confirmé. Ouvrez le lien reçu par e-mail pour activer le tableau de bord.",
+      "resend": "Renvoyer le lien d'accès",
+      "resending": "Envoi...",
+      "resendOk": "Un nouveau lien d'accès a été envoyé à votre adresse e-mail.",
+      "noPlan": "Aucun abonnement actif. Souscrivez une offre pour recevoir votre lien d'accès."
+    },
+    "access": {
+      "title": "Activation de l'accès",
+      "checking": "Vérification du jeton..."
+    },
+    "register": {
+      "title": "Créer un compte",
+      "subtitle": "Un compte est nécessaire pour souscrire et recevoir votre lien d'accès.",
+      "name": "Nom",
+      "submit": "Créer mon compte",
+      "submitting": "Création...",
+      "hasAccount": "Déjà inscrit ?"
+    }
   },
   "homepage": {
     "title": "Tableau de bord"
@@ -422,6 +476,74 @@
     "roles": {
       "user": "Utilisateur",
       "admin": "Administrateur"
+    }
+  },
+  "monitoring": {
+    "title": "Monitoring des services vocaux",
+    "subtitle": "État en temps réel de la chaîne vocale et de ses dépendances",
+    "loading": "Chargement du monitoring...",
+    "refreshing": "Actualisation...",
+    "errorTitle": "Monitoring indisponible",
+    "globalStatus": "Statut global",
+    "lastUpdated": "Dernière actualisation",
+    "fresh": "À jour",
+    "stale": "Données obsolètes",
+    "fallbackOpenAI": "Fallback OpenAI actif",
+    "infrastructure": "Infrastructure",
+    "servicesTitle": "Santé des services",
+    "liveActivity": "Activité en direct",
+    "activeCalls": "Appels actifs",
+    "events": "Événements",
+    "recentAlerts": "Alertes récentes",
+    "noActiveCalls": "Aucun appel actif",
+    "noRecentAlerts": "Aucune alerte récente",
+    "emptyPayload": "Le serveur n’a retourné aucune donnée de monitoring exploitable.",
+    "callId": "ID d’appel",
+    "route": "Route",
+    "step": "Étape",
+    "duration": "Durée",
+    "lastError": "Dernière erreur",
+    "latency": "Latence",
+    "provider": "Fournisseur",
+    "model": "Modèle",
+    "system": "Système",
+    "alertWithoutMessage": "Aucun détail disponible",
+    "notAvailable": "Non disponible",
+    "status": {
+      "healthy": "Opérationnel",
+      "degraded": "Dégradé",
+      "down": "Indisponible",
+      "unknown": "Inconnu"
+    },
+    "reasons": {
+      "openai-fallback-active": "Le LLM Scaleway est remplacé temporairement par OpenAI.",
+      "voice-server-pool-partially-unavailable": "Au moins un serveur vocal est indisponible.",
+      "voice-server-pool-unavailable": "Tous les serveurs vocaux sont indisponibles.",
+      "voice-server-unavailable": "Le service vocal est indisponible.",
+      "voice-server-disabled": "Le service vocal n’est pas configuré.",
+      "voice_context_unavailable": "Le menu du restaurant n’a pas pu être chargé.",
+      "vad_unavailable": "La détection vocale n’est pas prête.",
+      "stt_unavailable": "La transcription vocale n’est pas prête.",
+      "llm_unavailable": "Le modèle de langage n’est pas prêt.",
+      "tts_unavailable": "La synthèse vocale n’est pas prête.",
+      "vad_failed": "La détection vocale a échoué.",
+      "stt_failed": "La transcription a échoué.",
+      "llm_failed": "Le modèle de langage a échoué.",
+      "tts_failed": "La synthèse vocale a échoué.",
+      "turn_failed": "Le traitement du tour de parole a échoué."
+    },
+    "services": {
+      "backend": "Backend",
+      "mongo": "MongoDB",
+      "gateway": "Gateway",
+      "voice": "Service vocal",
+      "stt": "Reconnaissance vocale",
+      "llm": "Modèle de langage",
+      "tts": "Synthèse vocale"
+    },
+    "errors": {
+      "unauthenticated": "Session expirée, veuillez vous reconnecter.",
+      "fetchFailed": "Impossible de récupérer l’état des services."
     }
   },
   "graphs": {

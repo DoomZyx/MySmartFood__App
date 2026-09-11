@@ -1,0 +1,18 @@
+.site-shell {
+  min-height: 100vh;
+  background: linear-gradient(
+    to right,
+    rgb(92, 51, 158),
+    rgb(134, 96, 173),
+    rgb(171, 141, 187),
+    rgb(207, 188, 200),
+    rgb(242, 237, 212)
+  );
+  color: #fff;
+}
+
+.site-shell__main {
+  width: min(960px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 4rem;
+}

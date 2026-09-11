@@ -1,0 +1,55 @@
+.site-espace {
+  h1 {
+    font-size: 2.2rem;
+    margin-bottom: 1rem;
+  }
+
+  p {
+    margin-bottom: 1rem;
+    line-height: 1.5;
+  }
+
+  a {
+    color: #fff;
+    font-weight: 700;
+  }
+}
+
+.site-espace__notice {
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+}
+
+.site-espace__error {
+  background: rgba(255, 255, 255, 0.55);
+  color: #3b0d0d;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+}
+
+.site-espace__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+
+  a,
+  button {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.75rem 1.2rem;
+    border-radius: 999px;
+    background: #fff;
+    color: rgb(92, 51, 158);
+    text-decoration: none;
+    border: 0;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  button:disabled {
+    opacity: 0.7;
+    cursor: wait;
+  }
+}
