@@ -17,10 +17,15 @@ export class TranscriptionHandler {
     this.streamSid = streamSid;
     this.callLogger = callLogger;
     this.processed = false;
+    this.callerNumber = null;
   }
 
   setStreamSid(streamSid) {
     this.streamSid = streamSid;
+  }
+
+  setCallerNumber(callerNumber) {
+    this.callerNumber = callerNumber || null;
   }
 
   /**
@@ -106,7 +111,11 @@ export class TranscriptionHandler {
         this.callLogger.info(this.streamSid, "Transcription courte - envoi quand même à process-call");
       }
 
-      await this.sendToProcessingAPI(normalizedTranscription, startTime);
+      const processingTranscription = this.callerNumber
+        ? `Numéro de téléphone fourni par le système : ${this.callerNumber}\n${normalizedTranscription}`
+        : normalizedTranscription;
+
+      await this.sendToProcessingAPI(processingTranscription, startTime);
     } catch (error) {
       this.callLogger.error(this.streamSid, error, {
         source: "TranscriptionHandler.js",

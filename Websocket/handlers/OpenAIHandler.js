@@ -5,6 +5,7 @@ import { TranscriptionHandler } from "./openai/TranscriptionHandler.js";
 import { BargeInHandler } from "./openai/BargeInHandler.js";
 import { FunctionCallHandler } from "./openai/FunctionCallHandler.js";
 import { ErrorHandler } from "./openai/ErrorHandler.js";
+import { updateStreamRoute } from "../../Services/streamRegistry.js";
 
 /**
  * Gestionnaire principal des messages OpenAI
@@ -39,6 +40,7 @@ export class OpenAIHandler {
       consecutiveFailures: 0,
       lastUserTranscript: "",
       transferTriggered: false,
+      callerNumber: null,
     };
 
     // Initialisation des handlers spécialisés
@@ -59,14 +61,17 @@ export class OpenAIHandler {
   handleMessage(data) {
     switch (data.type) {
       case "session.updated":
+        updateStreamRoute(this.streamSid, { stage: "listening" });
         this.sessionHandler.handleSessionUpdated(data);
         break;
 
       case "response.created":
+        updateStreamRoute(this.streamSid, { stage: "speaking" });
         this.responseHandler.handleResponseCreated(data);
         break;
 
       case "response.cancelled":
+        updateStreamRoute(this.streamSid, { stage: "listening" });
         this.responseHandler.handleResponseCancelled();
         break;
 
@@ -79,6 +84,7 @@ export class OpenAIHandler {
         break;
 
       case "response.done":
+        updateStreamRoute(this.streamSid, { stage: "listening" });
         this.responseHandler.handleResponseCompleted(data);
         break;
 
@@ -95,6 +101,7 @@ export class OpenAIHandler {
         break;
 
       case "input_audio_buffer.speech_started":
+        updateStreamRoute(this.streamSid, { stage: "listening" });
         this.onUserVoiceActivity?.();
         this.bargeInHandler.handleUserSpeechStarted();
         break;
@@ -117,10 +124,12 @@ export class OpenAIHandler {
         break;
 
       case "response.function_call_arguments.done":
+        updateStreamRoute(this.streamSid, { stage: "processing" });
         this.functionCallHandler.handleFunctionCallCompleted(data);
         break;
 
       case "error":
+        updateStreamRoute(this.streamSid, { stage: "error" });
         this.errorHandler.handleError(data);
         break;
 
@@ -152,6 +161,14 @@ export class OpenAIHandler {
     if (this.state.transcription.startsWith("Appel démarré - StreamSid: null")) {
       this.state.transcription = `Appel démarré - StreamSid: ${newStreamSid}\n`;
     }
+  }
+
+  /**
+   * Définit le numéro fiable reçu directement de Twilio.
+   * Il sera imposé aux appels de fonction de création.
+   */
+  setCallerNumber(callerNumber) {
+    this.state.callerNumber = callerNumber || null;
   }
 
   /**

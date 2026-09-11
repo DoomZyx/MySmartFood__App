@@ -3,12 +3,18 @@ import { getVoiceRuntimeConfig } from "../Config/voiceRuntimeConfig.js";
 import WebSocket from "ws";
 import dotenv from "dotenv";
 import { callLogger } from "../Services/logging/logger.js";
-import { registerStream, unregisterStream, getCallSid } from "../Services/streamRegistry.js";
+import {
+  registerStream,
+  unregisterStream,
+  getCallSid,
+  updateStreamRoute,
+} from "../Services/streamRegistry.js";
 import { OpenAIHandler } from "./handlers/OpenAIHandler.js";
 import { TwilioHandler } from "./handlers/TwilioHandler.js";
 import { TranscriptionHandler } from "./handlers/TranscriptionHandler.js";
 import { SilenceMonitor } from "./SilenceMonitor.js";
 import { hangupDueToSilence } from "../utils/humanTransfer.js";
+import { normalizeCallerPhone } from "../utils/callerPhone.js";
 import { cleanAudio, checkRNNoiseAvailability } from "../Services/audioProcessing/audioCleaningService.js";
 import { recordAudioChunk } from "../Services/audioProcessing/audioRecordingService.js";
 
@@ -26,6 +32,37 @@ async function getRnnoiseAvailable() {
     }
   }
   return _rnnoiseAvailable;
+}
+
+function buildCallerSessionUpdate(instanceConfig, callerNumber) {
+  const basePayload = instanceConfig?.openAi?.sessionUpdatePayload;
+  if (!basePayload?.session) return null;
+
+  const phoneContext = callerNumber
+    ? [
+        `- Numéro de téléphone à utiliser pour create_appointment : ${callerNumber}`,
+        "- Ne demande pas ce numéro au client.",
+        "- Ne récite pas et ne confirme pas ce numéro oralement.",
+      ]
+    : [
+        "- Le numéro est indisponible ou masqué.",
+        "- Demande exceptionnellement son numéro une seule fois au client.",
+      ];
+
+  const callerInstructions = [
+    basePayload.session.instructions,
+    "",
+    "CONTEXTE APPELANT FOURNI PAR LE SYSTÈME :",
+    ...phoneContext,
+  ].join("\n");
+
+  return {
+    ...basePayload,
+    session: {
+      ...basePayload.session,
+      instructions: callerInstructions,
+    },
+  };
 }
 
 /**
@@ -130,13 +167,40 @@ export async function handleWebSocketConnection(connection, request, instanceId,
         // Événement START : mettre à jour streamSid dans les handlers
         if (data.event === "start") {
           streamSid = data.start.streamSid;
+          const callerNumber = normalizeCallerPhone(
+            data.start?.customParameters?.callerNumber,
+          );
           openAIHandler.setStreamSid(streamSid);
+          openAIHandler.setCallerNumber(callerNumber);
           twilioHandler.setStreamSid(streamSid);
           transcriptionHandler.setStreamSid(streamSid);
+          transcriptionHandler.setCallerNumber(callerNumber);
           silenceMonitor.start(streamSid);
           twilioHandler.handleMessage(data);
           const callSid = data.start?.callSid || null;
-          registerStream(streamSid, connection, callSid);
+          registerStream(streamSid, connection, callSid, {
+            route: "openai-realtime",
+            instanceId: resolvedInstanceId,
+            stage: "active",
+          });
+
+          const callerSessionUpdate = buildCallerSessionUpdate(
+            instanceConfig,
+            callerNumber,
+          );
+          if (callerSessionUpdate) {
+            const sendCallerSessionUpdate = () => {
+              if (openAiWs?.readyState === WebSocket.OPEN) {
+                openAiWs.send(JSON.stringify(callerSessionUpdate));
+              }
+            };
+
+            if (openAiWs?.readyState === WebSocket.OPEN) {
+              sendCallerSessionUpdate();
+            } else if (!useWorkers && typeof openAiWs?.once === "function") {
+              openAiWs.once("open", sendCallerSessionUpdate);
+            }
+          }
           if (useWorkers && typeof process !== "undefined" && process.pid) {
             console.log(`Worker ${process.pid} gère streamSid ${streamSid}`);
           }
@@ -171,6 +235,7 @@ export async function handleWebSocketConnection(connection, request, instanceId,
           audioChunkCount++;
 
           if (audioChunkCount === 1) {
+            updateStreamRoute(currentStreamSid, { stage: "listening" });
             callLogger.info(currentStreamSid, "Premier chunk audio reçu - début enregistrement", {
               event: "audio_recording_started",
               rnnoiseAvailable
@@ -266,6 +331,7 @@ export async function handleWebSocketConnection(connection, request, instanceId,
       }
       // Désenregistrer le stream
       if (streamSid) {
+        updateStreamRoute(streamSid, { stage: "finalizing" });
         unregisterStream(streamSid);
       }
       // Nettoyer le heartbeat

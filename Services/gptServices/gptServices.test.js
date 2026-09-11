@@ -1,16 +1,18 @@
 // @ts-nocheck
-import { createOpenAiSession } from "./gptServices.js";
-import WebSocket from "ws";
+import { jest } from "@jest/globals";
 
-//Vérifies que la fonction createOpenAiSession() crée bien une connexion WebSocket avec OpenAI et envoie les bons headers.
+const webSocketMock = jest.fn(() => ({
+  on: jest.fn(),
+  send: jest.fn(),
+}));
 
-jest.mock("ws");
+jest.unstable_mockModule("ws", () => ({
+  default: webSocketMock,
+}));
+
+const { createOpenAiSession } = await import("./gptServices.js");
 
 describe("gptService", () => {
-  beforeEach(() => {
-    WebSocket.mockClear();
-  });
-
   it("devrait créer une connexion WebSocket avec les bons headers", () => {
     createOpenAiSession({
       openAi: {
@@ -23,7 +25,7 @@ describe("gptService", () => {
       },
     });
 
-    expect(WebSocket).toHaveBeenCalledWith(
+    expect(webSocketMock).toHaveBeenCalledWith(
       expect.stringContaining("wss://api.openai.com/v1/realtime?model=gpt-realtime-1.5"),
       expect.objectContaining({
         headers: expect.objectContaining({
@@ -31,7 +33,7 @@ describe("gptService", () => {
         }),
       })
     );
-    const [, options] = WebSocket.mock.calls[0];
+    const [, options] = webSocketMock.mock.calls[0];
     expect(options.headers["OpenAI-Beta"]).toBeUndefined();
   });
 });

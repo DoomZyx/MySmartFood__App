@@ -45,6 +45,10 @@ export class FunctionCallHandler {
       const functionName = data.name;
       const args = JSON.parse(data.arguments || "{}");
 
+      if (functionName === "create_appointment" && this.state.callerNumber) {
+        args.telephone = this.state.callerNumber;
+      }
+
       // Logger le JSON parsé pour diagnostic
       this.callLogger.info(this.streamSid, "Function call arguments parsed", {
         functionName,

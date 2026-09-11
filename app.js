@@ -12,21 +12,29 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUi from "@fastify/swagger-ui";
-import callRoutes from "./Routes/Calls/call.js";
 import wsRoutes from "./Routes/Ws/ws.js";
-import processCallRoutes from "./Routes/CallData/processCall.js";
-import authRoutes from "./Routes/Auth/auth.js";
 import notificationRoutes from "./Routes/Ws/notifications.js";
-import orderRoutes from "./Routes/Appointments/order.js";
-import reservationRoutes from "./Routes/Appointments/reservation.js";
-import pricingRoutes from "./Routes/Pricing/pricing.js";
-import phoneLineRoutes from "./Routes/PhoneLine/phoneLine.js";
-import callMinutesRoutes from "./Routes/CallMinutes/callMinutes.js";
 import pingRoutes from "./Routes/Ping/ping.js";
 import monitoringRoutes from "./Routes/Monitoring/monitoring.js";
-import { multiTenantAuth } from "./API/middleware/multiTenantAuth.js";
-import { AuthService } from "./Business/services/AuthService.js";
-import mongoose from "mongoose";
+import { connectDatabase } from "./database/pool.js";
+import { registerSecurityPlugins, buildCorsOrigin } from "./plugins/security.js";
+import { registerGoogleOAuth } from "./plugins/googleOAuth.js";
+import accountAuthRoutes from "./Routes/Auth/accountAuth.js";
+import checkoutRoutes, { stripeWebhookRoutes } from "./Routes/Billing/checkout.js";
+import contactRoutes from "./Routes/Site/contact.js";
+import demoRoutes from "./Routes/Site/demo.js";
+import onboardingRoutes from "./Routes/Onboarding/onboarding.js";
+import tenantDataRoutes from "./Routes/TenantData/tenantData.js";
+import twilioBundleWebhookRoutes from "./Routes/Twilio/bundleWebhook.js";
+import csrfRoutes from "./Routes/Csrf/csrf.js";
+import pricingRoutes from "./Routes/Pricing/pricing.js";
+import orderRoutes from "./Routes/Appointments/order.js";
+import reservationRoutes from "./Routes/Appointments/reservation.js";
+import phoneLineRoutes from "./Routes/PhoneLine/phoneLine.js";
+import callClientRoutes from "./Routes/Calls/callClient.js";
+import callRoutes from "./Routes/Calls/call.js";
+import processCallRoutes from "./Routes/CallData/processCall.js";
+import voiceContextRoutes from "./Routes/Voice/voiceContext.js";
 import {
   beginHttpRequest,
   isProbePath,
@@ -36,18 +44,10 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function connectDB() {
-  try {
-    if (!process.env.MONGO_URI) {
-      throw new Error("MONGO_URI manquant dans le fichier .env");
-    }
-    await mongoose.connect(process.env.MONGO_URI);
-  } catch (err) {
-    logger.error({ err: err.message }, "Erreur de connexion MongoDB");
-    process.exit(1);
-  }
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL manquant : PostgreSQL est obligatoire");
 }
-await connectDB();
+await connectDatabase();
 
 // audit-fix: exiger variables critiques au démarrage (pas de fallback en prod)
 const requiredEnv = [{ name: "JWT_SECRET", minLen: 32 }];
@@ -58,10 +58,6 @@ for (const { name, minLen } of requiredEnv) {
     process.exit(1);
   }
 }
-
-// Créer l'utilisateur admin par défaut (désactivé en prod, voir AuthService)
-await AuthService.createDefaultAdmin();
-
 
 const fastify = Fastify();
 
@@ -122,8 +118,8 @@ const corsSuffix =
     ? ".mysmartfood.fr"
     : String(process.env.CORS_ALLOW_SUBDOMAIN_SUFFIX).trim();
 
-function buildCorsOrigin() {
-  if (corsOriginsFromEnv.length === 0) {
+function legacyBuildCorsOrigin() {
+  if (corsOriginsFromEnv.length === 0 && process.env.NODE_ENV !== "production") {
     return true;
   }
   return (origin, callback) => {
@@ -140,7 +136,7 @@ function buildCorsOrigin() {
       callback(null, normalizedOrigin);
       return;
     }
-    if (corsSuffix.length > 0) {
+    if (corsSuffix.length > 0 && process.env.NODE_ENV !== "production") {
       try {
         const host = new URL(normalizedOrigin).hostname;
         const root = corsSuffix.replace(/^\./, "");
@@ -164,11 +160,19 @@ await fastify.register(cors, {
     "Content-Type",
     "Authorization",
     "x-api-key",
+    "x-csrf-token",
+    "x-tenant-id",
     "Sec-WebSocket-Extensions",
     "Sec-WebSocket-Key",
     "Sec-WebSocket-Version"
   ],
 });
+
+await registerSecurityPlugins(fastify);
+await fastify.register(stripeWebhookRoutes);
+await fastify.register(twilioBundleWebhookRoutes);
+await registerGoogleOAuth(fastify);
+await fastify.register(csrfRoutes);
 
 fastify.register(fastifyFormBody);
 
@@ -211,7 +215,6 @@ fastify.register(fastifyWs, {
   }
 });
 
-fastify.register(callRoutes);
 fastify.register(wsRoutes);
 fastify.register(notificationRoutes);
 
@@ -219,22 +222,20 @@ fastify.register(notificationRoutes);
 fastify.register(pingRoutes, { prefix: "/api" });
 fastify.register(monitoringRoutes, { prefix: "/api/monitoring" });
 
-// Routes orders et réservations (système custom)
+fastify.register(accountAuthRoutes, { prefix: "/api/auth" });
+fastify.register(checkoutRoutes, { prefix: "/api/checkout" });
+fastify.register(contactRoutes, { prefix: "/api/contact" });
+fastify.register(demoRoutes, { prefix: "/api/demo" });
+fastify.register(onboardingRoutes, { prefix: "/api/onboarding" });
+fastify.register(tenantDataRoutes, { prefix: "/api/tenant" });
+fastify.register(pricingRoutes, { prefix: "/api" });
 fastify.register(orderRoutes, { prefix: "/api" });
 fastify.register(reservationRoutes, { prefix: "/api" });
-
-// Routes pricing publiques (système custom)
-fastify.register(pricingRoutes, { prefix: "/api" });
-
-fastify.register(async (instance) => {
-  // Pose request.instanceId depuis INSTANCE_ID (.env) — déploiement mono-client par dossier.
-  instance.addHook("onRequest", multiTenantAuth);
-
-  instance.register(processCallRoutes, { prefix: "/api" });
-  instance.register(phoneLineRoutes, { prefix: "/api" });
-  instance.register(callMinutesRoutes, { prefix: "/api" });
-  instance.register(authRoutes, { prefix: "/api/auth" });
-});
+fastify.register(phoneLineRoutes, { prefix: "/api" });
+fastify.register(callClientRoutes, { prefix: "/api" });
+fastify.register(callRoutes, { prefix: "/api" });
+fastify.register(processCallRoutes, { prefix: "/api" });
+fastify.register(voiceContextRoutes, { prefix: "/api/voice" });
 
 // Gestion globale des erreurs : Fastify log + Winston pour les 5xx (audit #14)
 fastify.setErrorHandler((error, request, reply) => {

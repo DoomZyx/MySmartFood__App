@@ -1,7 +1,18 @@
 import fetch from "node-fetch";
 import dotenv from "dotenv";
+import { resolveRuntimeTenantId } from "../../utils/runtimeTenant.js";
 
 dotenv.config();
+
+function internalHeaders() {
+  return {
+    "x-internal-secret":
+      process.env.SMARTCRM_INTERNAL_SECRET ||
+      process.env.WEBSITE_INTERNAL_SECRET ||
+      process.env.X_API_KEY,
+    "x-tenant-id": resolveRuntimeTenantId(),
+  };
+}
 
 /**
  * Service de gestion des function calls OpenAI
@@ -16,7 +27,7 @@ export class FunctionCallService {
   static async checkAvailability(date) {
     try {
       const baseUrl = `http://localhost:${process.env.PORT || 8080}`;
-      const headers = { "x-api-key": process.env.X_API_KEY };
+      const headers = internalHeaders();
 
       const [ordersResponse, reservationsResponse] = await Promise.all([
         fetch(`${baseUrl}/api/orders/ai/available-slots?date=${date}`, { headers }),
@@ -76,7 +87,7 @@ export class FunctionCallService {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": process.env.X_API_KEY,
+          ...internalHeaders(),
         },
         body: requestBody,
       });

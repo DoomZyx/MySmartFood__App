@@ -18,7 +18,13 @@ export default async function callRoutes(fastify) {
       return reply.type("text/xml").send(generateTwimlTransferToRestaurant(transferNumber));
     }
     const host = request.headers.host;
-    const xml = generateTwiml(host);
+    const callerNumber = request.body?.From ?? request.query?.From ?? null;
+    const xml = generateTwiml(
+      host,
+      "/media-stream",
+      callerNumber,
+      instanceId,
+    );
     return reply.type("text/xml").send(xml);
   });
 }

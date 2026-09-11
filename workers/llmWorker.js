@@ -21,6 +21,14 @@ export function createSession(instanceConfig, streamSid) {
     destroySession(streamSid);
   }
   const ws = createOpenAiSession(instanceConfig);
+  ws.on("open", () => {
+    const session = sessions.get(streamSid);
+    if (!session) return;
+
+    for (const payload of session.pendingControlMessages.splice(0)) {
+      ws.send(payload);
+    }
+  });
   ws.on("message", (msg) => {
     try {
       const data = JSON.parse(msg.toString());
@@ -36,7 +44,7 @@ export function createSession(instanceConfig, streamSid) {
     console.error("[llmWorker] OpenAI WS error:", err);
     sessions.delete(streamSid);
   });
-  sessions.set(streamSid, { ws });
+  sessions.set(streamSid, { ws, pendingControlMessages: [] });
 }
 
 /**
@@ -62,8 +70,15 @@ export function sendAudio(streamSid, payload) {
  */
 export function send(streamSid, data) {
   const session = sessions.get(streamSid);
-  if (!session?.ws || session.ws.readyState !== 1) return;
+  if (!session?.ws) return;
   const payload = typeof data === "string" ? data : JSON.stringify(data);
+
+  if (session.ws.readyState === 0) {
+    session.pendingControlMessages.push(payload);
+    return;
+  }
+  if (session.ws.readyState !== 1) return;
+
   session.ws.send(payload);
 }
 
