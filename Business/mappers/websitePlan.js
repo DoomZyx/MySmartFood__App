@@ -5,6 +5,7 @@ export const WEBSITE_PLAN_SLUGS = {
   3: "standard",
   4: "premium",
   5: "premium",
+  6: "beta",
 };
 
 export function slugFromWebsitePlanId(planId) {
