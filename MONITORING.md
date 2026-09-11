@@ -30,8 +30,32 @@ Les metriques HTTP, extraction et alertes sont **in-memory** : elles se reinitia
 - HTTP : volume, 2xx/4xx/5xx, latence avg/p95/max (hors sondes `/ping` `/health` `/status`)
 - Extraction GPT : succes, erreurs STT/parsing, telephones/heures invalides, echecs consecutifs
 - OpenAI : etat du circuit breaker
-- Runtime : streams media actifs, sockets notifications, taille de la queue transcription
+- Services : Backend, Voice Server et Gateway avec disponibilite et latence
+- Moteurs vocaux : VAD, STT, LLM et TTS remontes par le Voice Server
+- Runtime : appels actifs sanitizes, route, etape, fournisseur, sockets notifications et queue transcription
 - Persistance : extractions en echec sur 24 h (MongoDB)
+
+Le snapshot conserve les anciens champs et ajoute :
+
+- `services.backend`, `services.voiceServer`, `services.gateway`
+- `engines.vad`, `engines.stt`, `engines.llm`, `engines.tts`
+- `runtime.activeCalls`
+- `fallbackOpenAI`
+
+Les appels actifs ne contiennent ni numero de telephone ni transcription.
+
+Configuration des sondes :
+
+- `VOICE_HEALTH_URL` : endpoint `/health` du Voice Server
+- `VOICE_MONITORING_URL` : endpoint privé `/monitoring`, dérivé de l'URL de
+  santé si absent
+- `VOICE_SERVICE_URLS` : bases HTTP des réplicas, séparées par des virgules ;
+  prioritaire sur les variables historiques
+- `GATEWAY_HEALTH_URL` : endpoint `/health` du Gateway, optionnel
+
+Chaque sonde a un timeout court et ne fait jamais echouer la reponse admin.
+Un service configure mais injoignable fait passer le statut global a
+`degraded`. MongoDB indisponible produit `unhealthy`.
 
 ## Alertes
 
@@ -56,9 +80,16 @@ Interroge `/api/health` et `/api/status` toutes les 5 s (`MONITOR_HOST`, `MONITO
 
 Stdout/stderr uniquement (`Services/logging/logger.js`). Les secrets sont masques. Plus de fichiers Winston.
 
-## Hors scope actuel
+## Interface administrateur
+
+La page `/admin/services` interroge `GET /api/monitoring` toutes les cinq
+secondes. Elle est protegee par le role administrateur et affiche les services,
+les moteurs vocaux, le fallback OpenAI, les appels actifs et les alertes.
+
+## Limites connues
 
 - CallMonitor / quota minutes : modele et routes existent, le cycle de vie appel n'est pas cable ici
 - Routes orphelines `Routes/Auth/stats.js` et `maintenance.js` : non enregistrees, chiffres simules
-- Gateway (`gateway.js`) : process separe, pas de healthcheck
+- Le compteur du Gateway est local au worker qui repond ; le cluster n'est pas encore agrege par IPC
+- Les metriques vocales et backend sont en memoire et repartent de zero au redemarrage
 - Prometheus / Sentry / Grafana : non integres

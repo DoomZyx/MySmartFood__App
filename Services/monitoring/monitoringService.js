@@ -6,12 +6,13 @@
 import mongoose from "mongoose";
 import circuitBreaker from "../gptServices/circuitBreaker.js";
 import { getQueueStatus } from "../queue/transcriptionQueue.js";
-import { getActiveStreamCount } from "../streamRegistry.js";
+import { getActiveCalls } from "../streamRegistry.js";
 import notificationService from "../notificationService.js";
 import FailedExtractionModel from "../../models/failedExtraction.js";
 import { getAllMetrics } from "./extractionMetrics.js";
 import { getHttpMetrics } from "./httpMetrics.js";
 import { getRecentAlerts, isAlertMonitoringActive } from "../alerting/alertService.js";
+import { getExternalHealthSnapshot } from "./serviceHealth.js";
 
 const EVENT_LOOP_INTERVAL_MS = 500;
 const HTTP_5XX_DEGRADED_RATE = 5;
@@ -84,8 +85,20 @@ async function getFailedExtractions24h() {
   }
 }
 
-function deriveOverallStatus({ mongo, http, extraction, circuit }) {
+export function deriveOverallStatus({
+  mongo,
+  http,
+  extraction,
+  circuit,
+  services = {},
+}) {
   if (mongo.status !== "ok") return "unhealthy";
+  const unavailableService = Object.values(services).some(
+    (service) =>
+      service?.configured !== false &&
+      service?.status !== "healthy",
+  );
+  if (unavailableService) return "degraded";
   if (circuit.state === "OPEN") return "degraded";
   if ((http.errorRate || 0) >= HTTP_5XX_DEGRADED_RATE) return "degraded";
   if ((extraction.consecutiveFailures || 0) >= 10) return "degraded";
@@ -125,23 +138,88 @@ export async function getPublicStatusPayload() {
   };
 }
 
+function mergeActiveCalls(proxyCalls, voiceSessions) {
+  const callsByStream = new Map(
+    proxyCalls.map((call) => [call.streamSid, { ...call }]),
+  );
+
+  for (const voiceSession of voiceSessions) {
+    const streamSid = voiceSession.streamSid;
+    const existing = streamSid ? callsByStream.get(streamSid) : null;
+    if (existing) {
+      callsByStream.set(streamSid, {
+        ...existing,
+        stage: voiceSession.stage || existing.stage,
+        provider: voiceSession.provider || null,
+        lastError: voiceSession.lastError || null,
+      });
+      continue;
+    }
+
+    const key = streamSid || `voice-session-${callsByStream.size + 1}`;
+    callsByStream.set(key, {
+      streamSid,
+      callSid: voiceSession.callSid,
+      startedAt: null,
+      elapsedSeconds: voiceSession.elapsedSeconds,
+      route: "voice-server",
+      instanceId: voiceSession.instanceId,
+      stage: voiceSession.stage,
+      provider: voiceSession.provider,
+      lastError: voiceSession.lastError,
+    });
+  }
+
+  return Array.from(callsByStream.values());
+}
+
+function unavailableVoiceEngine(voiceService) {
+  return {
+    ready: false,
+    status:
+      voiceService.configured === false ? "unknown" : "unhealthy",
+    message:
+      voiceService.configured === false
+        ? "voice-server-disabled"
+        : "voice-server-unavailable",
+  };
+}
+
 export async function getFullSnapshot() {
-  const [mongo, failedExtractions24h] = await Promise.all([
+  const [mongo, failedExtractions24h, externalHealth] = await Promise.all([
     getMongoStatus(),
     getFailedExtractions24h(),
+    getExternalHealthSnapshot(),
   ]);
   const processInfo = getProcessSnapshot();
   const http = getHttpMetrics();
   const extraction = getAllMetrics();
   const circuit = circuitBreaker.getState();
   const queue = getQueueStatus();
+  const proxyCalls = getActiveCalls();
+  const activeCalls = mergeActiveCalls(
+    proxyCalls,
+    externalHealth.voiceServer.activeSessions || [],
+  );
+  const services = {
+    backend: {
+      configured: true,
+      status: mongo.status === "ok" ? "healthy" : "unhealthy",
+      reachable: true,
+    },
+    voiceServer: externalHealth.voiceServer.service,
+    gateway: externalHealth.gateway.service,
+  };
 
   const status = deriveOverallStatus({
     mongo,
     http,
     extraction,
     circuit,
+    services,
   });
+  const voiceComponents = externalHealth.voiceServer.components || {};
+  const voiceEngineFallback = unavailableVoiceEngine(services.voiceServer);
 
   return {
     status,
@@ -150,6 +228,21 @@ export async function getFullSnapshot() {
     dependencies: {
       mongodb: mongo,
     },
+    services,
+    engines: {
+      vad: voiceComponents.vad || voiceEngineFallback,
+      stt: voiceComponents.stt || voiceEngineFallback,
+      llm: voiceComponents.llm || voiceEngineFallback,
+      tts: voiceComponents.tts || voiceEngineFallback,
+      voiceServer: externalHealth.voiceServer.engines || { ready: false },
+      openaiRealtime: {
+        status: circuit.state === "OPEN" ? "unhealthy" : "healthy",
+        ready: circuit.state !== "OPEN",
+        circuitBreakerState: circuit.state,
+      },
+    },
+    fallbackOpenAI:
+      externalHealth.voiceServer.llmProviderActive === "openai",
     http,
     extraction,
     openai: {
@@ -160,7 +253,8 @@ export async function getFullSnapshot() {
       },
     },
     runtime: {
-      activeMediaStreams: getActiveStreamCount(),
+      activeMediaStreams: activeCalls.length,
+      activeCalls,
       notificationSockets: notificationService.connections.size,
       transcriptionQueue: {
         queueSize: queue.queueSize,

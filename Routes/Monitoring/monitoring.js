@@ -1,19 +1,19 @@
-import { requireAdmin } from "../../middleware/auth.js";
+import { requirePlatformAdmin } from "../../middleware/sessionAuth.js";
 import { MonitoringController } from "../../API/controllers/MonitoringController.js";
 
 export default async function monitoringRoutes(fastify) {
   fastify.get("/", {
-    preHandler: [requireAdmin],
+    preHandler: [requirePlatformAdmin],
     handler: MonitoringController.getSnapshot,
   });
 
   fastify.get("/metrics", {
-    preHandler: [requireAdmin],
+    preHandler: [requirePlatformAdmin],
     handler: MonitoringController.getMetrics,
   });
 
   fastify.get("/alerts", {
-    preHandler: [requireAdmin],
+    preHandler: [requirePlatformAdmin],
     schema: {
       querystring: {
         type: "object",
