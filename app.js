@@ -35,6 +35,7 @@ import callClientRoutes from "./Routes/Calls/callClient.js";
 import callRoutes from "./Routes/Calls/call.js";
 import processCallRoutes from "./Routes/CallData/processCall.js";
 import voiceContextRoutes from "./Routes/Voice/voiceContext.js";
+import platformAdminRoutes from "./Routes/Platform/platformAdmin.js";
 import {
   beginHttpRequest,
   isProbePath,
@@ -50,7 +51,10 @@ if (!process.env.DATABASE_URL) {
 await connectDatabase();
 
 // audit-fix: exiger variables critiques au démarrage (pas de fallback en prod)
-const requiredEnv = [{ name: "JWT_SECRET", minLen: 32 }];
+const requiredEnv = [
+  { name: "JWT_SECRET", minLen: 32 },
+  { name: "ACCOUNT_IDENTIFIER_ENCRYPTION_KEY", minLen: 32 },
+];
 for (const { name, minLen } of requiredEnv) {
   const v = process.env[name];
   if (!v || typeof v !== "string" || v.length < minLen) {
@@ -236,6 +240,7 @@ fastify.register(callClientRoutes, { prefix: "/api" });
 fastify.register(callRoutes, { prefix: "/api" });
 fastify.register(processCallRoutes, { prefix: "/api" });
 fastify.register(voiceContextRoutes, { prefix: "/api/voice" });
+fastify.register(platformAdminRoutes, { prefix: "/api/platform" });
 
 // Gestion globale des erreurs : Fastify log + Winston pour les 5xx (audit #14)
 fastify.setErrorHandler((error, request, reply) => {

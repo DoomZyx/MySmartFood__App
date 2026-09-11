@@ -7,6 +7,7 @@ import * as EstablishmentProfile from "../../models/pg/EstablishmentProfile.js";
 import { getPool } from "../../database/pool.js";
 import { websitePlanIdFromSlug } from "../mappers/websitePlan.js";
 import { dashboardUrl } from "../../utils/publicUrls.js";
+import { decryptGoogleId } from "../../utils/accountIdentifierCrypto.js";
 
 export class AccountAuthError extends Error {
   constructor(message, statusCode = 400) {
@@ -71,7 +72,7 @@ export async function loginWithGoogleProfile(profile) {
 
   const byEmail = await User.findByEmail(email);
   if (byEmail) {
-    if (byEmail.googleId && byEmail.googleId !== profile.googleId) {
+    if (byEmail.hasGoogleId) {
       throw new AccountAuthError("Ce compte est déjà lié à un autre identifiant Google", 409);
     }
     const linked = await User.linkGoogle(byEmail.id, {
@@ -111,7 +112,9 @@ export async function confirmGoogleLink({ userId, token }) {
     `UPDATE oauth_link_challenges SET consumed_at = NOW() WHERE id = $1`,
     [challenge.id]
   );
-  const user = await User.linkGoogle(userId, { googleId: challenge.googleId });
+  const user = await User.linkGoogle(userId, {
+    googleId: decryptGoogleId(challenge.googleId),
+  });
   return user;
 }
 
@@ -127,6 +130,7 @@ export async function sessionPayload(user) {
   const first = tenants[0] || null;
   let planSlug = null;
   let planId = null;
+  let planName = null;
   let twilioDocsSubmittedAt = null;
   let subscriptionStatus = null;
   if (first) {
@@ -135,6 +139,7 @@ export async function sessionPayload(user) {
     if (subscription?.planId) {
       const plan = await Plan.findById(subscription.planId);
       planSlug = plan?.slug || null;
+      planName = plan?.name || null;
       planId = websitePlanIdFromSlug(planSlug);
     }
     const profile = await EstablishmentProfile.findByTenantId(first.id);
@@ -151,6 +156,7 @@ export async function sessionPayload(user) {
       avatar: publicUser.avatarUrl,
       planId,
       planSlug,
+      planName,
       hasActiveSubscription,
       accessUnlocked,
       smartcrmInstanceId: first?.id || null,

@@ -27,6 +27,7 @@
     "db:import-mongo": "node scripts/importMongoTenantData.js",
     "db:import-mongo:apply": "node scripts/importMongoTenantData.js --apply",
     "db:provision-dev": "node scripts/provisionDevTenant.js",
+    "db:encrypt-google-ids": "node scripts/encryptGoogleIds.js",
     "db:cutover-check": "node scripts/controlledCutover.js",
     "db:purge-docs": "node scripts/purgeOnboardingDocuments.js"
   },

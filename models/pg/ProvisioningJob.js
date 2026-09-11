@@ -23,6 +23,17 @@ export async function findByTenantId(tenantId) {
   return result.rows[0] ? toCamelCase(result.rows[0]) : null;
 }
 
+export async function markCompleted(tenantId) {
+  const result = await getPool().query(
+    `UPDATE provisioning_jobs
+        SET state = 'completed', last_error = NULL
+      WHERE tenant_id = $1
+      RETURNING id, tenant_id AS "tenantId", state`,
+    [tenantId]
+  );
+  return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+}
+
 export async function transition(tenantId, fromStates, toState, patch = {}) {
   const result = await getPool().query(
     `UPDATE provisioning_jobs

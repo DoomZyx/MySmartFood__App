@@ -2,6 +2,7 @@ import "../Config/env.js";
 import pg from "pg";
 import { connectDatabase, closeDatabase, buildSslConfig } from "../database/pool.js";
 import { getPool } from "../database/pool.js";
+import { encryptGoogleId, hashGoogleId } from "../utils/accountIdentifierCrypto.js";
 
 /**
  * Importe users, contacts, demos et profils depuis l'ancienne base site.
@@ -31,14 +32,20 @@ async function main() {
       userIdMap.set(row.id, existing.rows[0].id);
       continue;
     }
+    const encryptedGoogleId = row.google_id ? encryptGoogleId(row.google_id) : null;
+    const googleIdHash = row.google_id ? hashGoogleId(row.google_id) : null;
     const inserted = await dest.query(
-      `INSERT INTO users (email, name, google_id, password_hash, avatar_url, email_verified, created_at)
-       VALUES (LOWER($1), $2, $3, $4, $5, $6, $7)
+      `INSERT INTO users (
+         email, name, google_id, google_id_hash, password_hash,
+         avatar_url, email_verified, created_at
+       )
+       VALUES (LOWER($1), $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
       [
         row.email,
         row.name,
-        row.google_id,
+        encryptedGoogleId,
+        googleIdHash,
         row.password_hash,
         row.avatar,
         Boolean(row.google_id),

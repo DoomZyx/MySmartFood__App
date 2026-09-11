@@ -15,16 +15,16 @@ import {
   setSessionCookie,
 } from "../../middleware/sessionAuth.js";
 import * as User from "../../models/pg/User.js";
-import * as Membership from "../../models/pg/Membership.js";
 import * as EstablishmentProfile from "../../models/pg/EstablishmentProfile.js";
 import { saveProfile, submitOnboardingDossier } from "../../Business/services/DocumentComplianceService.js";
 import { profileToWebsite } from "../../Business/mappers/websiteProfile.js";
 import { AccountProfileService } from "../../Business/services/AccountProfileService.js";
-
-async function firstTenantId(userId) {
-  const memberships = await Membership.listByUserId(userId);
-  return memberships[0]?.tenantId || null;
-}
+import {
+  countryCodeFromLabel,
+  ensureBetaTenant,
+  firstTenantId,
+} from "../../Business/services/TenantOnboardingService.js";
+import logger from "../../Services/logging/logger.js";
 
 function handleAuthError(error, reply) {
   if (error instanceof AccountAuthError) {
@@ -120,15 +120,13 @@ export const AccountAuthController = {
   },
 
   async updateWebsiteProfile(request, reply) {
-    const tenantId = await firstTenantId(request.user.id);
-    if (!tenantId) {
-      return reply.code(409).send({
-        error: "Aucun établissement : souscrivez un abonnement d'abord",
-        message: "Aucun établissement : souscrivez un abonnement d'abord",
-      });
-    }
     try {
-      const profile = await saveProfile(tenantId, request.body || {});
+      const body = request.body || {};
+      const tenantId = await ensureBetaTenant(request.user, {
+        name: body.nomEtablissement || body.businessName,
+        countryCode: countryCodeFromLabel(body.pays || body.country),
+      });
+      const profile = await saveProfile(tenantId, body);
       return reply.send(profileToWebsite(profile));
     } catch (error) {
       return reply.code(error.statusCode || 500).send({
@@ -139,14 +137,10 @@ export const AccountAuthController = {
   },
 
   async submitWebsiteOnboarding(request, reply) {
-    const tenantId = await firstTenantId(request.user.id);
-    if (!tenantId) {
-      return reply.code(409).send({
-        error: "Aucun établissement : souscrivez un abonnement d'abord",
-        message: "Aucun établissement : souscrivez un abonnement d'abord",
-      });
-    }
     try {
+      const tenantId = await ensureBetaTenant(request.user, {
+        name: request.user.name || request.user.email,
+      });
       const files = {};
       const body = {};
       const parts = request.parts();

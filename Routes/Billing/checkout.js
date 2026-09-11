@@ -1,11 +1,30 @@
 import { createCheckoutSession, handleStripeWebhook } from "../../Business/services/StripeBillingService.js";
+import { ensureBetaTenant } from "../../Business/services/TenantOnboardingService.js";
+import { sessionPayload } from "../../Business/services/AccountAuthService.js";
 import { requireAuth } from "../../middleware/sessionAuth.js";
 import * as Plan from "../../models/pg/Plan.js";
+import * as User from "../../models/pg/User.js";
 import logger from "../../Services/logging/logger.js";
 
 export default async function checkoutRoutes(fastify) {
   fastify.get("/plans", async () => {
     return { plans: await Plan.listActive() };
+  });
+
+  fastify.post("/start-beta", {
+    preHandler: [requireAuth],
+    handler: async (request, reply) => {
+      try {
+        await ensureBetaTenant(request.user, {
+          name: request.user.name || request.user.email,
+        });
+        const user = await User.findById(request.user.id);
+        const payload = await sessionPayload(user);
+        return reply.send(payload);
+      } catch (err) {
+        return reply.code(err.statusCode || 500).send({ error: err.message });
+      }
+    },
   });
 
   fastify.post("/create-session", {

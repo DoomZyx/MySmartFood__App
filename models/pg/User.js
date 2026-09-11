@@ -1,22 +1,30 @@
 import bcrypt from "bcryptjs";
 import { getPool } from "../../database/pool.js";
 import { toCamelCase } from "../../utils/rowMapper.js";
+import { encryptGoogleId, hashGoogleId } from "../../utils/accountIdentifierCrypto.js";
 
 const SALT_ROUNDS = 12;
 
 const USER_COLUMNS = `
   id, email, email_verified AS "emailVerified", name, avatar_url AS "avatarUrl",
-  google_id AS "googleId", is_platform_admin AS "isPlatformAdmin",
+  google_id_hash AS "googleIdHash", is_platform_admin AS "isPlatformAdmin",
   last_login_at AS "lastLoginAt", dashboard_unlocked_at AS "dashboardUnlockedAt",
   created_at AS "createdAt", updated_at AS "updatedAt"
 `;
+
+function mapUser(row) {
+  if (!row) return null;
+  const user = toCamelCase(row);
+  user.hasGoogleId = Boolean(user.googleIdHash);
+  return user;
+}
 
 export async function findById(id) {
   const result = await getPool().query(
     `SELECT ${USER_COLUMNS} FROM users WHERE id = $1`,
     [id]
   );
-  return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+  return mapUser(result.rows[0]);
 }
 
 export async function findByEmail(email) {
@@ -25,7 +33,7 @@ export async function findByEmail(email) {
     `SELECT ${USER_COLUMNS} FROM users WHERE LOWER(email) = LOWER(TRIM($1)) LIMIT 1`,
     [email]
   );
-  return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+  return mapUser(result.rows[0]);
 }
 
 export async function listByTenantId(tenantId) {
@@ -47,10 +55,10 @@ export async function listByTenantId(tenantId) {
 export async function findByGoogleId(googleId) {
   if (!googleId) return null;
   const result = await getPool().query(
-    `SELECT ${USER_COLUMNS} FROM users WHERE google_id = $1 LIMIT 1`,
-    [googleId]
+    `SELECT ${USER_COLUMNS} FROM users WHERE google_id_hash = $1 LIMIT 1`,
+    [hashGoogleId(googleId)]
   );
-  return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+  return mapUser(result.rows[0]);
 }
 
 export async function create({
@@ -65,21 +73,27 @@ export async function create({
   const passwordHash = password
     ? await bcrypt.hash(String(password).trim(), SALT_ROUNDS)
     : null;
+  const encryptedGoogleId = googleId ? encryptGoogleId(googleId) : null;
+  const googleIdHash = googleId ? hashGoogleId(googleId) : null;
   const result = await getPool().query(
-    `INSERT INTO users (email, name, google_id, avatar_url, email_verified, password_hash, is_platform_admin)
-     VALUES (LOWER(TRIM($1)), $2, $3, $4, $5, $6, $7)
+    `INSERT INTO users (
+       email, name, google_id, google_id_hash, avatar_url,
+       email_verified, password_hash, is_platform_admin
+     )
+     VALUES (LOWER(TRIM($1)), $2, $3, $4, $5, $6, $7, $8)
      RETURNING ${USER_COLUMNS}`,
     [
       email,
       name || null,
-      googleId || null,
+      encryptedGoogleId,
+      googleIdHash,
       avatarUrl || null,
       Boolean(emailVerified),
       passwordHash,
       Boolean(isPlatformAdmin),
     ]
   );
-  return toCamelCase(result.rows[0]);
+  return mapUser(result.rows[0]);
 }
 
 export async function updateEmail(userId, email) {
@@ -87,7 +101,7 @@ export async function updateEmail(userId, email) {
     `UPDATE users SET email = LOWER(TRIM($2)), email_verified = TRUE WHERE id = $1 RETURNING ${USER_COLUMNS}`,
     [userId, email]
   );
-  return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+  return mapUser(result.rows[0]);
 }
 
 export async function setPlatformAdmin(userId, enabled) {
@@ -95,7 +109,7 @@ export async function setPlatformAdmin(userId, enabled) {
     `UPDATE users SET is_platform_admin = $2 WHERE id = $1 RETURNING ${USER_COLUMNS}`,
     [userId, Boolean(enabled)]
   );
-  return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+  return mapUser(result.rows[0]);
 }
 
 export async function setPassword(userId, plainPassword) {
@@ -120,17 +134,20 @@ export async function verifyPassword(userId, plainPassword) {
 }
 
 export async function linkGoogle(userId, { googleId, avatarUrl, name }) {
+  const encryptedGoogleId = encryptGoogleId(googleId);
+  const googleIdHash = hashGoogleId(googleId);
   const result = await getPool().query(
     `UPDATE users
         SET google_id = $2,
-            avatar_url = COALESCE($3, avatar_url),
-            name = COALESCE($4, name),
+            google_id_hash = $3,
+            avatar_url = COALESCE($4, avatar_url),
+            name = COALESCE($5, name),
             email_verified = TRUE
       WHERE id = $1
       RETURNING ${USER_COLUMNS}`,
-    [userId, googleId, avatarUrl || null, name || null]
+    [userId, encryptedGoogleId, googleIdHash, avatarUrl || null, name || null]
   );
-  return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+  return mapUser(result.rows[0]);
 }
 
 export async function touchLastLogin(userId) {
@@ -167,7 +184,7 @@ export async function updateAccount(userId, { name, email, avatarUrl }) {
       RETURNING ${USER_COLUMNS}`,
     [userId, nextName, nextEmail, nextAvatar]
   );
-  return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+  return mapUser(result.rows[0]);
 }
 
 export function publicUser(user) {

@@ -136,7 +136,7 @@ INSTRUCTIONS IMPORTANTES :
 
 EXEMPLE DE PRISE DE COMMANDE AVEC OPTIONS :
 Client : "Je veux un menu tacos double"
-Toi : "Parfait ! Pour votre tacos double, quelle viande souhaitez-vous ?"
+Toi : "Quelle viande souhaitez-vous dans le tacos ?"
 Client : "Poulet"
 Toi : "Et comme sauce ?"
 Client : "Samourai"
@@ -144,7 +144,7 @@ Toi : "Des crudités ?"
 Client : "Oui salade et tomates"
 Toi : "Et quelle boisson avec votre menu ?"
 Client : "Un coca"
-Toi : "Parfait ! C'est note : menu tacos double poulet sauce samourai avec salade et tomates, et un coca. Pour quelle heure ?"
+Toi : "Ce sera pour quelle heure ?"
 `;
 
   enrichedPrompt += pricingInfo;

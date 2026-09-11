@@ -42,14 +42,18 @@ export function clearSessionCookie(reply) {
   reply.clearCookie(JWT_COOKIE_NAME, { ...cookieOptions(), maxAge: 0 });
 }
 
+function looksLikeJwt(token) {
+  return typeof token === "string" && token.split(".").length === 3;
+}
+
 function readCookieToken(request) {
   const raw = request.cookies?.[JWT_COOKIE_NAME];
   if (!raw) return null;
   if (typeof request.unsignCookie === "function") {
     const unsigned = request.unsignCookie(raw);
-    if (unsigned?.valid) return unsigned.value;
+    if (unsigned?.valid && looksLikeJwt(unsigned.value)) return unsigned.value;
   }
-  return raw;
+  return looksLikeJwt(raw) ? raw : null;
 }
 
 function readToken(request) {
@@ -58,7 +62,9 @@ function readToken(request) {
   const header = request.headers.authorization;
   if (header?.startsWith("Bearer ")) {
     const bearer = header.slice(7).trim();
-    if (bearer && bearer !== "null" && bearer !== "undefined") return bearer;
+    if (bearer && bearer !== "null" && bearer !== "undefined" && looksLikeJwt(bearer)) {
+      return bearer;
+    }
   }
   return null;
 }

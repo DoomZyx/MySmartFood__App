@@ -2,6 +2,14 @@
  * Gestionnaire de session OpenAI
  * Gère les événements liés à la session (session.updated)
  */
+export function buildGreetingInstruction(restaurantName) {
+  const greeting = restaurantName
+    ? `${restaurantName}, bonjour. Que puis-je faire pour vous ?`
+    : "Bonjour, que puis-je faire pour vous ?";
+
+  return `Dis exactement cette phrase, avec un ton naturel et accueillant : ${greeting}`;
+}
+
 export class SessionHandler {
   constructor(streamSid, callLogger, openAiWs, state) {
     this.streamSid = streamSid;
@@ -18,12 +26,11 @@ export class SessionHandler {
     if (!this.state.initialGreetingSent && this.openAiWs && this.openAiWs.readyState === 1) {
       this.state.initialGreetingSent = true;
 
-      let greetingInstruction = "Dis exactement : Bonjour, je vous écoute.";
+      let greetingInstruction = buildGreetingInstruction();
       try {
         const { getRestaurantInfo } = await import("../../../Services/gptServices/pricingService.js");
         const restaurantInfo = await getRestaurantInfo();
-        const nomRestaurant = restaurantInfo?.nom || "le restaurant";
-        greetingInstruction = `Dis exactement cette phrase d'accueil, rien d'autre : Bonjour, ${nomRestaurant}, je vous écoute.`;
+        greetingInstruction = buildGreetingInstruction(restaurantInfo?.nom);
       } catch (_) {
         // Fallback si erreur chargement config
       }

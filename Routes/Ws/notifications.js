@@ -2,6 +2,36 @@
 import notificationService from "../../Services/notificationService.js";
 import { callLogger } from "../../Services/logging/logger.js";
 import { notifDebugLog } from "../../Services/logging/notifDebugLog.js";
+import { requireAuth } from "../../middleware/sessionAuth.js";
+import { buildCorsOrigin } from "../../plugins/security.js";
+
+export async function requireAllowedNotificationOrigin(request, reply) {
+  const origin = request.headers.origin;
+  if (!origin) {
+    return reply.code(403).send({ error: "Origine WebSocket manquante" });
+  }
+
+  const originValidator = buildCorsOrigin();
+  if (originValidator === true) return;
+
+  const isAllowed = await new Promise((resolve, reject) => {
+    originValidator(origin, (error, allowedOrigin) => {
+      if (error) reject(error);
+      else resolve(Boolean(allowedOrigin));
+    });
+  });
+
+  if (!isAllowed) {
+    return reply.code(403).send({ error: "Origine WebSocket refusée" });
+  }
+}
+
+export function notificationWebSocketOptions() {
+  return {
+    websocket: true,
+    preValidation: [requireAllowedNotificationOrigin, requireAuth],
+  };
+}
 
 function requireApiKey(request, reply, done) {
   notifDebugLog("requireApiKey: requete recue x-api-key=" + (request.headers["x-api-key"] ? "present" : "absent"));
@@ -79,7 +109,7 @@ function attachNotificationWebSocket(connection, req, routeLabel) {
 
 export default async function notificationRoutes(fastify, options) {
   // Deux chemins : /api/ws/... pour reverse proxy qui ne forward que /api/* ; /ws/... rétrocompat.
-  const wsOpts = { websocket: true };
+  const wsOpts = notificationWebSocketOptions();
   fastify.get("/ws/notifications", wsOpts, (connection, req) =>
     attachNotificationWebSocket(connection, req, "/ws/notifications")
   );
