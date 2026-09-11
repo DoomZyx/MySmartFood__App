@@ -1,6 +1,6 @@
 import fastify from "./app.js";
 import { config } from "./Config/env.js";
-import mongoose from "mongoose";
+import { closeDatabase } from "./database/pool.js";
 import logger from "./Services/logging/logger.js";
 import {
   startAlertMonitoring,
@@ -14,12 +14,20 @@ import {
 const PORT = config.PORT;
 const HOST = "0.0.0.0";
 
-const close = async () => {
+let closing = false;
+
+const close = async (signal) => {
+  if (closing) return;
+  closing = true;
   try {
     stopAlertMonitoring();
     stopRuntimeProbes();
     await fastify.close();
-    await mongoose.connection.close();
+    await closeDatabase().catch(() => {});
+    if (signal === "SIGUSR2") {
+      process.kill(process.pid, "SIGUSR2");
+      return;
+    }
     process.exit(0);
   } catch (e) {
     logger.error({ err: e?.message }, "Fermeture serveur");
@@ -27,8 +35,9 @@ const close = async () => {
   }
 };
 
-process.on("SIGINT", close);
-process.on("SIGTERM", close);
+process.on("SIGINT", () => close("SIGINT"));
+process.on("SIGTERM", () => close("SIGTERM"));
+process.once("SIGUSR2", () => close("SIGUSR2"));
 
 try {
   startRuntimeProbes();
