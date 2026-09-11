@@ -1,41 +1,9 @@
-import { AuthController } from "../../API/controllers/AuthController.js";
 import { ProfileController } from "../../API/controllers/ProfileController.js";
 import { UserController } from "../../API/controllers/UserController.js";
 import { authenticateToken, requireAdmin } from "../../middleware/auth.js";
 
 export default async function authRoutes(fastify, options) {
-  // Route de connexion (publique)
-  fastify.post("/login", {
-    schema: {
-      body: {
-        type: "object",
-        properties: {
-          email: { type: "string", format: "email" },
-          password: { type: "string", minLength: 6 },
-        },
-        required: ["email", "password"],
-      },
-    },
-    handler: AuthController.login,
-  });
-
-  // Route d'inscription (admin seulement)
-  fastify.post("/register", {
-    preHandler: [requireAdmin],
-    schema: {
-      body: {
-        type: "object",
-        properties: {
-          username: { type: "string", minLength: 3, maxLength: 30 },
-          email: { type: "string", format: "email" },
-          password: { type: "string", minLength: 6 },
-          role: { type: "string", enum: ["admin", "user"] },
-        },
-        required: ["username", "email", "password"],
-      },
-    },
-    handler: AuthController.register,
-  });
+  // Login / register : Routes/Auth/accountAuth.js (cookie JWT + PostgreSQL).
 
   // Route pour obtenir le profil (utilisateur connecté)
   fastify.get("/profile", {

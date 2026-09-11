@@ -18,18 +18,20 @@ export class UserTransformer {
 
     // Sinon formater manuellement
     return {
-      id: user._id,
-      username: user.username,
+      id: user.id || user._id,
+      username: user.username || user.name,
       email: user.email,
       role: user.role,
       isActive: user.isActive,
-      avatar: user.avatar,
-      telephone: user.telephone,
-      poste: user.poste,
-      departement: user.departement,
-      lastLogin: user.lastLogin,
+      avatar: user.avatar || user.avatarUrl,
+      telephone: user.telephone || user.phone || "",
+      poste: user.poste || user.jobTitle || "",
+      departement: user.departement || user.department || "",
+      lastLogin: user.lastLogin || user.lastLoginAt,
       createdAt: user.createdAt,
-      updatedAt: user.updatedAt
+      updatedAt: user.updatedAt,
+      tenantId: user.tenantId || null,
+      tenantName: user.tenantName || null,
     };
   }
 
