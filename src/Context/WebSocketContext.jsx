@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
+import { isAuthenticated } from "../API/auth";
 import notificationService from "../Services/notificationService.js";
 
 const isDev = import.meta.env.DEV;
@@ -57,6 +58,10 @@ export function WebSocketProvider({ children }) {
   });
 
   const connectWebSocket = useCallback(() => {
+    if (!isAuthenticated()) {
+      return;
+    }
+
     if (isConnectingRef.current) {
       return;
     }

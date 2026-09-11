@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import Twemoji from "react-twemoji";
 import "bootstrap-icons/font/bootstrap-icons.css";
+import { WebSocketProvider } from "../Context/WebSocketContext";
 import indexCss from "../index.css?url";
 import dashboardCss from "../Base/base.scss?url";
 import notificationsCss from "../Styles/notifications.scss?url";
@@ -21,14 +22,16 @@ export function DashboardRoot() {
   }, []);
 
   return (
-    <Twemoji
-      options={{
-        className: "emoji-icon",
-        folder: "svg",
-        ext: ".svg",
-      }}
-    >
-      <Outlet />
-    </Twemoji>
+    <WebSocketProvider>
+      <Twemoji
+        options={{
+          className: "emoji-icon",
+          folder: "svg",
+          ext: ".svg",
+        }}
+      >
+        <Outlet />
+      </Twemoji>
+    </WebSocketProvider>
   );
 }

@@ -19,6 +19,7 @@ import {
   ServiceIATelephonique,
   FonctionnalitesPrevues,
   Onboarding,
+  PlatformAdmin,
   ProtectedRoute as WebsiteProtectedRoute,
 } from "./Website/WebsiteRoot";
 const DashboardRoot = lazy(() =>
@@ -123,6 +124,14 @@ function App() {
                 element={
                   <WebsiteProtectedRoute>
                     <Onboarding />
+                  </WebsiteProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin-plateforme"
+                element={
+                  <WebsiteProtectedRoute>
+                    <PlatformAdmin />
                   </WebsiteProtectedRoute>
                 }
               />

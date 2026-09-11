@@ -17,6 +17,7 @@ import PolitiqueConfidentialite from "@website/pages/PolitiqueConfidentialite";
 import ServiceIATelephonique from "@website/pages/ServiceIATelephonique";
 import FonctionnalitesPrevues from "@website/pages/FonctionnalitesPrevues";
 import Onboarding from "@website/pages/Onboarding";
+import PlatformAdmin from "@website/pages/PlatformAdmin";
 import ProtectedRoute from "@website/components/Auth/ProtectedRoute";
 
 export function useWebsiteStyles() {
@@ -50,5 +51,6 @@ export {
   ServiceIATelephonique,
   FonctionnalitesPrevues,
   Onboarding,
+  PlatformAdmin,
   ProtectedRoute,
 };
