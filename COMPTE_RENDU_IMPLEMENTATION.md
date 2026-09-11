@@ -9,6 +9,7 @@ Document de synthèse des phases 1 à 5 et guide pour comprendre le système.
 Le backend vocal (Twilio + OpenAI Realtime) a été migré vers une architecture **SaaS multi-tenant** en plusieurs phases. Chaque **instance** représente un client (ex. un restaurant) avec sa propre configuration : tarifs, numéros Twilio, clé OpenAI, voix, option RNNoise.
 
 - **Application principale** (`server.js` + `app.js`) : API REST (commandes, réservations, pricing, auth) + route WebSocket `/media-stream` et webhook `/incoming-call` en mode **monolithique** (tout dans le même processus).
+
 - **Gateway vocal** (`gateway.js`) : serveur léger dédié aux appels (routes Twilio + WebSocket par instance), avec **workers** (bus in-memory, audioWorker, llmWorker) pour le traitement audio et LLM.
 
 ---
@@ -20,9 +21,14 @@ Le backend vocal (Twilio + OpenAI Realtime) a été migré vers une architecture
 | Élément | Détail |
 |--------|--------|
 | **Instance** | `backend/storage/models/Instance.js` : `instanceId`, `slug`, `plan`, `status`, `twilioNumbers`, `openAi` (apiKey, model, voice), `audio.enableNoiseReduction`. |
-| **ApiKey** | `backend/storage/models/ApiKey.js` : `instanceId`, `keyHash`, `label`, `scopes`, `revokedAt`. Clé stockée hashée (PBKDF2). |
+
+| **ApiKey** | `backend/storage/models/ApiKey.js` : `instanceId`, `
+keyHash`, `label`, `scopes`, `revokedAt`. Clé stockée hashée (PBKDF2). |
+
 | **instanceId sur les modèles** | Champ optionnel indexé sur : Pricing, Order, Reservation, Client, CallMonitor, ClientQuota, User. Unicité par tenant (ex. Client sur `(instanceId, telephone)`). |
+
 | **Backfill** | `backend/scripts/backfillInstanceId.js` : crée l’instance par défaut `inst_default` (slug `default`) et met à jour les documents existants. À lancer depuis `backend/` : `node scripts/backfillInstanceId.js`. |
+
 | **Routes** | `backend/API/routes/instances.js` (GET/POST instances), `backend/API/routes/apiKeys.js` (POST/GET/PATCH api-keys). Enregistrées sous le bloc protégé par clé API dans `app.js`. |
 
 ### Phase 2 – Middleware et services par instance
