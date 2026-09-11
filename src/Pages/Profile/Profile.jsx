@@ -1,4 +1,3 @@
-import { useState } from "react";
 import AppLayout from "../../Components/Layout/AppLayout";
 import "./Profile.scss";
 import { useProfile } from "../../Hooks/Profile/useProfile";
@@ -10,7 +9,6 @@ function Profile() {
     tempData,
     saving,
     success,
-    isWebsiteOnly,
     handleEdit,
     handleCancel,
     handleSave,
@@ -22,8 +20,6 @@ function Profile() {
     error,
     setError,
   } = useProfile();
-
-  const websiteUrl = import.meta.env.VITE_WEBSITE_URL || "";
 
   if (loading) {
     return (
@@ -49,14 +45,6 @@ function Profile() {
           <div className="success-message">
             <i className="bi bi-check-circle-fill"></i>
             Profil mis à jour avec succès !
-          </div>
-        )}
-        {isWebsiteOnly && (
-          <div className="info-message" style={{ marginBottom: "1rem", padding: "0.75rem 1rem", background: "var(--bs-info-bg-subtle, #cff4fc)", borderRadius: "0.5rem" }}>
-            Vous pouvez modifier votre profil ci-dessous.
-            {websiteUrl && (
-              <a href={websiteUrl} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "0.5rem" }}>Ouvrir Mon Espace</a>
-            )}
           </div>
         )}
         <div className="profile-content">

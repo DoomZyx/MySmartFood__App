@@ -28,7 +28,7 @@ export function useAdmin() {
  // Vérification de sécurité - Rediriger si pas admin
  useEffect(() => {
   if (!isAdmin()) {
-    navigate("/");
+    navigate("/app");
     return;
   }
 
@@ -44,10 +44,14 @@ export function useAdmin() {
 
 const loadUsers = async () => {
   try {
+    setLoading(true);
     const response = await getAllUsers();
-    setUsers(response.data);
+    setUsers(Array.isArray(response?.data) ? response.data : []);
   } catch (err) {
     setError(err.message);
+    setUsers([]);
+  } finally {
+    setLoading(false);
   }
 };
 

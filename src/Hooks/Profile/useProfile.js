@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { getProfile, updateUserProfile, uploadAvatar as uploadAvatarAPI, isAuthenticatedViaWebsite, getToken, getCurrentUser } from "../../API/auth";
-import { updateStoredWebsiteUser } from "../../API/apiKey";
+import { getProfile, updateUserProfile, uploadAvatar as uploadAvatarAPI } from "../../API/auth";
 
 export function useProfile() {
   const [profileData, setProfileData] = useState({
@@ -52,38 +51,9 @@ export function useProfile() {
         };
         setProfileData(formattedData);
         setTempData(formattedData);
-      } else if (isAuthenticatedViaWebsite() && !getToken()) {
-        const user = getCurrentUser();
-        const formattedData = {
-          nom: user?.name || user?.username || "",
-          email: user?.email || "",
-          telephone: "",
-          poste: "",
-          departement: "",
-          avatar: user?.avatar || null,
-          dateCreation: "",
-          derniereConnexion: "",
-        };
-        setProfileData(formattedData);
-        setTempData(formattedData);
       }
     } catch (err) {
       setError(err.message);
-      if (isAuthenticatedViaWebsite() && !getToken()) {
-        const user = getCurrentUser();
-        const formattedData = {
-          nom: user?.name || user?.username || "",
-          email: user?.email || "",
-          telephone: "",
-          poste: "",
-          departement: "",
-          avatar: user?.avatar || null,
-          dateCreation: "",
-          derniereConnexion: "",
-        };
-        setProfileData(formattedData);
-        setTempData(formattedData);
-      }
     } finally {
       setLoading(false);
     }
@@ -119,23 +89,14 @@ export function useProfile() {
       if (response.success) {
         await loadProfile();
 
-        if (isAuthenticatedViaWebsite() && !getToken()) {
-          const avatar = response.data?.user?.avatar ?? response.data?.avatar;
-          updateStoredWebsiteUser({
-            name: updateData.username,
-            email: updateData.email,
-            ...(avatar !== undefined && { avatar }),
-          });
-        } else {
-          const currentUser = JSON.parse(localStorage.getItem("user"));
-          if (currentUser) {
-            currentUser.username = updateData.username;
-            currentUser.email = updateData.email;
-            currentUser.telephone = updateData.telephone;
-            currentUser.poste = updateData.poste;
-            currentUser.departement = updateData.departement;
-            localStorage.setItem("user", JSON.stringify(currentUser));
-          }
+        const currentUser = JSON.parse(localStorage.getItem("user"));
+        if (currentUser) {
+          currentUser.username = updateData.username;
+          currentUser.email = updateData.email;
+          currentUser.telephone = updateData.telephone;
+          currentUser.poste = updateData.poste;
+          currentUser.departement = updateData.departement;
+          localStorage.setItem("user", JSON.stringify(currentUser));
         }
 
         setEditMode(false);
@@ -160,14 +121,10 @@ export function useProfile() {
         await loadProfile();
 
         const avatar = response.data?.user?.avatar ?? response.data?.avatar;
-        if (isAuthenticatedViaWebsite() && !getToken() && avatar) {
-          updateStoredWebsiteUser({ avatar });
-        } else {
-          const currentUser = JSON.parse(localStorage.getItem("user"));
-          if (currentUser && avatar) {
-            currentUser.avatar = avatar;
-            localStorage.setItem("user", JSON.stringify(currentUser));
-          }
+        const currentUser = JSON.parse(localStorage.getItem("user"));
+        if (currentUser && avatar) {
+          currentUser.avatar = avatar;
+          localStorage.setItem("user", JSON.stringify(currentUser));
         }
 
         setSuccess(true);
@@ -204,8 +161,6 @@ const formatDateTime = (dateString) => {
     minute: "2-digit",
   });
 };
-  const isWebsiteOnly = isAuthenticatedViaWebsite() && !getToken();
-
   return {
     profileData,
     setProfileData,
@@ -221,7 +176,6 @@ const formatDateTime = (dateString) => {
     success,
     setSuccess,
     statsPersonnelles,
-    isWebsiteOnly,
     loadProfile,
     handleEdit,
     handleCancel,

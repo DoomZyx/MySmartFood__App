@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { getCurrentUser, logoutUser } from "../../API/auth";
+import { getCurrentUser, logoutUser, isAdmin } from "../../API/auth";
 import PhoneToggle from "../PhoneToggle/PhoneToggle";
 import "./menu.scss";
 
@@ -71,10 +71,10 @@ function Menu() {
             <img src={avatarUrl} alt="Avatar" />
             <h2>{currentUser?.username || t("menu.user")}</h2>
             <span className="user-role">
-              {currentUser?.role === "admin" ? t("menu.admin") : t("menu.user")}
+              {isAdmin() ? t("menu.admin") : t("menu.user")}
             </span>
           </div>
-          <Link to="/" className="dashboard-link" onClick={closeMenu}>
+          <Link to="/app" className="dashboard-link" onClick={closeMenu}>
             <i className="bi bi-speedometer2"></i>
             <span>{t("menu.dashboard")}</span>
           </Link>
@@ -108,11 +108,21 @@ function Menu() {
             <i className="bi bi-person-badge"></i>
             <h3>{t("menu.myAccount")}</h3>
           </Link>
-          {currentUser?.role === "admin" && (
-            <Link className="admin" to="/admin" onClick={closeMenu}>
-              <i className="bi bi-person-gear"></i>
-              <h3>{t("menu.adminPanel")}</h3>
-            </Link>
+          {isAdmin() && (
+            <>
+              <Link className="admin" to="/admin" onClick={closeMenu}>
+                <i className="bi bi-person-gear"></i>
+                <h3>{t("menu.adminPanel")}</h3>
+              </Link>
+              <Link
+                className="admin-services"
+                to="/admin/services"
+                onClick={closeMenu}
+              >
+                <i className="bi bi-activity"></i>
+                <h3>{t("menu.serviceMonitoring")}</h3>
+              </Link>
+            </>
           )}
         </div>
         <button
