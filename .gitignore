@@ -1,6 +1,17 @@
 node_modules
 .env
+.env.test
+.env.dev
+.env.dev.local
+.env.preprod
+.env.preprod.local
+.env.prod
+.env.prod.local
+.env.test
+
+
 coverage
 uploads/
 testAudio/
+.tmp/
 .env.example 
