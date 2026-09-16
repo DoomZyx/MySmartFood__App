@@ -1,0 +1,24 @@
+.faq-card {
+  background: #1e1e1e;
+  border: 1px solid #333333;
+  border-radius: 16px;
+  padding: 24px;
+  transition: all 0.3s ease;
+  transition: all 0.3s ease;
+}
+.faq-card:hover {
+  transform: translateY(-4px);
+  border-color: #00d4ff;
+  box-shadow: 0 8px 32px rgba(74, 144, 226, 0.3);
+}
+
+.faq-question {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  line-height: 1.2;
+}
+
+.faq-answer {
+  color: #a3a3a3;
+}/*# sourceMappingURL=FAQCard.css.map */

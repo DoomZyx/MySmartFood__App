@@ -1,0 +1,20 @@
+@use "../../../styles/variables" as *;
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+  max-width: 72rem;
+  margin: 0 auto;
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  &--single {
+    @media (min-width: 768px) {
+      grid-template-columns: minmax(280px, 26rem);
+      justify-content: center;
+    }
+  }
+}

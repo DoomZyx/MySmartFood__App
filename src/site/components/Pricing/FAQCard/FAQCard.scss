@@ -1,0 +1,23 @@
+@use "../../../styles/variables" as *;
+
+.faq-card {
+  @include card-base;
+  transition: all 0.3s ease;
+
+  &:hover {
+    transform: translateY(-4px);
+    border-color: $accent-primary;
+    box-shadow: 0 8px 32px rgba(74, 144, 226, 0.3);
+  }
+}
+
+.faq-question {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  line-height: 1.2;
+}
+
+.faq-answer {
+  color: $text-muted;
+}

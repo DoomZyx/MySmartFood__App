@@ -5,6 +5,11 @@
     "target": "esnext", // navigateurs modernes
     "module": "esnext", // ES6
     "baseUrl": "src",
-    "allowJs": true
+    "allowJs": true,
+    "paths": {
+      "@site/*": ["site/*"],
+      "@dashboard/*": ["dashboard/*"],
+      "@shared/*": ["shared/*"]
+    }
   }
 }

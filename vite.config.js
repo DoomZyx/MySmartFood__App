@@ -8,7 +8,9 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
-      "@website": path.resolve(rootDir, "../SmartCRM-Website-Frontend/src"),
+      "@site": path.resolve(rootDir, "src/site"),
+      "@dashboard": path.resolve(rootDir, "src/dashboard"),
+      "@shared": path.resolve(rootDir, "src/shared"),
       react: path.resolve(rootDir, "node_modules/react"),
       "react-dom": path.resolve(rootDir, "node_modules/react-dom"),
       "react-router-dom": path.resolve(rootDir, "node_modules/react-router-dom"),
@@ -22,7 +24,7 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5174,
     fs: {
-      allow: [rootDir, path.resolve(rootDir, "../SmartCRM-Website-Frontend")],
+      allow: [rootDir],
     },
     allowedHosts: [
       ".trycloudflare.com",

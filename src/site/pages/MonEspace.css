@@ -1,0 +1,96 @@
+.mon-espace-form-wrapper {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.mon-espace-subscription {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: #1e1e1e;
+  border: 1px solid #333333;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+}
+
+.mon-espace-subscription-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  color: #00d4ff;
+}
+
+.mon-espace-subscription-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #a3a3a3;
+  margin: 0 0 0.25rem 0;
+}
+
+.mon-espace-subscription-value {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+.mon-espace-app-access {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: #1e1e1e;
+  border: 1px solid #333333;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+}
+
+.mon-espace-app-access-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  color: #00d4ff;
+}
+
+.mon-espace-app-access-content {
+  flex: 1;
+}
+
+.mon-espace-app-access-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0 0 0.25rem 0;
+}
+
+.mon-espace-app-access-desc {
+  font-size: 0.8125rem;
+  color: #a3a3a3;
+  margin: 0 0 0.75rem 0;
+}
+
+.mon-espace-app-access-link {
+  display: inline-block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #00d4ff;
+  text-decoration: none;
+}
+.mon-espace-app-access-link:hover {
+  text-decoration: underline;
+}
+
+.mon-espace-form-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 1rem;
+}
+
+.mon-espace-form-intro {
+  font-size: 0.875rem;
+  color: #a3a3a3;
+  line-height: 1.5;
+  margin: 0 0 1.5rem 0;
+}/*# sourceMappingURL=MonEspace.css.map */
