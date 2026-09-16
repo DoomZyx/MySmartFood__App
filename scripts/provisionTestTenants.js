@@ -7,6 +7,7 @@ import * as Membership from "../models/pg/Membership.js";
 import * as Plan from "../models/pg/Plan.js";
 import * as Subscription from "../models/pg/Subscription.js";
 import { createProvisioningJob } from "../models/pg/ProvisioningJob.js";
+import { voiceWebhookUrl } from "../utils/voiceWebhookUrl.js";
 
 const TEST_RESTOS = [
   {
@@ -82,7 +83,8 @@ async function ensureResto(spec, plan) {
     slug: tenant.slug,
     tenantId: tenant.id,
     email: spec.email,
-    voiceWebhookUrl: `/twilio/${tenant.slug}/incoming-call`,
+    voiceWebhookUrl: voiceWebhookUrl(tenant.slug, process.env.PUBLIC_HOST || "")
+      || `/twilio/${tenant.slug}/incoming-call`,
   };
 }
 

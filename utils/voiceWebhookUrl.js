@@ -1,7 +1,12 @@
 /**
- * Webhook vocal Twilio par établissement : /twilio/:slug/incoming-call.
- * Le numéro appelé doit appartenir à ce slug (isolation).
+ * Webhook vocal unique : /twilio/incoming-call (aucun slug dans le chemin).
+ * Le jeton chiffré se colle en identifiant HTTP Basic Twilio, pas dans l'URL.
+ * Les anciens chemins /twilio/:slug/incoming-call restent acceptés.
  */
+import {
+  decryptVoiceWebhookSlug,
+  encryptVoiceWebhookSlug,
+} from "./accountIdentifierCrypto.js";
 
 function trimHost(value) {
   return String(value || "").trim().replace(/\/$/, "");
@@ -83,11 +88,27 @@ export function sanitizeTenantSlug(value) {
   return text;
 }
 
-export function voiceWebhookUrl(slug, host = process.env.VOICE_GATEWAY_PUBLIC_HOST || process.env.PUBLIC_HOST || "") {
+/** Jeton HTTP Basic Twilio (pas un segment d'URL). */
+export function voiceWebhookSlug(slug) {
+  const safeSlug = sanitizeTenantSlug(slug);
+  if (!safeSlug) return null;
+  try {
+    return encryptVoiceWebhookSlug(safeSlug);
+  } catch {
+    return null;
+  }
+}
+
+/** Résout le jeton HTTP / l'ancien slug d'URL vers le slug métier. */
+export function resolveVoiceSlugParam(value) {
+  const decrypted = decryptVoiceWebhookSlug(value);
+  if (decrypted) return decrypted;
+  return sanitizeTenantSlug(value);
+}
+
+export function voiceWebhookUrl(_slug, host = process.env.VOICE_GATEWAY_PUBLIC_HOST || process.env.PUBLIC_HOST || "") {
   const resolved = trimHost(host);
   if (!resolved) return null;
-  const safeSlug = sanitizeTenantSlug(slug);
-  if (safeSlug) return `${resolved}/twilio/${safeSlug}/incoming-call`;
   return `${resolved}/twilio/incoming-call`;
 }
 

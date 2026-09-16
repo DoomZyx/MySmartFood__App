@@ -1,6 +1,6 @@
 import { getPool } from "../../database/pool.js";
 import { toCamelCase } from "../../utils/rowMapper.js";
-import { sanitizeTenantSlug } from "../../utils/voiceWebhookUrl.js";
+import { resolveVoiceSlugParam } from "../../utils/voiceWebhookUrl.js";
 
 export async function upsertBundle(data) {
   const result = await getPool().query(
@@ -34,7 +34,7 @@ function normalizeInboundPhone(value) {
 
 export async function findTenantForInboundCall({ phoneNumber, slug } = {}) {
   const to = normalizeInboundPhone(phoneNumber);
-  const safeSlug = sanitizeTenantSlug(slug);
+  const safeSlug = resolveVoiceSlugParam(slug);
 
   if (to && safeSlug) {
     const matched = await getPool().query(

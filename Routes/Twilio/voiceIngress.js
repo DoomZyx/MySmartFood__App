@@ -4,7 +4,11 @@ import {
   generateTwimlTransferToRestaurant,
 } from "../../Services/twilioServices/twilioServices.js";
 import { withTenant } from "../../database/transaction.js";
-import { voicePublicHostname, voiceStreamHost } from "../../utils/voiceWebhookUrl.js";
+import {
+  resolveVoiceSlugParam,
+  voicePublicHostname,
+  voiceStreamHost,
+} from "../../utils/voiceWebhookUrl.js";
 import {
   createStreamToken,
 } from "../../utils/streamToken.js";
@@ -35,13 +39,30 @@ function isValidTwilioWebhook(request) {
   );
 }
 
+function basicAuthUsername(header) {
+  const raw = String(header || "");
+  const match = raw.match(/^Basic\s+(\S+)/i);
+  if (!match) return null;
+  try {
+    const decoded = Buffer.from(match[1], "base64").toString("utf8");
+    const cut = decoded.indexOf(":");
+    return (cut === -1 ? decoded : decoded.slice(0, cut)).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function inboundSlugHint(request) {
+  return basicAuthUsername(request.headers.authorization) || request.params?.slug || null;
+}
+
 function callMeta(request) {
   const body = request.body || {};
   return {
     callSid: body.CallSid || null,
     from: body.From || null,
     to: body.To || body.Called || null,
-    slug: request.params?.slug || null,
+    slug: resolveVoiceSlugParam(inboundSlugHint(request)),
   };
 }
 

@@ -1,29 +1,45 @@
 import {
   incomingNumberVoiceUpdate,
   resetVoicePublicHostCache,
+  resolveVoiceSlugParam,
   voicePublicHostname,
   voiceStreamHost,
+  voiceWebhookSlug,
   voiceWebhookUrl,
 } from "./voiceWebhookUrl.js";
 
 describe("voiceWebhookUrl", () => {
   const originalGateway = process.env.VOICE_GATEWAY_PUBLIC_HOST;
   const originalPublic = process.env.PUBLIC_HOST;
+  const originalKey = process.env.ACCOUNT_IDENTIFIER_ENCRYPTION_KEY;
+  const TEST_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+  beforeEach(() => {
+    process.env.ACCOUNT_IDENTIFIER_ENCRYPTION_KEY = TEST_KEY;
+  });
 
   afterEach(() => {
     if (originalGateway === undefined) delete process.env.VOICE_GATEWAY_PUBLIC_HOST;
     else process.env.VOICE_GATEWAY_PUBLIC_HOST = originalGateway;
     if (originalPublic === undefined) delete process.env.PUBLIC_HOST;
     else process.env.PUBLIC_HOST = originalPublic;
+    if (originalKey === undefined) delete process.env.ACCOUNT_IDENTIFIER_ENCRYPTION_KEY;
+    else process.env.ACCOUNT_IDENTIFIER_ENCRYPTION_KEY = originalKey;
     resetVoicePublicHostCache();
   });
 
-  it("construit le webhook isole par slug", () => {
+  it("laisse le chemin webhook sans slug et chiffre l'identifiant HTTP", () => {
     delete process.env.VOICE_GATEWAY_PUBLIC_HOST;
     process.env.PUBLIC_HOST = "https://tunnel.example";
-    expect(voiceWebhookUrl("chez-test")).toBe(
-      "https://tunnel.example/twilio/chez-test/incoming-call"
-    );
+    const token = voiceWebhookSlug("chez-test");
+    expect(token).toMatch(/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+    expect(token).not.toContain("chez-test");
+    expect(voiceWebhookUrl("chez-test")).toBe("https://tunnel.example/twilio/incoming-call");
+    expect(resolveVoiceSlugParam(token)).toBe("chez-test");
+  });
+
+  it("accepte encore un slug clair historique", () => {
+    expect(resolveVoiceSlugParam("chez-test")).toBe("chez-test");
   });
 
   it("ignore un slug invalide et retombe sur le webhook unique", () => {
@@ -61,7 +77,7 @@ describe("voiceWebhookUrl", () => {
     delete process.env.VOICE_GATEWAY_PUBLIC_HOST;
     process.env.PUBLIC_HOST = "https://tunnel.example";
     await expect(incomingNumberVoiceUpdate("chez-test")).resolves.toEqual({
-      voiceUrl: "https://tunnel.example/twilio/chez-test/incoming-call",
+      voiceUrl: "https://tunnel.example/twilio/incoming-call",
       voiceMethod: "POST",
       voiceApplicationSid: "",
       trunkSid: "",

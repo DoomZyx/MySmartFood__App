@@ -1,6 +1,8 @@
 import {
   decryptGoogleId,
+  decryptVoiceWebhookSlug,
   encryptGoogleId,
+  encryptVoiceWebhookSlug,
   hashGoogleId,
 } from "./accountIdentifierCrypto.js";
 
@@ -30,5 +32,14 @@ describe("accountIdentifierCrypto", () => {
     parts[2] = `${parts[2].slice(0, -1)}${parts[2].endsWith("A") ? "B" : "A"}`;
 
     expect(() => decryptGoogleId(parts.join(":"))).toThrow();
+  });
+
+  test("chiffre un slug vocal de façon déterministe et URL-safe", () => {
+    const token = encryptVoiceWebhookSlug("resto-test-a");
+    expect(token).toBe(encryptVoiceWebhookSlug("resto-test-a"));
+    expect(token.startsWith("v1.")).toBe(true);
+    expect(token).not.toContain("resto-test-a");
+    expect(decryptVoiceWebhookSlug(token)).toBe("resto-test-a");
+    expect(decryptVoiceWebhookSlug("pas-un-jeton")).toBe(null);
   });
 });
