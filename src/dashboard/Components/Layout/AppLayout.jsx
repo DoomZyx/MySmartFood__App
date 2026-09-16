@@ -8,7 +8,6 @@ function AppLayout({ children, title, subtitle }) {
   useSystemNotifications();
   return (
     <div className="app-layout">
-      <img className="app-wallpaper" src="/bgs.jpg" alt="" />
       <Menu />
       <main className="main-content">
         <div className="title-section">

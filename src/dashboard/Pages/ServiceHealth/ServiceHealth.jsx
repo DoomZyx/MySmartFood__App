@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
 import AppLayout from "../../Components/Layout/AppLayout";
+import TokenUsageList from "../../Components/Dashboard/TokenUsageList";
 import { useServiceHealth } from "../../Hooks/Admin/useServiceHealth";
+import { useTokenUsage } from "../../Hooks/Dashboard/useTokenUsage";
 import "./ServiceHealth.scss";
 
 const SERVICE_ICONS = {
@@ -55,6 +57,7 @@ function ServiceHealth() {
     isStale,
     refresh,
   } = useServiceHealth();
+  const tokenUsage = useTokenUsage();
 
   if (loading && !monitoring) {
     return (
@@ -150,6 +153,13 @@ function ServiceHealth() {
             {t("monitoring.emptyPayload")}
           </div>
         )}
+
+        <TokenUsageList
+          events={tokenUsage.events}
+          totals={tokenUsage.totals}
+          loading={tokenUsage.loading}
+          error={tokenUsage.error}
+        />
 
         <section
           className="service-health__panel"

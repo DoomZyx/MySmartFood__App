@@ -1,4 +1,4 @@
-:root {
+html[data-app="dashboard"] {
   /* Système de design inspiré de Base44/Basecamp */
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   line-height: 1.6;
@@ -54,7 +54,12 @@
   --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
   
   color: var(--color-text-primary);
-  background-color: var(--color-background);
+  background-color: transparent;
+  background-image: url("/bgs.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -62,14 +67,16 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
+html[data-app="dashboard"] *,
+html[data-app="dashboard"] *::before,
+html[data-app="dashboard"] *::after {
   box-sizing: border-box;
 }
 
-body {
+html[data-app="dashboard"] body {
   margin: 0;
   padding: 0;
-  background-color: var(--color-background);
+  background-color: transparent;
   color: var(--color-text-primary);
 }
 
@@ -99,27 +106,18 @@ body {
 }
 
 /* Pour Firefox */
-html {
+html[data-app="dashboard"] {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-hover) var(--color-background);
 }
 
-/* Barres de défilement dans les conteneurs spécifiques */
-.calls-table-container,
-.modal-content,
-.settings-content,
-.admin-content {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-border-hover) transparent;
-}
-
-a {
+html[data-app="dashboard"] a {
   text-decoration: none;
   color: var(--color-accent);
   transition: color var(--transition-fast);
 }
 
-a:hover {
+html[data-app="dashboard"] a:hover {
   color: var(--color-accent-hover);
 }
 

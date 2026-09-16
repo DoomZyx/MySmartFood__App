@@ -1,3 +1,5 @@
+import "./dashboard.scss";
+
 function formatTime(value) {
   if (!value) return "—";
   return new Intl.DateTimeFormat("fr-FR", {

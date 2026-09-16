@@ -12,9 +12,6 @@ export function DashboardRoot() {
   useLayoutEffect(() => {
     document.querySelectorAll('link[data-theme="website"]').forEach((node) => node.remove());
     document.documentElement.dataset.app = "dashboard";
-    return () => {
-      delete document.documentElement.dataset.app;
-    };
   }, []);
 
   return (

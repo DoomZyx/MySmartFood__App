@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useLayoutEffect, lazy, Suspense } from "react";
 import { isAuthenticated, isAdmin, hasDashboardAccess, fetchSession } from "./dashboard/API/auth";
 import ErrorBoundary from "./dashboard/Components/Common/ErrorBoundary";
 import Access from "./dashboard/Pages/Site/Access";
@@ -25,6 +25,7 @@ import {
 } from "./app/WebsiteRoot";
 import { PLATFORM_ADMIN_PATH } from "@shared/platformAdminPath";
 import { DASHBOARD_PATH, openDashboard } from "@shared/dashboardPath";
+import { isDashboardPath, useWebsiteStyles } from "./app/WebsiteRoot";
 const DashboardRoot = lazy(() =>
   import("./app/DashboardRoot").then((mod) => ({ default: mod.DashboardRoot }))
 );
@@ -71,6 +72,12 @@ function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [flashError, setFlashError] = useState(null);
   const location = useLocation();
+  const onDashboard = isDashboardPath(location.pathname);
+  useWebsiteStyles();
+
+  useLayoutEffect(() => {
+    document.documentElement.dataset.app = onDashboard ? "dashboard" : "website";
+  }, [onDashboard]);
 
   useEffect(() => {
     let cancelled = false;

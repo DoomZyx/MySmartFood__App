@@ -58,7 +58,6 @@ export function useWebsiteStyles() {
 }
 
 export function StyledWebsiteLayout() {
-  useWebsiteStyles();
   return <WebsiteLayout />;
 }
 

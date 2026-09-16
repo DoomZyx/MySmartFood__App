@@ -8,7 +8,7 @@
   box-sizing: border-box;
 }
 
-body {
+html[data-app="website"] body {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
     sans-serif;
   background-color: $bg-primary;
@@ -119,7 +119,7 @@ html {
   scroll-padding-top: 80px; // Pour éviter que le header cache le contenu lors du scroll vers les ancres
 }
 
-body {
+html[data-app="website"] body {
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch; // Pour un scroll fluide sur iOS
 }
