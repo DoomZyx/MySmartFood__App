@@ -9,6 +9,7 @@ import { withTenant } from "../../database/transaction.js";
 import {
   incomingNumberVoiceUpdate,
   resolveVoicePublicHost,
+  voiceWebhookSlug,
   voiceWebhookUrl,
 } from "../../utils/voiceWebhookUrl.js";
 
@@ -56,6 +57,7 @@ function serializeTenant(row, publicHost) {
     needsReview: Boolean(
       row.documentsSubmittedAt && row.status !== "active" && row.status !== "closed"
     ),
+    voiceWebhookSlug: voiceWebhookSlug(row.slug),
     voiceWebhookUrl: voiceWebhookUrl(row.slug, publicHost),
     createdAt: row.createdAt,
     activatedAt: row.activatedAt,

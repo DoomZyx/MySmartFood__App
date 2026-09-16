@@ -60,6 +60,61 @@ export function encryptGoogleId(googleId) {
   ].join(":");
 }
 
+const VOICE_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
+
+function deriveVoiceWebhookKey(purpose) {
+  return Buffer.from(
+    crypto.hkdfSync("sha256", readMasterKey(), EMPTY_SALT, `voice-webhook-slug:${purpose}`, KEY_BYTES)
+  );
+}
+
+/**
+ * Jeton déterministe, URL-safe, à coller dans Twilio :
+ * /twilio/<jeton>/incoming-call
+ */
+export function encryptVoiceWebhookSlug(slug) {
+  const normalized = String(slug || "").trim().toLowerCase();
+  if (!VOICE_SLUG_PATTERN.test(normalized)) {
+    throw new Error("slug vocal invalide");
+  }
+  const iv = crypto
+    .createHmac("sha256", deriveVoiceWebhookKey("iv"))
+    .update(normalized, "utf8")
+    .digest()
+    .subarray(0, IV_BYTES);
+  const cipher = crypto.createCipheriv(ALGORITHM, deriveVoiceWebhookKey("encryption"), iv);
+  const ciphertext = Buffer.concat([cipher.update(normalized, "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return [VERSION, iv.toString("base64url"), ciphertext.toString("base64url"), authTag.toString("base64url")].join(
+    "."
+  );
+}
+
+/** @returns {string|null} slug en clair, ou null si le jeton n'est pas un slug webhook chiffré */
+export function decryptVoiceWebhookSlug(token) {
+  const parts = String(token || "").trim().split(".");
+  if (parts.length !== 4 || parts[0] !== VERSION) {
+    return null;
+  }
+  try {
+    const [, ivRaw, ciphertextRaw, authTagRaw] = parts;
+    const decipher = crypto.createDecipheriv(
+      ALGORITHM,
+      deriveVoiceWebhookKey("encryption"),
+      Buffer.from(ivRaw, "base64url")
+    );
+    decipher.setAuthTag(Buffer.from(authTagRaw, "base64url"));
+    const plain = Buffer.concat([
+      decipher.update(Buffer.from(ciphertextRaw, "base64url")),
+      decipher.final(),
+    ]).toString("utf8");
+    const normalized = plain.trim().toLowerCase();
+    return VOICE_SLUG_PATTERN.test(normalized) ? normalized : null;
+  } catch {
+    return null;
+  }
+}
+
 export function decryptGoogleId(encryptedGoogleId) {
   const parts = String(encryptedGoogleId || "").split(":");
   if (parts.length !== 4 || parts[0] !== VERSION) {
