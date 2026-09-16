@@ -1,0 +1,13 @@
+@import "../../../styles/variables";
+
+.section {
+  padding: 100px 0;
+
+  @media (max-width: 768px) {
+    padding: 60px 0;
+  }
+
+  &.alt {
+    background: rgba(17, 17, 17, 0.3);
+  }
+}

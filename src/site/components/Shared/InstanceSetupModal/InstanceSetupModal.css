@@ -1,0 +1,145 @@
+.instance-setup-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: loginModalFadeIn 0.3s ease-out;
+}
+
+.instance-setup-modal {
+  background: #111111;
+  border: 1px solid #333333;
+  border-radius: 16px;
+  max-width: 560px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  animation: loginModalSlideIn 0.3s ease-out;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.instance-setup-modal-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: none;
+  border: none;
+  color: #e5e5e5;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+.instance-setup-modal-close:hover {
+  background: #1a1a1a;
+  color: #ffffff;
+  transform: scale(1.1);
+}
+
+.instance-setup-modal-content {
+  padding: 40px;
+}
+
+.instance-setup-modal-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: #ffffff;
+  text-align: center;
+}
+
+.instance-setup-modal-subtitle {
+  text-align: center;
+  color: #e5e5e5;
+  margin-bottom: 24px;
+  line-height: 1.6;
+  font-size: 0.9rem;
+}
+
+.instance-setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.instance-setup-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.instance-setup-form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.instance-setup-form-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #e5e5e5;
+  margin-bottom: 6px;
+}
+
+.instance-setup-form-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: #1a1a1a;
+  border: 1px solid #333333;
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 0.95rem;
+}
+.instance-setup-form-input::-moz-placeholder {
+  color: #a3a3a3;
+}
+.instance-setup-form-input::placeholder {
+  color: #a3a3a3;
+}
+.instance-setup-form-input:focus {
+  outline: none;
+  border-color: #00d4ff;
+}
+
+.instance-setup-form-error {
+  color: #ef4444;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.instance-setup-submit {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+@keyframes loginModalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes loginModalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}/*# sourceMappingURL=InstanceSetupModal.css.map */

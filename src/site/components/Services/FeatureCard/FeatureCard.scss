@@ -1,0 +1,64 @@
+@use "../../../styles/variables" as *;
+
+.feature-card {
+  @include card-base;
+  text-align: center;
+  transition: all 0.3s ease;
+
+  &:hover {
+    transform: translateY(-4px);
+    border-color: $accent-primary;
+    box-shadow: 0 8px 32px rgba(74, 144, 226, 0.3);
+  }
+
+  &.alt {
+    .icon-wrapper {
+      background: linear-gradient(
+        135deg,
+        $accent-secondary 0%,
+        $accent-primary 100%
+      );
+      border-radius: 8px;
+    }
+  }
+}
+
+.feature-icon {
+  margin-bottom: 16px;
+}
+
+.icon-wrapper {
+  width: 48px;
+  height: 48px;
+  background: $gradient-primary;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  transition: transform 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+
+  .feature-card:hover & {
+    transform: scale(1.1);
+  }
+
+  .icon {
+    width: 24px;
+    height: 24px;
+    color: $text-primary;
+  }
+}
+
+.feature-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  line-height: 1.2;
+}
+
+.feature-description {
+  color: $text-muted;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}

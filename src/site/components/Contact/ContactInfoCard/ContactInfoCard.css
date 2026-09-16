@@ -1,0 +1,62 @@
+.contact-info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+@media (max-width: 1200px) {
+  .contact-info-grid {
+    gap: 1rem;
+    padding: 0 1rem;
+  }
+}
+@media (max-width: 992px) {
+  .contact-info-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+  }
+}
+@media (max-width: 768px) {
+  .contact-info-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+.contact-info-card {
+  background: #1e1e1e;
+  border: 1px solid #333333;
+  border-radius: 16px;
+  padding: 24px;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+.contact-info-card:hover {
+  transform: translateY(-4px);
+  border-color: #00d4ff;
+  box-shadow: 0 8px 32px rgba(74, 144, 226, 0.3);
+}
+
+.contact-icon {
+  margin-bottom: 16px;
+}
+
+.contact-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  line-height: 1.2;
+}
+
+.contact-value {
+  color: #00d4ff;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.contact-description {
+  color: #a3a3a3;
+  font-size: 0.875rem;
+}/*# sourceMappingURL=ContactInfoCard.css.map */

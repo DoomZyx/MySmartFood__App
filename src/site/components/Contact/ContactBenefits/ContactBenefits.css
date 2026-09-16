@@ -1,0 +1,34 @@
+.contact-benefits .benefit-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.contact-benefits .benefit-item:last-child {
+  margin-bottom: 0;
+}
+
+.benefit-icon {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #00d4ff 0%, #8b5cf6 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px;
+  flex-shrink: 0;
+}
+.benefit-icon.benefit-icon-alt {
+  background: linear-gradient(135deg, #8b5cf6 0%, #00d4ff 100%);
+}
+
+.benefit-content h3 {
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.benefit-description {
+  color: #a3a3a3;
+  font-size: 0.875rem;
+}/*# sourceMappingURL=ContactBenefits.css.map */

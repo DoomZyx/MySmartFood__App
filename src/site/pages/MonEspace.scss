@@ -1,0 +1,148 @@
+@use "../styles/variables" as *;
+
+.mon-espace-form-wrapper {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.mon-espace-subscription {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: $bg-card;
+  border: 1px solid $border-primary;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+}
+
+.mon-espace-subscription-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  color: $accent-primary;
+}
+
+.mon-espace-subscription-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: $text-muted;
+  margin: 0 0 0.25rem 0;
+}
+
+.mon-espace-subscription-value {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: $text-primary;
+  margin: 0;
+}
+
+.mon-espace-app-access {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: $bg-card;
+  border: 1px solid $border-primary;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+}
+
+.mon-espace-app-access-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  color: $accent-primary;
+}
+
+.mon-espace-app-access-content {
+  flex: 1;
+}
+
+.mon-espace-app-access-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: $text-primary;
+  margin: 0 0 0.25rem 0;
+}
+
+.mon-espace-app-access-desc {
+  font-size: 0.8125rem;
+  color: $text-muted;
+  margin: 0 0 0.75rem 0;
+}
+
+.mon-espace-app-access-link {
+  display: inline-block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: $accent-primary;
+  text-decoration: none;
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.mon-espace-instance-required {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: $bg-card;
+  border: 1px solid $accent-primary;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+}
+
+.mon-espace-instance-required-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  color: $accent-primary;
+}
+
+.mon-espace-instance-required-content {
+  flex: 1;
+}
+
+.mon-espace-instance-required-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: $text-primary;
+  margin: 0 0 0.25rem 0;
+}
+
+.mon-espace-instance-required-desc {
+  font-size: 0.8125rem;
+  color: $text-muted;
+  margin: 0 0 0.75rem 0;
+}
+
+.mon-espace-instance-required-btn {
+  display: inline-block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  background: $accent-primary;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
+.mon-espace-form-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: $text-primary;
+  margin-bottom: 1rem;
+}
+
+.mon-espace-form-intro {
+  font-size: 0.875rem;
+  color: $text-muted;
+  line-height: 1.5;
+  margin: 0 0 1.5rem 0;
+}

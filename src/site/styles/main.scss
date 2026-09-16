@@ -1,0 +1,796 @@
+// Import des variables et mixins
+@use "variables" as *;
+
+// Reset et base
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+    sans-serif;
+  background-color: $bg-primary;
+  color: $text-primary;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+// Optimisation des animations pour les performances
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  .animate-fade-in,
+  .animate-fade-up,
+  .animate-slide-left,
+  .animate-slide-right {
+    animation-duration: 0.4s !important;
+    animation-timing-function: ease-out !important;
+  }
+
+  // Réduction des effets de hover sur mobile
+  .card:hover,
+  .feature-card:hover,
+  .btn:hover {
+    transform: none !important;
+    box-shadow: inherit !important;
+  }
+
+  // Optimisation des animations de scroll
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+// Optimisations spécifiques pour mobile uniquement
+@media (max-width: 768px) {
+  // Désactivation des animations complexes sur mobile
+  .effect-1,
+  .effect-2 {
+    animation: none !important;
+    opacity: 0.05 !important;
+  }
+
+  // Simplification des animations de texte
+  .text-gradient {
+    background-attachment: scroll !important;
+  }
+
+  // Optimisation des transitions
+  .btn,
+  .card,
+  .feature-card {
+    transition: opacity 0.2s ease !important;
+  }
+
+  // Amélioration de la performance des animations
+  [data-framer-motion] {
+    will-change: auto !important;
+  }
+}
+
+// Styles globaux pour le menu mobile
+.mobile-menu-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: rgba(0, 0, 0, 0.8) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  z-index: 999 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.mobile-menu-overlay .mobile-menu-content {
+  background: $bg-secondary !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3) !important;
+  width: 90% !important;
+  max-width: 400px !important;
+  min-width: 300px !important;
+  margin: 0 auto !important;
+  position: relative !important;
+  transform: none !important;
+  overflow: hidden !important;
+}
+
+// Scroll fluide global optimisé
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 80px; // Pour éviter que le header cache le contenu lors du scroll vers les ancres
+}
+
+body {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch; // Pour un scroll fluide sur iOS
+}
+
+// Scrollbar personnalisée optimisée
+::-webkit-scrollbar {
+  width: 8px; // Plus fine pour un look plus moderne
+}
+
+::-webkit-scrollbar-track {
+  background: $bg-secondary;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: $gradient-primary;
+  border-radius: 4px;
+  border: 1px solid $bg-secondary;
+  transition: all 0.3s ease; // Animation fluide
+
+  &:hover {
+    background: linear-gradient(135deg, $accent-secondary, $accent-primary);
+    transform: scaleX(1.2); // Effet de zoom au hover
+  }
+}
+
+// Scrollbar pour Firefox
+* {
+  scrollbar-width: thin;
+  scrollbar-color: $accent-primary $bg-secondary;
+}
+
+// Animations globales
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+// Classes utilitaires globales
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out;
+}
+
+.animate-fade-up {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.animate-slide-left {
+  animation: slideInLeft 0.6s ease-out;
+}
+
+.animate-slide-right {
+  animation: slideInRight 0.6s ease-out;
+}
+
+// Glassmorphism global
+.glass {
+  @include glassmorphism;
+}
+
+// Boutons globaux
+.btn {
+  @include button-base;
+
+  &-primary {
+    background: $gradient-primary;
+    color: $text-primary;
+    box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 212, 255, 0.4);
+      filter: brightness(1.1);
+    }
+  }
+
+  &-secondary {
+    background: transparent;
+    color: $text-primary;
+    border: 1px solid $border-primary;
+    backdrop-filter: blur(10px);
+
+    &:hover {
+      background: $bg-tertiary;
+      border-color: $accent-primary;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px rgba(0, 212, 255, 0.2);
+    }
+  }
+}
+
+// Cartes globales
+.card {
+  @include card-base;
+  margin-bottom: 16px;
+
+  &:hover {
+    border-color: $accent-primary;
+    transform: translateY(-4px);
+    box-shadow: 0 10px 30px rgba(0, 212, 255, 0.1);
+    filter: brightness(1.05);
+  }
+}
+
+// Container global
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 32px;
+
+  @media (max-width: 768px) {
+    padding: 0 20px;
+  }
+}
+
+// Section globale
+.section {
+  padding: 100px 0;
+
+  @media (max-width: 768px) {
+    padding: 60px 0;
+  }
+}
+
+// Styles pour la section du formulaire de contact
+.contact-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  align-items: start;
+
+  @media (max-width: 992px) {
+    grid-template-columns: 1fr;
+    gap: 3rem;
+    max-width: 600px;
+  }
+
+  @media (max-width: 768px) {
+    gap: 2rem;
+  }
+}
+
+.contact-info {
+  .contact-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 1.5rem;
+    color: $text-primary;
+
+    @media (max-width: 768px) {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+    }
+  }
+
+  .contact-info-text {
+    font-size: 1.125rem;
+    line-height: 1.7;
+    color: $text-secondary;
+    margin-bottom: 2rem;
+
+    @media (max-width: 768px) {
+      font-size: 1rem;
+      margin-bottom: 1.5rem;
+    }
+  }
+}
+
+
+// Styles pour la grille équipe
+.team-grid {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (min-width: 1024px) {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  @media (max-width: 768px) {
+    gap: 1.5rem;
+    padding: 0 1rem;
+  }
+}
+
+// Spacing utilities globales
+.mt-20 {
+  margin-top: 80px;
+}
+
+.pt-20 {
+  padding-top: 80px;
+}
+
+.mb-16 {
+  margin-bottom: 64px;
+}
+
+.mb-8 {
+  margin-bottom: 32px;
+}
+
+.mb-6 {
+  margin-bottom: 24px;
+}
+
+.mb-4 {
+  margin-bottom: 16px;
+}
+
+.p-6 {
+  padding: 24px;
+}
+
+.p-4 {
+  padding: 16px;
+}
+
+.px-6 {
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+.py-8 {
+  padding-top: 32px;
+  padding-bottom: 32px;
+}
+
+.py-6 {
+  padding-top: 24px;
+  padding-bottom: 24px;
+}
+
+.py-4 {
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+// Titres globaux
+.title {
+  font-weight: 700;
+  line-height: 1.2;
+
+  &-xl {
+    font-size: 3.5rem;
+    @include gradient-text;
+    margin-bottom: 32px;
+  }
+
+  &-lg {
+    font-size: 2.5rem;
+    margin-bottom: 24px;
+  }
+
+  &-md {
+    font-size: 2rem;
+    margin-bottom: 20px;
+  }
+
+  &-sm {
+    font-size: 1.5rem;
+    margin-bottom: 16px;
+  }
+}
+
+// Texte gradient global
+.text-gradient {
+  @include gradient-text;
+}
+
+// Styles pour les éléments HTML natifs
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+h1 {
+  font-size: 3.5rem;
+}
+h2 {
+  font-size: 2.5rem;
+}
+h3 {
+  font-size: 2rem;
+}
+h4 {
+  font-size: 1.5rem;
+}
+h5 {
+  font-size: 1.25rem;
+}
+h6 {
+  font-size: 1rem;
+}
+
+// Responsive global
+@media (max-width: 768px) {
+  .title-xl {
+    font-size: 2.5rem;
+  }
+
+  .title-lg {
+    font-size: 2rem;
+  }
+
+  .section {
+    padding: 60px 0;
+  }
+
+  .container {
+    padding: 0 16px;
+  }
+}
+
+// Styles spécifiques pour les pages de services
+.service-page {
+  .legal-content {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 20px;
+
+    h3 {
+      @include gradient-text;
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 2rem 0 1rem 0;
+      position: relative;
+      padding-left: 1rem;
+
+      &::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 4px;
+        height: 1.5rem;
+        background: $gradient-primary;
+        border-radius: 2px;
+      }
+
+      &:first-child {
+        margin-top: 0;
+      }
+    }
+
+    p {
+      color: $text-secondary;
+      line-height: 1.7;
+      margin-bottom: 1.5rem;
+      font-size: 1.05rem;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 1.5rem 0;
+
+      li {
+        position: relative;
+        padding-left: 1.5rem;
+        margin-bottom: 0.75rem;
+        color: $text-secondary;
+        line-height: 1.6;
+
+        &::before {
+          content: "→";
+          position: absolute;
+          left: 0;
+          color: $accent-primary;
+          font-weight: bold;
+          font-size: 1.1rem;
+        }
+
+        strong {
+          color: $text-primary;
+          font-weight: 600;
+        }
+      }
+    }
+
+    .feature-highlight {
+      @include glassmorphism;
+      padding: 1.5rem;
+      margin: 2rem 0;
+      border-left: 4px solid $accent-primary;
+      border-radius: 12px;
+
+      h4 {
+        color: $text-primary;
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+      }
+
+      p {
+        margin-bottom: 0;
+        color: $text-secondary;
+      }
+    }
+
+    .tech-stack {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 1rem 0;
+
+      .tech-tag {
+        background: rgba(0, 212, 255, 0.1);
+        color: $accent-primary;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        border: 1px solid rgba(0, 212, 255, 0.2);
+      }
+    }
+  }
+
+  // Animations spécifiques pour les sections
+  .section {
+    .legal-content {
+      animation: fadeInUp 0.8s ease-out;
+    }
+
+    &:nth-child(even) .legal-content {
+      animation-delay: 0.1s;
+    }
+
+    &:nth-child(odd) .legal-content {
+      animation-delay: 0.2s;
+    }
+  }
+
+  // Styles pour les icônes dans les sections
+  .section-icon {
+    width: 48px;
+    height: 48px;
+    background: $gradient-primary;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+
+    svg {
+      width: 24px;
+      height: 24px;
+      color: $text-primary;
+    }
+  }
+
+  // Styles pour les cartes de fonctionnalités
+  .feature-card {
+    @include card-base;
+    padding: 2rem;
+    margin: 1.5rem 0;
+    border: 1px solid $border-primary;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+
+    &::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: $gradient-primary;
+      transform: scaleX(0);
+      transition: transform 0.3s ease;
+    }
+
+    &:hover {
+      border-color: $accent-primary;
+      transform: translateY(-4px);
+      box-shadow: 0 10px 30px rgba(0, 212, 255, 0.15);
+
+      &::before {
+        transform: scaleX(1);
+      }
+    }
+
+    h4 {
+      @include gradient-text;
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+
+    p {
+      color: $text-secondary;
+      line-height: 1.6;
+      margin-bottom: 0;
+    }
+  }
+
+  // Styles pour les listes de fonctionnalités
+  .features-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin: 2rem 0;
+
+    .feature-item {
+      @include glassmorphism;
+      padding: 1.5rem;
+      border-radius: 12px;
+      transition: all 0.3s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 212, 255, 0.1);
+      }
+
+      h5 {
+        color: $text-primary;
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+      }
+
+      p {
+        color: $text-secondary;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        margin-bottom: 0;
+      }
+    }
+  }
+
+  // Styles pour les métriques et statistiques
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin: 2rem 0;
+
+    .metric-card {
+      @include glassmorphism;
+      padding: 1.5rem;
+      text-align: center;
+      border-radius: 12px;
+      transition: all 0.3s ease;
+
+      &:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 30px rgba(0, 212, 255, 0.15);
+      }
+
+      .metric-value {
+        @include gradient-text;
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+      }
+
+      .metric-label {
+        color: $text-secondary;
+        font-size: 0.9rem;
+        font-weight: 500;
+      }
+    }
+  }
+
+  // Responsive pour les pages de services
+  @media (max-width: 768px) {
+    .legal-content {
+      padding: 0 16px;
+
+      h3 {
+        font-size: 1.3rem;
+        margin: 1.5rem 0 1rem 0;
+      }
+
+      p {
+        font-size: 1rem;
+      }
+    }
+
+    .features-list {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+
+    .metrics-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+
+    .feature-card {
+      padding: 1.5rem;
+    }
+  }
+}
+
+// Import des composants
+@import "../components/Header/Header";
+@import "../components/Navigation/Navigation";
+@import "../components/Header/HeaderActions/HeaderActions";
+@import "../components/Header/Logo/Logo";
+@import "../components/Shared/Hero/Hero";
+@import "../components/Shared/Section/Section";
+@import "../components/Shared/SectionHeader/SectionHeader";
+@import "../components/Services/FeatureCard/FeatureCard";
+@import "../components/Services/FeaturesGrid/FeaturesGrid";
+@import "../components/Pricing/PricingCard/PricingCard";
+@import "../components/Pricing/PricingGrid/PricingGrid";
+@import "../components/Pricing/FAQCard/FAQCard";
+@import "../components/Pricing/FAQGrid/FAQGrid";
+@import "../components/Contact/ContactInfoCard/ContactInfoCard";
+@import "../components/Contact/ContactForm/ContactForm";
+@import "../components/Contact/ContactBenefits/ContactBenefits";
+@import "../components/Home/HomeHero/HomeHero";
+@import "../components/Home/HomeFeatures/HomeFeatures";
+@import "../components/Home/HomeCTA/HomeCTA";
+@import "../components/Shared/CTASection/CTASection";
+@import "../components/Shared/PageContainer/PageContainer";
+@import "../components/Shared/DemoModal/DemoModal";
+@import "../components/Shared/CookieBanner/CookieBanner";

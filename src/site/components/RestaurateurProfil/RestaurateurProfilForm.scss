@@ -1,0 +1,122 @@
+@use "../../styles/variables" as *;
+
+.restaurateur-profil-form {
+  @include card-base;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+
+  &--loading {
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    min-height: 120px;
+    color: $text-muted;
+  }
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: $text-secondary;
+  margin-bottom: 8px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: $bg-secondary;
+  border: 1px solid $border-primary;
+  border-radius: 12px;
+  color: $text-primary;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+
+  &::placeholder {
+    color: $text-muted;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: $accent-primary;
+    box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+  }
+}
+
+.submit-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 1.125rem;
+  padding: 16px 32px;
+
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+}
+
+.form-message {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 0;
+  font-weight: 500;
+
+  &.success {
+    background-color: #dcfce7;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+
+    .icon {
+      color: #16a34a;
+    }
+  }
+
+  &.error {
+    background-color: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+
+    .icon {
+      color: #ef4444;
+    }
+  }
+
+  .icon {
+    flex-shrink: 0;
+  }
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

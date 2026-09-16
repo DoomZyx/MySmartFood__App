@@ -1,0 +1,182 @@
+@use "../../../styles/variables" as *;
+
+.instance-setup-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: loginModalFadeIn 0.3s ease-out;
+}
+
+.instance-setup-modal {
+  background: $bg-secondary;
+  border: 1px solid $border-primary;
+  border-radius: 16px;
+  max-width: 560px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  animation: loginModalSlideIn 0.3s ease-out;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.instance-setup-modal-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: none;
+  border: none;
+  color: $text-secondary;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  z-index: 10;
+
+  &:hover {
+    background: $bg-tertiary;
+    color: $text-primary;
+    transform: scale(1.1);
+  }
+}
+
+.instance-setup-modal-content {
+  padding: 40px;
+}
+
+.instance-setup-modal-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: $text-primary;
+  text-align: center;
+}
+
+.instance-setup-modal-subtitle {
+  text-align: center;
+  color: $text-secondary;
+  margin-bottom: 24px;
+  line-height: 1.6;
+  font-size: 0.9rem;
+}
+
+.instance-setup-modal-info {
+  background: $bg-tertiary;
+  border: 1px solid $border-primary;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  font-size: 0.875rem;
+  color: $text-secondary;
+  line-height: 1.5;
+
+  p {
+    margin: 0;
+  }
+}
+
+.instance-setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.instance-setup-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.instance-setup-form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.instance-setup-form-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: $text-secondary;
+  margin-bottom: 6px;
+}
+
+.instance-setup-form-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: $bg-tertiary;
+  border: 1px solid $border-primary;
+  border-radius: 10px;
+  color: $text-primary;
+  font-size: 0.95rem;
+
+  &::placeholder {
+    color: $text-muted;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: $accent-primary;
+  }
+}
+
+.instance-setup-form-error {
+  color: #ef4444;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.instance-setup-submit {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.instance-setup-result {
+  margin-top: 1rem;
+
+  .instance-setup-result-success {
+    color: #0d9488;
+    margin-bottom: 1rem;
+  }
+
+  .instance-setup-result-warning {
+    color: #b45309;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+  }
+
+  .instance-setup-form-submit {
+    margin-top: 0.5rem;
+  }
+}
+
+@keyframes loginModalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes loginModalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

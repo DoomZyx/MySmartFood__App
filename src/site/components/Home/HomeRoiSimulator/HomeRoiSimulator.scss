@@ -1,0 +1,121 @@
+@use "../../../styles/variables" as *;
+
+.roi-section {
+  padding: 80px 0;
+  background: $bg-primary;
+
+  @media (max-width: 768px) {
+    padding: 60px 0;
+  }
+}
+
+.roi-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+
+  @media (max-width: 768px) {
+    padding: 0 20px;
+  }
+}
+
+.roi-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.roi-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 24px;
+  color: $text-primary;
+
+  @media (max-width: 768px) {
+    font-size: 2rem;
+  }
+}
+
+.roi-intro {
+  font-size: 1.25rem;
+  color: $text-secondary;
+  max-width: 48rem;
+  margin: 0 auto;
+  line-height: 1.6;
+
+  @media (max-width: 768px) {
+    font-size: 1.125rem;
+  }
+}
+
+.roi-card {
+  @include glassmorphism;
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 48px;
+  text-align: center;
+
+  @media (max-width: 768px) {
+    padding: 32px 24px;
+  }
+}
+
+.roi-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  margin-bottom: 32px;
+  text-align: left;
+
+  @media (min-width: 768px) {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    color: $text-secondary;
+    font-size: 0.95rem;
+  }
+
+  input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid $border-primary;
+    border-radius: 12px;
+    background: $bg-secondary;
+    color: $text-primary;
+    font-size: 1.1rem;
+  }
+}
+
+.roi-results {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin: 0 0 24px;
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  dt {
+    color: $text-muted;
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 1.6rem;
+    font-weight: 700;
+    @include gradient-text;
+  }
+}
+
+.roi-compare {
+  color: $text-secondary;
+  line-height: 1.6;
+  margin: 0 0 28px;
+}

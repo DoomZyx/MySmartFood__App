@@ -1,0 +1,66 @@
+// Variables
+$bg-primary: #000000;
+$bg-secondary: #111111;
+$bg-tertiary: #1a1a1a;
+$bg-card: #1e1e1e;
+
+$accent-primary: #00d4ff;
+$accent-secondary: #8b5cf6;
+$accent-success: #10b981;
+
+$text-primary: #ffffff;
+$text-secondary: #e5e5e5;
+$text-muted: #a3a3a3;
+
+$border-primary: #333333;
+$border-secondary: #404040;
+
+$gradient-primary: linear-gradient(
+  135deg,
+  $accent-primary 0%,
+  $accent-secondary 100%
+);
+$gradient-secondary: linear-gradient(135deg, $bg-tertiary 0%, #2d2d2d 100%);
+
+// Mixins
+@mixin glassmorphism {
+  background: rgba(30, 30, 30, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+}
+
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@mixin gradient-text {
+  background: $gradient-primary;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@mixin button-base {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 24px;
+  border-radius: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border: none;
+  font-size: 16px;
+}
+
+@mixin card-base {
+  background: $bg-card;
+  border: 1px solid $border-primary;
+  border-radius: 16px;
+  padding: 24px;
+  transition: all 0.3s ease;
+} 

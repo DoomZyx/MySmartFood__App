@@ -1,0 +1,174 @@
+@use "../styles/variables" as *;
+
+.platform-admin {
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.platform-admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+
+  label {
+    font-size: 0.9rem;
+    color: $text-secondary;
+  }
+
+  select {
+    padding: 0.5rem 0.75rem;
+    border-radius: 10px;
+    border: 1px solid $border-primary;
+    background: $bg-secondary;
+    color: $text-primary;
+  }
+}
+
+.platform-admin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.platform-admin-card {
+  padding: 1.5rem;
+  background: $bg-card;
+  border: 1px solid $border-primary;
+  border-radius: 16px;
+}
+
+.platform-admin-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+
+  h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: $text-primary;
+  }
+}
+
+.platform-admin-status {
+  font-size: 0.8rem;
+  color: $accent-primary;
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+}
+
+.platform-admin-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem 1rem;
+  margin: 0 0 1.25rem;
+
+  dt {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: $text-muted;
+    margin-bottom: 0.2rem;
+  }
+
+  dd {
+    margin: 0;
+    color: $text-secondary;
+    word-break: break-word;
+  }
+}
+
+.platform-admin-webhook {
+  grid-column: 1 / -1;
+
+  dd {
+    color: $accent-primary;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.85rem;
+  }
+}
+
+.platform-admin-actions {
+  label {
+    display: block;
+    margin-bottom: 0.45rem;
+    font-size: 0.85rem;
+    color: $text-secondary;
+  }
+}
+
+.platform-admin-assign {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+
+  input {
+    flex: 1 1 220px;
+    padding: 10px 14px;
+    border: 1px solid $border-primary;
+    border-radius: 12px;
+    background: $bg-secondary;
+    color: $text-primary;
+  }
+}
+
+.platform-admin-error {
+  color: #f87171;
+  font-size: 0.9rem;
+  margin: 0.75rem 0 0;
+}
+
+.platform-admin-empty {
+  color: $text-muted;
+}
+
+.platform-admin-login {
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+
+  label {
+    font-size: 0.85rem;
+    color: $text-secondary;
+  }
+
+  input {
+    padding: 10px 14px;
+    border: 1px solid $border-primary;
+    border-radius: 12px;
+    background: $bg-secondary;
+    color: $text-primary;
+  }
+
+  .btn {
+    margin-top: 0.5rem;
+  }
+}
+
+.platform-admin-totp-setup {
+  p {
+    margin: 0 0 0.75rem;
+    color: $text-secondary;
+    font-size: 0.9rem;
+  }
+}
+
+.platform-admin-totp-qr {
+  display: block;
+  width: 220px;
+  height: 220px;
+  margin: 0 auto 0.5rem;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid $border-primary;
+  background: #fff;
+}

@@ -1,0 +1,155 @@
+@use "../../../styles/variables" as *;
+
+.pricing-card {
+  @include card-base;
+  position: relative;
+  transition: all 0.3s ease;
+  transform: translateZ(0); // Force GPU acceleration pour Firefox
+  backface-visibility: hidden; // Optimisation Firefox
+
+  &:hover {
+    transform: translateY(-4px) translateZ(0);
+    border-color: $accent-primary;
+    box-shadow: 0 8px 32px rgba(74, 144, 226, 0.3);
+  }
+
+  &.popular {
+    border-color: $accent-primary;
+    transform: scale(1.05);
+
+    &:hover {
+      transform: scale(1.05) translateY(-4px);
+      border-color: $accent-primary;
+      box-shadow: 0 8px 32px rgba(255, 107, 53, 0.3);
+    }
+  }
+}
+
+.popular-badge {
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.new-badge {
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.development-badge {
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.badge-content {
+  background: $gradient-primary;
+  color: $text-primary;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  display: flex;
+  justify-content: center;
+  width: 195px;
+  height: 40px;
+}
+
+
+
+
+.pricing-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.pricing-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  line-height: 1.2;
+}
+
+.pricing-description {
+  color: $text-muted;
+  margin-bottom: 24px;
+}
+
+.pricing-price {
+  margin-bottom: 24px;
+}
+
+.API-price,
+.pricing-minutes,
+.pricing-calls {
+  color: $text-muted;
+  font-size: 0.875rem;
+}
+
+.price-suffix {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.price-amount {
+  font-size: 2.25rem;
+  font-weight: bold;
+  @include gradient-text;
+}
+
+.price-period {
+  color: $text-muted;
+}
+
+.pricing-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pricing-checkout-error {
+  font-size: 0.875rem;
+  color: $accent-secondary;
+  margin: 0;
+}
+
+.pricing-btn {
+  width: 100%;
+  text-decoration: none;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.pricing-features {
+  h4 {
+    font-weight: 600;
+    color: $text-primary;
+    margin-bottom: 16px;
+  }
+}
+
+.feature-item {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.check-icon {
+  width: 20px;
+  height: 20px;
+  color: $accent-primary;
+  margin-top: 2px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.feature-text {
+  color: $text-secondary;
+  font-size: 0.875rem;
+}

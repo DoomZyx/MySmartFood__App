@@ -1,0 +1,43 @@
+@use "../../../styles/variables" as *;
+
+.features-grid {
+  display: grid;
+  gap: 32px;
+  margin-bottom: 64px;
+  margin-left: auto;
+  margin-right: auto;
+  width: max-content;
+  max-width: 100%;
+
+  &--1-cols {
+    grid-template-columns: minmax(0, 360px);
+  }
+
+  &--2-cols {
+    grid-template-columns: minmax(0, 360px);
+
+    @media (min-width: 768px) {
+      grid-template-columns: repeat(2, minmax(260px, 360px));
+    }
+  }
+
+  &--3-cols {
+    grid-template-columns: minmax(0, 360px);
+
+    @media (min-width: 768px) {
+      grid-template-columns: repeat(3, minmax(240px, 320px));
+    }
+  }
+
+  &--4-cols {
+    grid-template-columns: minmax(0, 360px);
+
+    @media (min-width: 768px) {
+      grid-template-columns: repeat(2, minmax(260px, 360px));
+    }
+
+    @media (min-width: 1024px) {
+      grid-template-columns: repeat(4, minmax(220px, 280px));
+    }
+  }
+}

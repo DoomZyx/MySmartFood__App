@@ -1,8 +1,8 @@
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect, lazy, Suspense } from "react";
-import { isAuthenticated, isAdmin, hasDashboardAccess, fetchSession } from "./API/auth";
-import ErrorBoundary from "./Components/Common/ErrorBoundary";
-import Access from "./Pages/Site/Access";
+import { isAuthenticated, isAdmin, hasDashboardAccess, fetchSession } from "./dashboard/API/auth";
+import ErrorBoundary from "./dashboard/Components/Common/ErrorBoundary";
+import Access from "./dashboard/Pages/Site/Access";
 import {
   StyledWebsiteLayout,
   WebsiteProviders,
@@ -22,21 +22,30 @@ import {
   Onboarding,
   PlatformAdmin,
   ProtectedRoute as WebsiteProtectedRoute,
-} from "./Website/WebsiteRoot";
-import { PLATFORM_ADMIN_PATH } from "@website/utils/platformAdminPath";
+} from "./app/WebsiteRoot";
+import { PLATFORM_ADMIN_PATH } from "@shared/platformAdminPath";
+import { DASHBOARD_PATH, openDashboard } from "@shared/dashboardPath";
 const DashboardRoot = lazy(() =>
-  import("./Website/DashboardRoot").then((mod) => ({ default: mod.DashboardRoot }))
+  import("./app/DashboardRoot").then((mod) => ({ default: mod.DashboardRoot }))
 );
 
-const Homepage = lazy(() => import("./Pages/Homepage/homepage"));
-const Profile = lazy(() => import("./Pages/Profile/Profile"));
-const Admin = lazy(() => import("./Pages/Admin/Admin"));
-const ServiceHealth = lazy(() => import("./Pages/ServiceHealth/ServiceHealth"));
-const AppointmentsPage = lazy(() => import("./Pages/AppointmentsPage/AppointmentsPage"));
-const ReservationsPage = lazy(() => import("./Pages/ReservationsPage/ReservationsPage"));
-const Configuration = lazy(() => import("./Pages/Configuration/Configuration"));
+const Homepage = lazy(() => import("./dashboard/Pages/Homepage/homepage"));
+const Profile = lazy(() => import("./dashboard/Pages/Profile/Profile"));
+const Admin = lazy(() => import("./dashboard/Pages/Admin/Admin"));
+const ServiceHealth = lazy(() => import("./dashboard/Pages/ServiceHealth/ServiceHealth"));
+const AppointmentsPage = lazy(() => import("./dashboard/Pages/AppointmentsPage/AppointmentsPage"));
+const ReservationsPage = lazy(() => import("./dashboard/Pages/ReservationsPage/ReservationsPage"));
+const Configuration = lazy(() => import("./dashboard/Pages/Configuration/Configuration"));
 
 const FLASH_ERROR_KEY = "app_flash_error";
+
+function DashboardEntry() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    openDashboard(navigate);
+  }, [navigate]);
+  return null;
+}
 
 function DashboardProtectedRoute({ children, requireAdmin = false, requireSubscription = false, authChecked }) {
   const routeLocation = useLocation();
@@ -48,7 +57,7 @@ function DashboardProtectedRoute({ children, requireAdmin = false, requireSubscr
 
   if (requireAdmin && !isAdmin()) {
     sessionStorage.setItem(FLASH_ERROR_KEY, "Vous n'avez pas les privilèges pour accéder à cette page.");
-    return <Navigate to="/app" replace />;
+    return <Navigate to={DASHBOARD_PATH} replace />;
   }
 
   if (requireSubscription && !hasDashboardAccess()) {
@@ -109,7 +118,6 @@ function App() {
               <Route path="/fonctionnalites-prevues" element={<FonctionnalitesPrevues />} />
               <Route path="/login" element={<LoginRedirect />} />
               <Route path="/register" element={<LoginRedirect />} />
-              <Route path="api/auth/google" element={<GoogleStartRedirect />} />
               <Route path="/api/auth/google" element={<GoogleStartRedirect />} />
               <Route path="/api/auth/callback" element={<AuthCallback />} />
               <Route path="/api/auth/google/callback" element={<GoogleCallbackRedirect />} />
@@ -133,9 +141,11 @@ function App() {
               <Route path={PLATFORM_ADMIN_PATH} element={<PlatformAdmin />} />
             </Route>
 
+            <Route path="/app" element={<DashboardEntry />} />
+
             <Route element={<DashboardRoot />}>
               <Route
-                path="/app"
+                path={DASHBOARD_PATH}
                 element={
                   <DashboardProtectedRoute authChecked={authChecked} requireSubscription>
                     <Homepage />

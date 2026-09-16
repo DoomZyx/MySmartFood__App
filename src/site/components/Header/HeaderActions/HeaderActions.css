@@ -1,0 +1,30 @@
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+@media (max-width: 768px) {
+  .header-actions {
+    display: none;
+  }
+}
+.header-actions .btn {
+  font-size: 0.875rem;
+  padding: 8px 16px;
+}
+.header-actions .header-link-btn {
+  text-decoration: none;
+  color: inherit;
+}
+.header-actions .btn-ghost-header {
+  background: transparent;
+  border: none;
+  color: #e5e5e5;
+  font-size: 0.875rem;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.header-actions .btn-ghost-header:hover {
+  color: #00d4ff;
+}/*# sourceMappingURL=HeaderActions.css.map */

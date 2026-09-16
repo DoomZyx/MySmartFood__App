@@ -1,0 +1,46 @@
+@use "../../../styles/variables" as *;
+
+.contact-benefits {
+  .benefit-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 24px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+}
+
+.benefit-icon {
+  width: 48px;
+  height: 48px;
+  background: $gradient-primary;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px;
+  flex-shrink: 0;
+
+  &.benefit-icon-alt {
+    background: linear-gradient(
+      135deg,
+      $accent-secondary 0%,
+      $accent-primary 100%
+    );
+  }
+}
+
+.benefit-content {
+  h3 {
+    font-weight: 600;
+    color: $text-primary;
+    margin-bottom: 4px;
+  }
+}
+
+.benefit-description {
+  color: $text-muted;
+  font-size: 0.875rem;
+}
