@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { loginUser, isAuthenticated, getCurrentUser } from "../../API/auth";
 import { postAuthPath } from "../../utils/postAuthPath";
+import { apiBaseUrl } from "@website/services/apiBase";
 
 export function useLogin() {
  const { t } = useTranslation();
@@ -28,8 +29,12 @@ useEffect(() => {
 }, [navigate, location.state, location.key]);
 
 const handleGoogle = () => {
-  const base = import.meta.env.VITE_API_URL || "/";
-  window.location.href = `${base}api/auth/google?return=site`;
+  const base = apiBaseUrl();
+  if (!base) {
+    setError(t("login.googleFailed"));
+    return;
+  }
+  window.location.assign(`${base}/api/auth/google?return=site`);
 };
 
 const handleInputChange = (e) => {

@@ -5,6 +5,7 @@ import {
   WebsiteProviders,
   LoginRedirect,
   GoogleCallbackRedirect,
+  GoogleStartRedirect,
 } from "@website/App.jsx";
 import Home from "@website/pages/Home";
 import Services from "@website/pages/Services";
@@ -40,6 +41,7 @@ export {
   WebsiteProviders,
   LoginRedirect,
   GoogleCallbackRedirect,
+  GoogleStartRedirect,
   Home,
   Services,
   Pricing,

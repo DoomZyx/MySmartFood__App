@@ -8,6 +8,7 @@ import {
   WebsiteProviders,
   LoginRedirect,
   GoogleCallbackRedirect,
+  GoogleStartRedirect,
   Home,
   Services,
   Pricing,
@@ -108,7 +109,8 @@ function App() {
               <Route path="/fonctionnalites-prevues" element={<FonctionnalitesPrevues />} />
               <Route path="/login" element={<LoginRedirect />} />
               <Route path="/register" element={<LoginRedirect />} />
-              <Route path="api/auth/google" element={<Navigate to="/login" replace />} />
+              <Route path="api/auth/google" element={<GoogleStartRedirect />} />
+              <Route path="/api/auth/google" element={<GoogleStartRedirect />} />
               <Route path="/api/auth/callback" element={<AuthCallback />} />
               <Route path="/api/auth/google/callback" element={<GoogleCallbackRedirect />} />
               <Route path="/access" element={<Access />} />
