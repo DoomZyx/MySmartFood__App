@@ -45,7 +45,10 @@ export function persistSession({ user, tenants }) {
     user.appRole === "admin"
       ? "admin"
       : "user";
-  const first = Array.isArray(tenants) && tenants[0] ? tenants[0].id : "";
+  const active = Array.isArray(tenants)
+    ? tenants.find((item) => item.status === "active")
+    : null;
+  const first = active?.id || (Array.isArray(tenants) && tenants[0] ? tenants[0].id : "");
   localStorage.setItem(
     USER_KEY,
     JSON.stringify({
@@ -61,7 +64,7 @@ export function persistSession({ user, tenants }) {
       planName: user.planName || null,
       hasActiveSubscription: Boolean(user.hasActiveSubscription),
       accessUnlocked: Boolean(user.accessUnlocked || user.dashboardUnlockedAt),
-      smartcrmInstanceId: user.smartcrmInstanceId || first || null,
+      smartcrmInstanceId: first || user.smartcrmInstanceId || null,
     })
   );
   if (first) setStoredTenantId(first);

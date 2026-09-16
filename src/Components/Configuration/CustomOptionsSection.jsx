@@ -1,17 +1,17 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
+import { choiceName, choicePrice } from "../../utils/menuOptions";
 import "./CustomOptionsSection.scss";
 
 export function CustomOptionsSection({ categorie, options, onUpdateOptions }) {
   const { t } = useTranslation();
+  const [drafts, setDrafts] = React.useState({});
 
-  // Afficher pour les produits personnalisables (Tacos, Burgers, etc.)
   const categorieLower = categorie.toLowerCase();
   const isCustomizable = categorieLower.includes('tacos') || 
                          categorieLower.includes('burger') || 
                          categorieLower.includes('sandwich');
   
-  // Ne pas afficher pour les menus, boissons, desserts, accompagnements
   const isExcluded = ['menus', 'menu', 'boissons', 'boisson', 'desserts', 'dessert', 'accompagnements', 'accompagnement']
     .some(cat => categorieLower.includes(cat));
   
@@ -19,25 +19,41 @@ export function CustomOptionsSection({ categorie, options, onUpdateOptions }) {
     return null;
   }
 
-  // Initialiser les options par défaut si vide
   React.useEffect(() => {
     if (!options || Object.keys(options).length === 0) {
       const defaultOptions = categorieLower.includes('tacos') ? {
         viandes: {
           nom: "Viandes",
-          choix: ["Poulet", "Bœuf", "Agneau", "Mixte"],
+          choix: [
+            { nom: "Poulet", prix: 0 },
+            { nom: "Bœuf", prix: 0 },
+            { nom: "Agneau", prix: 0 },
+            { nom: "Mixte", prix: 0 }
+          ],
           multiple: false,
           obligatoire: true
         },
         sauces: {
           nom: "Sauces",
-          choix: ["Algérienne", "Blanche", "Samourai", "Harissa", "Ketchup", "Mayonnaise"],
+          choix: [
+            { nom: "Algérienne", prix: 0 },
+            { nom: "Blanche", prix: 0 },
+            { nom: "Samourai", prix: 0 },
+            { nom: "Harissa", prix: 0 },
+            { nom: "Ketchup", prix: 0 },
+            { nom: "Mayonnaise", prix: 0 }
+          ],
           multiple: true,
           obligatoire: true
         },
         crudites: {
           nom: "Crudités",
-          choix: ["Salade", "Tomates", "Oignons", "Cornichons"],
+          choix: [
+            { nom: "Salade", prix: 0 },
+            { nom: "Tomates", prix: 0 },
+            { nom: "Oignons", prix: 0 },
+            { nom: "Cornichons", prix: 0 }
+          ],
           multiple: true,
           obligatoire: false
         }
@@ -49,27 +65,50 @@ export function CustomOptionsSection({ categorie, options, onUpdateOptions }) {
     }
   }, []);
   
-  // Si toujours vide après init, ne rien afficher
   if (!options || Object.keys(options).length === 0) {
     return null;
   }
 
   const handleRemoveChoice = (optionKey, choixIndex) => {
     const newOptions = { ...options };
-    newOptions[optionKey].choix = newOptions[optionKey].choix.filter((_, i) => i !== choixIndex);
+    newOptions[optionKey] = {
+      ...newOptions[optionKey],
+      choix: newOptions[optionKey].choix.filter((_, i) => i !== choixIndex)
+    };
     onUpdateOptions(newOptions);
   };
 
   const handleAddChoice = (optionKey, value) => {
     const newOptions = { ...options };
-    if (!newOptions[optionKey].choix) {
-      newOptions[optionKey].choix = [];
-    }
+    const current = newOptions[optionKey].choix || [];
     newOptions[optionKey] = {
       ...newOptions[optionKey],
-      choix: [...newOptions[optionKey].choix, value]
+      choix: [...current, value]
     };
     onUpdateOptions(newOptions);
+  };
+
+  const handleUpdateChoicePrice = (optionKey, choixIndex, prix) => {
+    const newOptions = { ...options };
+    const current = newOptions[optionKey].choix[choixIndex];
+    const nom = choiceName(current);
+    newOptions[optionKey] = {
+      ...newOptions[optionKey],
+      choix: newOptions[optionKey].choix.map((entry, index) =>
+        index === choixIndex ? { nom, prix } : entry
+      )
+    };
+    onUpdateOptions(newOptions);
+  };
+
+  const commitDraft = (optionKey) => {
+    const draft = drafts[optionKey] || {};
+    const nom = String(draft.nom || "").trim();
+    if (!nom) return;
+    const rawPrix = Number(draft.prix);
+    const prix = Number.isFinite(rawPrix) && rawPrix > 0 ? rawPrix : 0;
+    handleAddChoice(optionKey, { nom, prix });
+    setDrafts((prev) => ({ ...prev, [optionKey]: { nom: "", prix: "" } }));
   };
 
   return (
@@ -88,11 +127,29 @@ export function CustomOptionsSection({ categorie, options, onUpdateOptions }) {
           </div>
           
           <div className="option-choices">
-            <label className="choices-label">Choix disponibles :</label>
+            <label className="choices-label">{t('configuration.menu.choices')} :</label>
             <div className="tags-list">
               {(optionData.choix || []).map((choix, idx) => (
-                <span key={idx} className="choice-badge">
-                  {choix}
+                <span key={`${choiceName(choix)}-${idx}`} className="choice-badge">
+                  {choiceName(choix)}
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="choice-price-input"
+                    value={choicePrice(choix)}
+                    onChange={(e) =>
+                      handleUpdateChoicePrice(
+                        optionKey,
+                        idx,
+                        parseFloat(e.target.value) || 0
+                      )
+                    }
+                    onFocus={(e) => e.target.select()}
+                    title={t('configuration.menu.optionSurcharge')}
+                    aria-label={t('configuration.menu.optionSurcharge')}
+                  />
+                  <span className="choice-price-suffix">€</span>
                   <button
                     type="button"
                     onClick={() => handleRemoveChoice(optionKey, idx)}
@@ -102,26 +159,50 @@ export function CustomOptionsSection({ categorie, options, onUpdateOptions }) {
                 </span>
               ))}
             </div>
-            <input
-              type="text"
-              className="choice-input"
-              placeholder="Ajouter un choix (appuyez sur Entrée)"
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  const value = e.target.value.trim();
-                  if (value) {
-                    handleAddChoice(optionKey, value);
-                    e.target.value = '';
-                  }
+            <div className="choice-add-row">
+              <input
+                type="text"
+                className="choice-input"
+                placeholder={t('configuration.menu.addChoice')}
+                value={drafts[optionKey]?.nom || ""}
+                onChange={(e) =>
+                  setDrafts((prev) => ({
+                    ...prev,
+                    [optionKey]: { ...(prev[optionKey] || {}), nom: e.target.value }
+                  }))
                 }
-              }}
-            />
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitDraft(optionKey);
+                  }
+                }}
+              />
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className="choice-input choice-draft-price"
+                placeholder={t('configuration.menu.optionSurchargePlaceholder')}
+                value={drafts[optionKey]?.prix ?? ""}
+                onChange={(e) =>
+                  setDrafts((prev) => ({
+                    ...prev,
+                    [optionKey]: { ...(prev[optionKey] || {}), prix: e.target.value }
+                  }))
+                }
+                onFocus={(e) => e.target.select()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitDraft(optionKey);
+                  }
+                }}
+              />
+            </div>
           </div>
         </div>
       ))}
     </div>
   );
 }
-
-

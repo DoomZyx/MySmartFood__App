@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { useTranslation } from "react-i18next";
 import { fetchPricing } from "../../API/Pricing/api";
+import { choiceName, computeUnitPrice, formatChoiceLabel } from "../../utils/menuOptions";
 
 export function CreateAppointmentForm({ onSubmit, onCancel, loading, appointmentType }) {
   const { t } = useTranslation();
@@ -143,7 +144,7 @@ export function CreateAppointmentForm({ onSubmit, onCancel, loading, appointment
               nom: prod?.nom || "Plat inconnu",
               categorie: prod?.categorie || "",
               quantite: it.qty && it.qty > 0 ? it.qty : 1,
-              prixUnitaire: prod?.prixBase || 0,
+              prixUnitaire: computeUnitPrice(prod?.prixBase || 0, prod?.options, it.options),
               composition: it.composition?.trim() || "",
               options: it.options || {} // Inclure les options sélectionnées
             };
@@ -253,6 +254,9 @@ export function CreateAppointmentForm({ onSubmit, onCancel, loading, appointment
             {selectedItems.map((item, idx) => {
               const selectedProduct = menuProducts.find(p => p._id === item.productId);
               const hasOptions = selectedProduct && Object.keys(selectedProduct.options || {}).length > 0;
+              const unitPrice = selectedProduct
+                ? computeUnitPrice(selectedProduct.prixBase, selectedProduct.options, item.options)
+                : 0;
               
               return (
                 <div key={item.id} className="item-row-container">
@@ -283,7 +287,7 @@ export function CreateAppointmentForm({ onSubmit, onCancel, loading, appointment
                         <>
                           <span className="product-category" style={{ color: '#6b7280', fontSize: '0.85rem', fontWeight: 600 }}>{selectedProduct.categorie}</span>
                           <span className="product-name" style={{ color: '#1f2937', fontWeight: 700 }}>{selectedProduct.nom}</span>
-                          <span className="product-price" style={{ marginLeft: 'auto', color: '#6366f1', fontWeight: 700, fontSize: '1.1rem' }}>{selectedProduct.prixBase?.toFixed?.(2) || selectedProduct.prixBase}€</span>
+                          <span className="product-price" style={{ marginLeft: 'auto', color: '#6366f1', fontWeight: 700, fontSize: '1.1rem' }}>{unitPrice.toFixed(2)}€</span>
                         </>
                       ) : (
                         <span className="product-placeholder" style={{ color: '#9ca3af', fontSize: '1rem' }}>
@@ -379,16 +383,18 @@ export function CreateAppointmentForm({ onSubmit, onCancel, loading, appointment
                             {optionData.obligatoire && <span className="required">*</span>}
                           </label>
                           <div className="option-choices">
-                            {optionData.choix.map((choix) => (
-                              <label key={choix} className="choice-label">
+                            {(optionData.choix || []).map((choix, choixIdx) => {
+                              const nom = choiceName(choix);
+                              return (
+                              <label key={`${nom}-${choixIdx}`} className="choice-label">
                                 <input
                                   type={optionData.multiple ? "checkbox" : "radio"}
                                   name={`${item.id}-${optionKey}`}
-                                  value={choix}
+                                  value={nom}
                                   checked={
                                     optionData.multiple
-                                      ? (item.options[optionKey] || []).includes(choix)
-                                      : item.options[optionKey] === choix
+                                      ? (item.options[optionKey] || []).includes(nom)
+                                      : item.options[optionKey] === nom
                                   }
                                   onChange={(e) => {
                                     setSelectedItems(prev => prev.map(it => {
@@ -396,25 +402,24 @@ export function CreateAppointmentForm({ onSubmit, onCancel, loading, appointment
                                       
                                       const newOptions = { ...it.options };
                                       if (optionData.multiple) {
-                                        // Checkbox: gérer un tableau
                                         const current = newOptions[optionKey] || [];
                                         if (e.target.checked) {
-                                          newOptions[optionKey] = [...current, choix];
+                                          newOptions[optionKey] = [...current, nom];
                                         } else {
-                                          newOptions[optionKey] = current.filter(c => c !== choix);
+                                          newOptions[optionKey] = current.filter(c => c !== nom);
                                         }
                                       } else {
-                                        // Radio: une seule valeur
-                                        newOptions[optionKey] = choix;
+                                        newOptions[optionKey] = nom;
                                       }
                                       
                                       return { ...it, options: newOptions };
                                     }));
                                   }}
                                 />
-                                {choix}
+                                {formatChoiceLabel(choix)}
                               </label>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       ))}

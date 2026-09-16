@@ -52,14 +52,11 @@ export const ProductItem = ({
             {t('configuration.menu.productForm.available')}
           </label>
 
-          {/* Options personnalisables en mode édition - uniquement pour les Tacos */}
-          {categorie.toLowerCase() === 'tacos' && (
-            <CustomOptionsSection 
-              categorie={categorie}
-              options={produit.options || {}}
-              onUpdateOptions={(newOptions) => onChange('options', newOptions)}
-            />
-          )}
+          <CustomOptionsSection 
+            categorie={categorie}
+            options={produit.options || {}}
+            onUpdateOptions={(newOptions) => onChange('options', newOptions)}
+          />
 
           <div className="edit-actions">
             <button onClick={onSave}>

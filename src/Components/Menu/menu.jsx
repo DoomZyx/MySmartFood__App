@@ -92,6 +92,9 @@ function Menu() {
             <Link to="/configuration" onClick={closeMenu}>
               <i className="bi bi-gear"></i> <h3>{t("menu.configuration")}</h3>
             </Link>
+            <Link to="/monitoring" onClick={closeMenu}>
+              <i className="bi bi-activity"></i> <h3>{t("menu.serviceMonitoring")}</h3>
+            </Link>
             <div className="nav-phone-line">
               <i
                 className="bi bi-telephone toolbar-icon"
@@ -109,20 +112,10 @@ function Menu() {
             <h3>{t("menu.myAccount")}</h3>
           </Link>
           {isAdmin() && (
-            <>
-              <Link className="admin" to="/admin" onClick={closeMenu}>
-                <i className="bi bi-person-gear"></i>
-                <h3>{t("menu.adminPanel")}</h3>
-              </Link>
-              <Link
-                className="admin-services"
-                to="/admin/services"
-                onClick={closeMenu}
-              >
-                <i className="bi bi-activity"></i>
-                <h3>{t("menu.serviceMonitoring")}</h3>
-              </Link>
-            </>
+            <Link className="admin" to="/admin" onClick={closeMenu}>
+              <i className="bi bi-person-gear"></i>
+              <h3>{t("menu.adminPanel")}</h3>
+            </Link>
           )}
         </div>
         <button

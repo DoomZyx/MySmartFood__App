@@ -22,6 +22,7 @@ import {
   PlatformAdmin,
   ProtectedRoute as WebsiteProtectedRoute,
 } from "./Website/WebsiteRoot";
+import { PLATFORM_ADMIN_PATH } from "@website/utils/platformAdminPath";
 const DashboardRoot = lazy(() =>
   import("./Website/DashboardRoot").then((mod) => ({ default: mod.DashboardRoot }))
 );
@@ -127,14 +128,7 @@ function App() {
                   </WebsiteProtectedRoute>
                 }
               />
-              <Route
-                path="/admin-plateforme"
-                element={
-                  <WebsiteProtectedRoute>
-                    <PlatformAdmin />
-                  </WebsiteProtectedRoute>
-                }
-              />
+              <Route path={PLATFORM_ADMIN_PATH} element={<PlatformAdmin />} />
             </Route>
 
             <Route element={<DashboardRoot />}>
@@ -179,18 +173,22 @@ function App() {
                 }
               />
               <Route
-                path="/admin"
+                path="/monitoring"
                 element={
-                  <DashboardProtectedRoute authChecked={authChecked} requireAdmin requireSubscription>
-                    <Admin />
+                  <DashboardProtectedRoute authChecked={authChecked} requireSubscription>
+                    <ServiceHealth />
                   </DashboardProtectedRoute>
                 }
               />
               <Route
                 path="/admin/services"
+                element={<Navigate to="/monitoring" replace />}
+              />
+              <Route
+                path="/admin"
                 element={
                   <DashboardProtectedRoute authChecked={authChecked} requireAdmin requireSubscription>
-                    <ServiceHealth />
+                    <Admin />
                   </DashboardProtectedRoute>
                 }
               />

@@ -14,6 +14,10 @@
   max-width: 1500px;
   margin: 0 auto;
 
+  .title-section h1 {
+    color: #fff;
+  }
+
   &__eyebrow {
     margin: 0 0 0.35rem;
     color: var(--color-text-secondary);
@@ -229,6 +233,10 @@
 
   &__section-heading {
     margin-bottom: 1rem;
+
+    h2 {
+      color: #fff;
+    }
   }
 
   &__services {

@@ -9,16 +9,19 @@ export function ConfigurationRestaurant({ safePricing, handleInputChange }) {
     <div className="restaurant-info">
       <h3>{t('configuration.restaurant.title')}</h3>
 
-      {/* Numéro intelligent (IA) - lecture seule */}
       <div className="form-group">
-        <label>Numéro intelligent (IA mySmartFood)</label>
+        <label htmlFor="instancePhoneNumber">{t("configuration.restaurant.smartPhone")}</label>
         <input
+          id="instancePhoneNumber"
           type="tel"
           value={safePricing.instancePhoneNumber || ""}
+          placeholder={t("configuration.restaurant.smartPhonePending")}
           readOnly
         />
         <small className="help-text">
-          Ce numéro est celui de votre IA téléphonique. Il peut être communiqué à vos clients pour qu&apos;ils appellent directement l&apos;assistant.
+          {safePricing.instancePhoneNumber
+            ? t("configuration.restaurant.smartPhoneHelp")
+            : t("configuration.restaurant.smartPhonePendingHelp")}
         </small>
       </div>
 
@@ -72,6 +75,58 @@ export function ConfigurationRestaurant({ safePricing, handleInputChange }) {
           placeholder="Ex: 50"
         />
         <small className="help-text">{t('configuration.restaurant.seatsHelp')}</small>
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="accessibilitePmr">{t('configuration.restaurant.pmr')}</label>
+        <select
+          id="accessibilitePmr"
+          value={
+            safePricing.restaurantInfo?.accessibilitePmr === true
+              ? "yes"
+              : safePricing.restaurantInfo?.accessibilitePmr === false
+                ? "no"
+                : ""
+          }
+          onChange={(e) => {
+            const value = e.target.value;
+            handleInputChange(
+              "restaurantInfo.accessibilitePmr",
+              value === "yes" ? true : value === "no" ? false : null
+            );
+          }}
+        >
+          <option value="">{t('configuration.restaurant.pmrUnknown')}</option>
+          <option value="yes">{t('common.yes')}</option>
+          <option value="no">{t('common.no')}</option>
+        </select>
+        <small className="help-text">{t('configuration.restaurant.pmrHelp')}</small>
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="nombreChaisesBebe">{t('configuration.restaurant.highchairs')}</label>
+        <input
+          id="nombreChaisesBebe"
+          type="number"
+          min="0"
+          value={
+            safePricing.restaurantInfo?.nombreChaisesBebe === "" ||
+            safePricing.restaurantInfo?.nombreChaisesBebe == null
+              ? ""
+              : safePricing.restaurantInfo.nombreChaisesBebe
+          }
+          onChange={(e) =>
+            handleInputChange(
+              "restaurantInfo.nombreChaisesBebe",
+              e.target.value === ""
+                ? ""
+                : Math.max(0, parseInt(e.target.value, 10) || 0)
+            )
+          }
+          onFocus={(e) => e.target.select()}
+          placeholder="Ex: 4"
+        />
+        <small className="help-text">{t('configuration.restaurant.highchairsHelp')}</small>
       </div>
     </div>
   );

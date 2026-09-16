@@ -7,7 +7,9 @@ import ActiveReservations from "./ActiveReservations";
 import ServiceRadar from "./ServiceRadar";
 import RestaurantCapacity from "./RestaurantCapacity";
 import AgentStats from "./AgentStats";
+import TokenUsageList from "./TokenUsageList";
 import { useDashboard } from "../../Hooks/Dashboard/useDashboard";
+import { useTokenUsage } from "../../Hooks/Dashboard/useTokenUsage";
 import "./dashboard.scss";
 
 function Dashboard() {
@@ -21,6 +23,7 @@ function Dashboard() {
     agentStats,
     refresh,
   } = useDashboard();
+  const tokenUsage = useTokenUsage();
 
   if (loading) {
     return (
@@ -48,6 +51,12 @@ function Dashboard() {
       <ServiceRadar events={radarEvents} />
       <RestaurantCapacity capacity={capacity} />
       <AgentStats stats={agentStats} />
+      <TokenUsageList
+        events={tokenUsage.events}
+        totals={tokenUsage.totals}
+        loading={tokenUsage.loading}
+        error={tokenUsage.error}
+      />
     </div>
   );
 }

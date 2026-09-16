@@ -4,13 +4,9 @@ import { useServiceHealth } from "../../Hooks/Admin/useServiceHealth";
 import "./ServiceHealth.scss";
 
 const SERVICE_ICONS = {
-  backend: "bi-server",
-  mongo: "bi-database",
+  postgres: "bi-database",
   gateway: "bi-diagram-3",
   voice: "bi-telephone",
-  stt: "bi-mic",
-  llm: "bi-cpu",
-  tts: "bi-volume-up",
 };
 
 function formatDateTime(value, language) {
@@ -27,6 +23,11 @@ function formatDuration(durationMs) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return minutes > 0 ? `${minutes} min ${seconds} s` : `${seconds} s`;
+}
+
+function formatMs(value, t) {
+  if (value === null || value === undefined) return t("monitoring.notAvailable");
+  return `${Math.round(value)} ms`;
 }
 
 function translateReason(reason, t) {
@@ -57,10 +58,7 @@ function ServiceHealth() {
 
   if (loading && !monitoring) {
     return (
-      <AppLayout
-        title={t("monitoring.title")}
-        subtitle={t("monitoring.subtitle")}
-      >
+      <AppLayout>
         <div className="service-health__state" role="status" aria-live="polite">
           <span className="spinner spinner-lg" aria-hidden="true" />
           <p>{t("monitoring.loading")}</p>
@@ -71,10 +69,7 @@ function ServiceHealth() {
 
   if (!monitoring) {
     return (
-      <AppLayout
-        title={t("monitoring.title")}
-        subtitle={t("monitoring.subtitle")}
-      >
+      <AppLayout>
         <div className="service-health__state service-health__state--error" role="alert">
           <i className="bi bi-exclamation-triangle" aria-hidden="true" />
           <h2>{t("monitoring.errorTitle")}</h2>
@@ -88,13 +83,15 @@ function ServiceHealth() {
   }
 
   const displayedUpdate = monitoring.serverUpdatedAt || lastUpdatedAt;
+  const latencies = monitoring.latencies || [];
 
   return (
-    <AppLayout
-      title={t("monitoring.title")}
-      subtitle={t("monitoring.subtitle")}
-    >
+    <AppLayout>
       <div className="service-health">
+        <div className="title-section">
+          <h1>{t("monitoring.title")}</h1>
+          <p className="subtitle">{t("monitoring.subtitle")}</p>
+        </div>
         {error && (
           <div className="service-health__error-banner" role="alert">
             <i className="bi bi-exclamation-triangle" aria-hidden="true" />
@@ -154,6 +151,113 @@ function ServiceHealth() {
           </div>
         )}
 
+        <section
+          className="service-health__panel"
+          aria-labelledby="monitoring-latency-title"
+        >
+          <header className="service-health__panel-header">
+            <div>
+              <p className="service-health__eyebrow">
+                {t("monitoring.latencySection")}
+              </p>
+              <h2 id="monitoring-latency-title">{t("monitoring.latencyTitle")}</h2>
+            </div>
+          </header>
+
+          <ul className="service-health__call-list">
+            {latencies.map((hop) => (
+              <li key={hop.key}>
+                <div className="service-health__call-id">
+                  <span>{t(`monitoring.latencies.${hop.key}`)}</span>
+                  <code>{formatMs(hop.last, t)}</code>
+                </div>
+                {hop.measured && hop.average != null ? (
+                  <dl>
+                    <div>
+                      <dt>{t("monitoring.last")}</dt>
+                      <dd>{formatMs(hop.last, t)}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("monitoring.average")}</dt>
+                      <dd>{formatMs(hop.average, t)}</dd>
+                    </div>
+                    {hop.max != null && (
+                      <div>
+                        <dt>{t("monitoring.max")}</dt>
+                        <dd>{formatMs(hop.max, t)}</dd>
+                      </div>
+                    )}
+                  </dl>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section
+          className="service-health__panel"
+          aria-labelledby="monitoring-callflow-title"
+        >
+          <header className="service-health__panel-header">
+            <div>
+              <p className="service-health__eyebrow">
+                {t("monitoring.callFlowSection")}
+              </p>
+              <h2 id="monitoring-callflow-title">{t("monitoring.callFlowTitle")}</h2>
+            </div>
+            <span className="service-health__count">
+              {(monitoring.callFlow || []).length}
+            </span>
+          </header>
+
+          {(monitoring.callFlow || []).length === 0 ? (
+            <div className="service-health__panel-empty">
+              <i className="bi bi-telephone-x" aria-hidden="true" />
+              <p>{t("monitoring.noCallFlow")}</p>
+            </div>
+          ) : (
+            <ul className="service-health__alert-list">
+              {(monitoring.callFlow || []).map((event) => (
+                <li
+                  className={`service-health__alert service-health__alert--${event.severity}`}
+                  key={event.id}
+                >
+                  <span className="service-health__alert-marker" aria-hidden="true" />
+                  <div>
+                    <div className="service-health__alert-meta">
+                      <strong>
+                        {t(`monitoring.callFlowStages.${event.stage}`, {
+                          defaultValue: event.stage,
+                        })}
+                        {" — "}
+                        {t(`monitoring.callFlowOutcomes.${event.outcome}`, {
+                          defaultValue: event.outcome,
+                        })}
+                      </strong>
+                      <time dateTime={event.at || undefined}>
+                        {formatDateTime(event.at, i18n.language) ||
+                          t("monitoring.notAvailable")}
+                      </time>
+                    </div>
+                    <p>
+                      {[
+                        event.to ? `${t("monitoring.callFlowTo")} ${event.to}` : null,
+                        event.fromMasked
+                          ? `${t("monitoring.callFlowFrom")} ${event.fromMasked}`
+                          : null,
+                        event.slug || null,
+                        event.detail,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         <section aria-labelledby="monitoring-services-title">
           <div className="service-health__section-heading">
             <div>
@@ -165,9 +269,15 @@ function ServiceHealth() {
           </div>
 
           <div className="service-health__services">
-            {monitoring.services.map((service) => (
+            {monitoring.services.map((service) => {
+              const status =
+                service.key === "voice" &&
+                (service.fallbackAvailable || monitoring.fallbackOpenAI)
+                  ? "healthy"
+                  : service.status;
+              return (
               <article
-                className={`service-health__service-card service-health__service-card--${service.status}`}
+                className={`service-health__service-card service-health__service-card--${status}`}
                 key={service.key}
               >
                 <header>
@@ -176,40 +286,23 @@ function ServiceHealth() {
                   </span>
                   <div>
                     <h3>{t(`monitoring.services.${service.key}`)}</h3>
-                    <StatusLabel status={service.status} t={t} />
+                    <StatusLabel status={status} t={t} />
+                    {service.key === "voice" && (
+                      <span className="service-health__fallback">
+                        {t("monitoring.fallback")}
+                      </span>
+                    )}
                   </div>
                 </header>
 
-                <dl>
-                  <div>
-                    <dt>{t("monitoring.latency")}</dt>
-                    <dd>
-                      {service.latencyMs === null
-                        ? t("monitoring.notAvailable")
-                        : `${Math.round(service.latencyMs)} ms`}
-                    </dd>
-                  </div>
-                  {service.provider && (
-                    <div>
-                      <dt>{t("monitoring.provider")}</dt>
-                      <dd>{service.provider}</dd>
-                    </div>
-                  )}
-                  {service.model && (
-                    <div>
-                      <dt>{t("monitoring.model")}</dt>
-                      <dd>{service.model}</dd>
-                    </div>
-                  )}
-                </dl>
-
-                {service.message && (
+                {service.message && status !== "healthy" && (
                   <p className="service-health__service-message">
                     {translateReason(service.message, t)}
                   </p>
                 )}
               </article>
-            ))}
+              );
+            })}
           </div>
         </section>
 
@@ -239,19 +332,7 @@ function ServiceHealth() {
               <ul className="service-health__call-list">
                 {monitoring.activeCalls.map((call) => (
                   <li key={call.id}>
-                    <div className="service-health__call-id">
-                      <span>{t("monitoring.callId")}</span>
-                      <code>{call.id}</code>
-                    </div>
                     <dl>
-                      <div>
-                        <dt>{t("monitoring.route")}</dt>
-                        <dd>{call.route || t("monitoring.notAvailable")}</dd>
-                      </div>
-                      <div>
-                        <dt>{t("monitoring.step")}</dt>
-                        <dd>{call.step || t("monitoring.notAvailable")}</dd>
-                      </div>
                       <div>
                         <dt>{t("monitoring.duration")}</dt>
                         <dd>
@@ -260,8 +341,8 @@ function ServiceHealth() {
                         </dd>
                       </div>
                       <div>
-                        <dt>{t("monitoring.provider")}</dt>
-                        <dd>{call.provider || t("monitoring.notAvailable")}</dd>
+                        <dt>{t("monitoring.step")}</dt>
+                        <dd>{call.step || t("monitoring.notAvailable")}</dd>
                       </div>
                       {call.lastError && (
                         <div>
@@ -276,26 +357,21 @@ function ServiceHealth() {
             )}
           </section>
 
-          <section
-            className="service-health__panel"
-            aria-labelledby="monitoring-alerts-title"
-          >
-            <header className="service-health__panel-header">
-              <div>
-                <p className="service-health__eyebrow">
-                  {t("monitoring.events")}
-                </p>
-                <h2 id="monitoring-alerts-title">{t("monitoring.recentAlerts")}</h2>
-              </div>
-              <span className="service-health__count">{monitoring.alerts.length}</span>
-            </header>
+          {monitoring.alerts.length > 0 && (
+            <section
+              className="service-health__panel"
+              aria-labelledby="monitoring-alerts-title"
+            >
+              <header className="service-health__panel-header">
+                <div>
+                  <p className="service-health__eyebrow">
+                    {t("monitoring.events")}
+                  </p>
+                  <h2 id="monitoring-alerts-title">{t("monitoring.recentAlerts")}</h2>
+                </div>
+                <span className="service-health__count">{monitoring.alerts.length}</span>
+              </header>
 
-            {monitoring.alerts.length === 0 ? (
-              <div className="service-health__panel-empty">
-                <i className="bi bi-check-circle" aria-hidden="true" />
-                <p>{t("monitoring.noRecentAlerts")}</p>
-              </div>
-            ) : (
               <ul className="service-health__alert-list">
                 {monitoring.alerts.map((alert) => (
                   <li
@@ -318,8 +394,8 @@ function ServiceHealth() {
                   </li>
                 ))}
               </ul>
-            )}
-          </section>
+            </section>
+          )}
         </div>
       </div>
     </AppLayout>

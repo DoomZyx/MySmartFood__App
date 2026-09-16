@@ -96,6 +96,8 @@ export function useConfiguration() {
             telephone: data.restaurantInfo?.telephone || "",
             email: data.restaurantInfo?.email || "",
             nombreCouverts: data.restaurantInfo?.nombreCouverts || 0,
+            accessibilitePmr: data.restaurantInfo?.accessibilitePmr ?? null,
+            nombreChaisesBebe: data.restaurantInfo?.nombreChaisesBebe ?? "",
             horairesOuverture: horaires
           },
           menuPricing: data.menuPricing || {

@@ -5,13 +5,20 @@ const POLLING_INTERVAL_MS = 5000;
 const STALE_AFTER_MS = POLLING_INTERVAL_MS * 2;
 
 const SERVICE_DEFINITIONS = [
-  { key: "backend", aliases: ["backend", "api"] },
-  { key: "mongo", aliases: ["mongo", "mongodb", "database", "db"] },
-  { key: "gateway", aliases: ["gateway", "voiceGateway"] },
   { key: "voice", aliases: ["voice", "voiceServer", "voiceService"] },
-  { key: "stt", aliases: ["stt", "speechToText", "speech_to_text"] },
-  { key: "llm", aliases: ["llm", "languageModel", "language_model"] },
-  { key: "tts", aliases: ["tts", "textToSpeech", "text_to_speech"] },
+  { key: "postgres", aliases: ["postgres", "postgresql", "mongo", "mongodb", "database", "db"] },
+  { key: "gateway", aliases: ["gateway", "voiceGateway"] },
+];
+
+const LATENCY_HOPS = [
+  "gpuStt",
+  "gpuLlm",
+  "gpuTts",
+  "voiceToApi",
+  "backendToVoice",
+  "fallbackApi",
+  "postgres",
+  "gateway",
 ];
 
 function isRecord(value) {
@@ -133,6 +140,7 @@ function normalizeService(root, definition) {
     message: asText(
       firstDefined(details.message, details.detail, details.reason, details.error),
     ),
+    fallbackAvailable: details.fallbackAvailable === true,
     hasData:
       source !== null &&
       (status !== "unknown" ||
@@ -274,19 +282,65 @@ function deriveGlobalStatus(services) {
   return "unknown";
 }
 
+function normalizeLatencyHop(source) {
+  if (!isRecord(source)) return null;
+  const last = asNumber(firstDefined(source.last, source.last_ms, source.latencyMs, source.latency_ms));
+  const average = asNumber(firstDefined(source.average, source.avg, source.average_ms));
+  const max = asNumber(firstDefined(source.max, source.max_ms));
+  const count = asNumber(firstDefined(source.count));
+  if (last === null && average === null) return null;
+  return { last, average, max, count };
+}
+
+function normalizeLatencies(root) {
+  const source = isRecord(root.latencies) ? root.latencies : {};
+  return LATENCY_HOPS.map((key) => {
+    const hop = normalizeLatencyHop(source[key]);
+    return {
+      key,
+      last: hop?.last ?? null,
+      average: hop?.average ?? null,
+      max: hop?.max ?? null,
+      count: hop?.count ?? null,
+      measured: Boolean(hop),
+    };
+  }).filter((hop) => hop.key !== "gateway" || hop.measured);
+}
+
+function normalizeCallFlow(root) {
+  const source = firstDefined(root.callFlow, root.call_flow, []);
+  const events = Array.isArray(source) ? source : [];
+  return events.map((event, index) => {
+    const details = isRecord(event) ? event : {};
+    const outcome = asText(details.outcome) || "ok";
+    return {
+      id: asText(firstDefined(details.id, details.callSid, details.call_sid)) || `flow-${index + 1}`,
+      at: asDate(firstDefined(details.at, details.timestamp)),
+      to: asText(details.to),
+      fromMasked: asText(firstDefined(details.fromMasked, details.from_masked)),
+      slug: asText(details.slug),
+      stage: asText(details.stage) || "webhook",
+      outcome,
+      detail: asText(firstDefined(details.detail, details.message)),
+      severity: outcome === "hangup" ? "down" : "healthy",
+    };
+  });
+}
+
 function normalizeFallbackOpenAI(root, llmService) {
+  const llmSource = isRecord(llmService?.source) ? llmService.source : {};
   const fallback = firstDefined(
     root.fallbackOpenAI,
     root.fallback_openai,
     root.openaiFallback,
     root.openai_fallback,
     root.fallback?.openai,
-    llmService.source.fallbackOpenAI,
-    llmService.source.fallback_openai,
-    llmService.source.fallbackActive,
-    llmService.source.fallback_active,
-    llmService.source.usingFallback,
-    llmService.source.using_fallback,
+    llmSource.fallbackOpenAI,
+    llmSource.fallback_openai,
+    llmSource.fallbackActive,
+    llmSource.fallback_active,
+    llmSource.usingFallback,
+    llmSource.using_fallback,
   );
 
   if (typeof fallback === "boolean") return fallback;
@@ -306,9 +360,11 @@ function normalizeMonitoringPayload(payload, fetchedAt) {
       : data;
   const services = SERVICE_DEFINITIONS.map((definition) =>
     normalizeService(root, definition),
-  );
+  ).filter((service) => service.hasData || service.key !== "gateway");
+  const latencies = normalizeLatencies(root);
   const activeCalls = normalizeCalls(root, fetchedAt);
   const alerts = normalizeAlerts(root);
+  const callFlow = normalizeCallFlow(root);
   const explicitGlobalStatus = normalizeStatus(
     firstDefined(root.overallStatus, root.overall_status, root.status, root.health),
   );
@@ -322,14 +378,19 @@ function normalizeMonitoringPayload(payload, fetchedAt) {
       envelope.timestamp,
     ),
   );
-  const llmService = services.find((service) => service.key === "llm");
+  const llmService = normalizeService(root, {
+    key: "llm",
+    aliases: ["llm", "languageModel", "language_model"],
+  });
   const fallbackOpenAI = normalizeFallbackOpenAI(root, llmService);
   const sourceStale = firstDefined(root.stale, root.isStale, root.is_stale) === true;
   const hasData =
     explicitGlobalStatus !== "unknown" ||
     services.some((service) => service.hasData) ||
+    latencies.some((hop) => hop.measured) ||
     activeCalls.length > 0 ||
     alerts.length > 0 ||
+    callFlow.length > 0 ||
     fallbackOpenAI ||
     Boolean(serverUpdatedAt);
 
@@ -342,8 +403,10 @@ function normalizeMonitoringPayload(payload, fetchedAt) {
       ...service,
       hasData: serviceHasData,
     })),
+    latencies,
     activeCalls,
     alerts,
+    callFlow,
     fallbackOpenAI,
     serverUpdatedAt,
     sourceStale,
