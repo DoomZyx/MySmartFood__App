@@ -1,30 +1,21 @@
 import "../Config/env.js";
 
 /**
- * Bascule contrôlée Mongo -> PostgreSQL.
- * N'applique aucune écriture et ne retire pas mongoose.
- *
- * Étapes :
- * 1. Sauvegarde Mongo
- * 2. Dry-run : pnpm db:import-mongo
- * 3. Corriger les rejets listés dans le rapport
- * 4. Import : pnpm db:import-mongo -- --apply
- * 5. Valider dashboard et voix
- * 6. Laisser Mongo en lecture seule jusqu'à acceptation du rapport
+ * Contrôle post-bascule : le runtime n'utilise plus Mongo.
+ * L'import one-shot reste disponible via pnpm db:import-mongo.
  */
 function main() {
-  const ready = Boolean(process.env.MONGO_URI && process.env.TENANT_MAP && process.env.DATABASE_URL);
+  const pgReady = Boolean(process.env.DATABASE_URL);
   const message = {
-    mongoRemoved: false,
-    mongooseKept: true,
+    mongoRemovedFromRuntime: true,
+    mongooseKeptForImportScript: true,
     importDefaultMode: "dry-run",
-    readyForDryRun: ready,
-    nextCommand: ready
-      ? "node scripts/importMongoTenantData.js"
-      : "Renseigner MONGO_URI, TENANT_MAP et DATABASE_URL puis relancer le dry-run",
+    postgresReady: pgReady,
+    nextCommand: pgReady
+      ? "Le backend lit uniquement PostgreSQL. Import historique : pnpm db:import-mongo"
+      : "Renseigner DATABASE_URL",
   };
   process.stdout.write(`${JSON.stringify(message, null, 2)}\n`);
-  if (!ready) process.exitCode = 0;
 }
 
 main();

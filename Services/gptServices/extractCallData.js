@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import dotenv from "dotenv";
 import { getPricingForGPT } from "./pricingService.js";
+import { formatOptionChoices } from "../../Business/mappers/menuOptions.js";
 import {
   validateCallData,
   getValidationReport,
@@ -24,6 +25,7 @@ import { retryWithBackoff } from "../utils/retryWithBackoff.js";
 import { extractWithRules } from "./ruleBasedExtractor.js";
 import { FailedExtractionService } from "./failedExtractionService.js";
 import circuitBreaker from "./circuitBreaker.js";
+import { LlmUsageService } from "../../Business/services/LlmUsageService.js";
 
 dotenv.config();
 
@@ -52,9 +54,52 @@ function appointmentToReservationOrder(appointment, nom, telephone) {
   };
 }
 
-const openai = new OpenAI({
+const openaiFallback = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+function resolveExtractionLlm() {
+  const vllmBase = String(process.env.VLLM_BASE_URL || "")
+    .trim()
+    .replace(/\/+$/, "");
+  const vllmKey = String(process.env.VLLM_API_KEY || "").trim();
+  if (vllmBase && vllmKey) {
+    return {
+      provider: "vllm",
+      model: String(process.env.VLLM_MODEL || "restaurant-assistant").trim(),
+      client: new OpenAI({ apiKey: vllmKey, baseURL: vllmBase }),
+      jsonSchema: false,
+    };
+  }
+  return {
+    provider: "openai",
+    model: "gpt-4o-mini",
+    client: openaiFallback,
+    jsonSchema: true,
+  };
+}
+
+function buildExtractionRequest(llm, enrichedPrompt, transcription) {
+  const request = {
+    model: llm.model,
+    messages: [
+      { role: "system", content: enrichedPrompt },
+      { role: "user", content: transcription },
+    ],
+    temperature: 0,
+    max_tokens: 2000,
+  };
+  request.response_format = llm.jsonSchema
+    ? {
+        type: "json_schema",
+        json_schema: {
+          name: "call_extraction",
+          schema: EXTRACTION_JSON_SCHEMA,
+        },
+      }
+    : { type: "json_object" };
+  return request;
+}
 
 // Version du prompt pour traçabilité (AMEL-011)
 const PROMPT_VERSION = "2.0";
@@ -651,7 +696,7 @@ const EXTRACTION_JSON_SCHEMA = {
  * @param {Array} produits - Tableau de produits
  * @returns {Array} - Tableau de produits consolidés
  */
-export async function extractCallData(transcription, streamSid = "unknown") {
+export async function extractCallData(transcription, streamSid = "unknown", instanceId = null) {
   const extractionStartTime = Date.now();
   
   try {
@@ -670,7 +715,7 @@ export async function extractCallData(transcription, streamSid = "unknown") {
     });
 
     // Récupérer le menu configuré
-    const pricing = await getPricingForGPT();
+    const pricing = await getPricingForGPT(instanceId);
     let enrichedPrompt = EXTRACTION_PROMPT;
 
     // Ajouter le menu du restaurant au prompt si disponible
@@ -695,7 +740,7 @@ ${category.produits.map(produit => {
     Object.keys(produit.options).forEach(optKey => {
       const option = produit.options[optKey];
       if (option.choix && option.choix.length > 0) {
-        produitStr += `\n    ${option.nom}: ${option.choix.join(', ')}`;
+        produitStr += `\n    ${option.nom}: ${formatOptionChoices(option.choix)}`;
       }
     });
   }
@@ -766,36 +811,18 @@ N'invente pas d'année passée ou fictive : utilise l'année courante du serveur
       };
     }
 
-    // Appel OpenAI avec retry et backoff exponentiel (AMEL-005)
+    // Appel LLM (vLLM Scaleway en priorite, OpenAI sinon)
     let completion;
     let tentatives = 0;
+    const llm = resolveExtractionLlm();
     
     try {
       completion = await retryWithBackoff(
         async () => {
           tentatives++;
-          return await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-              {
-                role: "system",
-                content: enrichedPrompt,
-              },
-              {
-                role: "user",
-                content: transcription,
-              },
-            ],
-            temperature: 0,
-            max_tokens: 2000,
-            response_format: {
-              type: "json_schema",
-              json_schema: {
-                name: "call_extraction",
-                schema: EXTRACTION_JSON_SCHEMA,
-              },
-            },
-          });
+          return await llm.client.chat.completions.create(
+            buildExtractionRequest(llm, enrichedPrompt, transcription),
+          );
         },
         {
           maxRetries: 3,
@@ -818,6 +845,18 @@ N'invente pas d'année passée ou fictive : utilise l'année courante du serveur
 
       // Succès - enregistrer dans circuit breaker
       circuitBreaker.recordSuccess();
+      const usage = completion?.usage;
+      if (usage) {
+        LlmUsageService.recordFromStream(streamSid, {
+          source: "extraction",
+          provider: llm.provider,
+          model: completion.model || llm.model,
+          inputTokens: usage.prompt_tokens,
+          outputTokens: usage.completion_tokens,
+          totalTokens: usage.total_tokens,
+          latencyMs: Date.now() - extractionStartTime,
+        }).catch(() => {});
+      }
     } catch (retryError) {
       // Toutes les tentatives ont échoué
       const errorStatus = retryError.status || (retryError.response && retryError.response.status);
@@ -838,7 +877,8 @@ N'invente pas d'année passée ou fictive : utilise l'année courante du serveur
         streamSid,
         transcription,
         retryError,
-        tentatives
+        tentatives,
+        instanceId
       );
 
       // Si erreur 429 (rate limit) ou erreurs serveur, utiliser fallback rule-based
@@ -939,7 +979,7 @@ N'invente pas d'année passée ou fictive : utilise l'année courante du serveur
       productsToValidate = extractedData.order.commandes;
     }
     
-    const productsValidation = await validateAllProducts(productsToValidate, streamSid);
+    const productsValidation = await validateAllProducts(productsToValidate, streamSid, instanceId);
     
     // Remplacer les produits extraits par les produits validés
     if (extractedData.order && productsValidation.validatedProducts.length > 0) {
@@ -985,7 +1025,8 @@ N'invente pas d'année passée ou fictive : utilise l'année courante du serveur
     if (slotForTime?.heure && slotForTime?.date) {
       const timeValidation = await validateTimeAgainstOpeningHours(
         slotForTime.heure,
-        slotForTime.date
+        slotForTime.date,
+        instanceId
       );
       if (!timeValidation.isValid) {
         callLogger.warn(streamSid, "Heure hors horaires d'ouverture", {
@@ -1079,7 +1120,7 @@ N'invente pas d'année passée ou fictive : utilise l'année courante du serveur
     });
     
     try {
-      const pricing = await getPricingForGPT();
+      const pricing = await getPricingForGPT(instanceId);
       const fallbackData = extractWithRules(transcription, pricing);
       callLogger.info(streamSid, "Extraction rule-based utilisée après erreur GPT", {
         extractedData: fallbackData,

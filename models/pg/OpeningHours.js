@@ -1,4 +1,4 @@
-import { toCamelCase, mapRows } from "../../utils/rowMapper.js";
+import { mapRows } from "../../utils/rowMapper.js";
 
 function formatTime(value) {
   if (!value) return null;
@@ -30,18 +30,18 @@ export async function replaceAll(client, tenantId, slots) {
 
 export async function list(client, tenantId) {
   const result = await client.query(
-    `SELECT id, day_of_week AS "dayOfWeek", slot_kind AS "slotKind",
-            opens_at, closes_at, closes_next_day AS "closesNextDay"
+    `SELECT id,
+            day_of_week AS "dayOfWeek",
+            slot_kind AS "slotKind",
+            to_char(opens_at, 'HH24:MI') AS "opensAt",
+            to_char(closes_at, 'HH24:MI') AS "closesAt",
+            closes_next_day AS "closesNextDay"
        FROM opening_hours
       WHERE tenant_id = $1
       ORDER BY day_of_week, slot_kind`,
     [tenantId]
   );
-  return result.rows.map((row) => ({
-    ...toCamelCase(row),
-    opensAt: formatTime(row.opens_at),
-    closesAt: formatTime(row.closes_at),
-  }));
+  return mapRows(result.rows);
 }
 
 export { formatTime, mapRows };

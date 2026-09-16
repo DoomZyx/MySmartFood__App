@@ -5,7 +5,7 @@ import * as Order from "../../models/pg/Order.js";
 import * as EstablishmentProfile from "../../models/pg/EstablishmentProfile.js";
 import * as TenantSettings from "../../models/pg/TenantSettings.js";
 import { hoursToLegacy } from "../mappers/pricingMapper.js";
-import { formatMinutes, minutesOf, splitInTimeZone, toYmd, zonedTimeToUtc } from "../../utils/timeZone.js";
+import { formatMinutes, minutesOf, splitInTimeZone, toYmd, weekdayIndexFromYmd, zonedTimeToUtc, DAYS_FR } from "../../utils/timeZone.js";
 import { isTimeInSlot, slotKindForTime } from "../validators/businessRules.js";
 
 function slotsFromDay(dayHours, step = 30) {
@@ -44,21 +44,8 @@ export async function loadDayContext(tenantId, dateYmd) {
     ]);
     const timeZone = settings?.timezone || "Europe/Paris";
     const horaires = hoursToLegacy(hours);
-    const date = new Date(`${dateYmd}T12:00:00`);
-    const dayIndex = new Date(
-      zonedTimeToUtc(dateYmd, "12:00", timeZone)
-    ).toLocaleString("en-US", { timeZone, weekday: "short" });
-    const jsDay = zonedTimeToUtc(dateYmd, "12:00", timeZone).getUTCDay();
-    const localMid = zonedTimeToUtc(dateYmd, "12:00", timeZone);
-    const weekday = new Date(
-      localMid.toLocaleString("en-US", { timeZone })
-    ).getDay();
-    void date;
-    void dayIndex;
-    void jsDay;
-    const jours = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
-    const weekdayIndex = weekday;
-    const dayName = jours[weekdayIndex];
+    const weekdayIndex = weekdayIndexFromYmd(dateYmd, timeZone);
+    const dayName = DAYS_FR[weekdayIndex];
     const dayHours = horaires[dayName];
     return { client, timeZone, horaires, dayHours, dayName, settings, profile, weekdayIndex };
   });
@@ -66,16 +53,7 @@ export async function loadDayContext(tenantId, dateYmd) {
 
 export function isOpenNow(horaires, timeZone = "Europe/Paris") {
   const now = splitInTimeZone(new Date(), timeZone);
-  const date = new Date(`${now.date}T12:00:00`);
-  const dayName = [
-    "dimanche",
-    "lundi",
-    "mardi",
-    "mercredi",
-    "jeudi",
-    "vendredi",
-    "samedi",
-  ][date.getDay()];
+  const dayName = DAYS_FR[weekdayIndexFromYmd(now.date, timeZone)];
   const dayHours = horaires?.[dayName];
   if (!dayHours?.ouvert) return false;
   return Boolean(slotKindForTime(now.heure, dayHours));
@@ -87,29 +65,9 @@ export async function getOrderSlots(tenantId, dateYmd) {
     const timeZone = settings?.timezone || "Europe/Paris";
     const hours = await OpeningHours.list(client, tenantId);
     const horaires = hoursToLegacy(hours);
-    const weekday = zonedTimeToUtc(dateYmd, "12:00", timeZone);
-    const dayName = [
-      "dimanche",
-      "lundi",
-      "mardi",
-      "mercredi",
-      "jeudi",
-      "vendredi",
-      "samedi",
-    ][new Date(`${dateYmd}T12:00:00Z`).getUTCDay()];
-    const local = new Date(weekday.toLocaleString("en-US", { timeZone }));
-    void local;
-    const jsDay = new Date(`${dateYmd}T00:00:00`).getDay();
-    const resolvedDay = [
-      "dimanche",
-      "lundi",
-      "mardi",
-      "mercredi",
-      "jeudi",
-      "vendredi",
-      "samedi",
-    ][jsDay];
-    const dayHours = horaires[resolvedDay];
+    const weekdayIndex = weekdayIndexFromYmd(dateYmd, timeZone);
+    const dayName = DAYS_FR[weekdayIndex];
+    const dayHours = horaires[dayName];
     if (!dayHours?.ouvert) {
       return { availableSlots: [], occupiedSlots: [], message: "Restaurant fermé ce jour-là", horaires };
     }
@@ -143,16 +101,8 @@ export async function getReservationSlots(tenantId, dateYmd) {
     const timeZone = settings?.timezone || "Europe/Paris";
     const hours = await OpeningHours.list(client, tenantId);
     const horaires = hoursToLegacy(hours);
-    const jsDay = new Date(`${dateYmd}T00:00:00`).getDay();
-    const dayName = [
-      "dimanche",
-      "lundi",
-      "mardi",
-      "mercredi",
-      "jeudi",
-      "vendredi",
-      "samedi",
-    ][jsDay];
+    const weekdayIndex = weekdayIndexFromYmd(dateYmd, timeZone);
+    const dayName = DAYS_FR[weekdayIndex];
     const dayHours = horaires[dayName];
     const maxCouverts = profile?.seatCount || null;
     if (!dayHours?.ouvert) {

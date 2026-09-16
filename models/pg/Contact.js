@@ -17,10 +17,14 @@ export async function create(data) {
   return toCamelCase(result.rows[0]);
 }
 
-export async function findWithFilter({ status, limit, offset }) {
+export async function findWithFilter({ status, statuses, limit, offset }) {
   const params = [];
   let where = "";
-  if (status && isValidStatus(status)) {
+  const list = Array.isArray(statuses) ? statuses.filter(isValidStatus) : [];
+  if (list.length) {
+    params.push(list);
+    where = "WHERE status = ANY($1::text[])";
+  } else if (status && isValidStatus(status)) {
     params.push(status);
     where = "WHERE status = $1";
   }

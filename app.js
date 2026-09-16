@@ -26,6 +26,7 @@ import demoRoutes from "./Routes/Site/demo.js";
 import onboardingRoutes from "./Routes/Onboarding/onboarding.js";
 import tenantDataRoutes from "./Routes/TenantData/tenantData.js";
 import twilioBundleWebhookRoutes from "./Routes/Twilio/bundleWebhook.js";
+import voiceIngressRoutes from "./Routes/Twilio/voiceIngress.js";
 import csrfRoutes from "./Routes/Csrf/csrf.js";
 import pricingRoutes from "./Routes/Pricing/pricing.js";
 import orderRoutes from "./Routes/Appointments/order.js";
@@ -35,7 +36,9 @@ import callClientRoutes from "./Routes/Calls/callClient.js";
 import callRoutes from "./Routes/Calls/call.js";
 import processCallRoutes from "./Routes/CallData/processCall.js";
 import voiceContextRoutes from "./Routes/Voice/voiceContext.js";
+import usageRoutes from "./Routes/Usage/usage.js";
 import platformAdminRoutes from "./Routes/Platform/platformAdmin.js";
+import platformSessionRoutes from "./Routes/Platform/platformSession.js";
 import {
   beginHttpRequest,
   isProbePath,
@@ -73,12 +76,26 @@ fastify.addHook("onRequest", async (request) => {
 fastify.addHook("onResponse", async (request, reply) => {
   const startedAt = request._monitorStartedAt;
   const url = request.raw?.url || request.url || "";
+  const durationMs = startedAt != null ? Date.now() - startedAt : 0;
   recordHttpRequest({
     statusCode: reply.statusCode,
-    durationMs: startedAt != null ? Date.now() - startedAt : 0,
+    durationMs,
     path: url,
     isProbe: isProbePath(url),
   });
+  const pathOnly = url.split("?")[0];
+  const isUpgrade = String(request.headers.upgrade || "").toLowerCase() === "websocket";
+  if (!isProbePath(url) && !isUpgrade && !pathOnly.startsWith("/api/monitoring")) {
+    logger.info(
+      {
+        method: request.method,
+        url: sanitizeUrlForLog(String(url)),
+        statusCode: reply.statusCode,
+        durationMs,
+      },
+      "HTTP"
+    );
+  }
 });
 
 /**
@@ -221,6 +238,7 @@ fastify.register(fastifyWs, {
 
 fastify.register(wsRoutes);
 fastify.register(notificationRoutes);
+fastify.register(voiceIngressRoutes);
 
 // Routes ping publiques (pour maintenir le backend actif)
 fastify.register(pingRoutes, { prefix: "/api" });
@@ -240,6 +258,8 @@ fastify.register(callClientRoutes, { prefix: "/api" });
 fastify.register(callRoutes, { prefix: "/api" });
 fastify.register(processCallRoutes, { prefix: "/api" });
 fastify.register(voiceContextRoutes, { prefix: "/api/voice" });
+fastify.register(usageRoutes, { prefix: "/api/usage" });
+fastify.register(platformSessionRoutes, { prefix: "/api/platform" });
 fastify.register(platformAdminRoutes, { prefix: "/api/platform" });
 
 // Gestion globale des erreurs : Fastify log + Winston pour les 5xx (audit #14)

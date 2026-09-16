@@ -13,11 +13,12 @@ dotenv.config();
  * Valide, traite et envoie les transcriptions à l'API de traitement
  */
 export class TranscriptionHandler {
-  constructor(streamSid, callLogger) {
+  constructor(streamSid, callLogger, instanceId = null) {
     this.streamSid = streamSid;
     this.callLogger = callLogger;
     this.processed = false;
     this.callerNumber = null;
+    this.instanceId = instanceId || null;
   }
 
   setStreamSid(streamSid) {
@@ -26,6 +27,10 @@ export class TranscriptionHandler {
 
   setCallerNumber(callerNumber) {
     this.callerNumber = callerNumber || null;
+  }
+
+  setInstanceId(instanceId) {
+    this.instanceId = instanceId || null;
   }
 
   /**
@@ -141,9 +146,14 @@ export class TranscriptionHandler {
       headers: {
         "Content-Type": "application/json",
         "x-api-key": process.env.X_API_KEY,
+        "x-internal-secret":
+          process.env.SMARTCRM_INTERNAL_SECRET ||
+          process.env.WEBSITE_INTERNAL_SECRET ||
+          process.env.X_API_KEY,
         "x-stream-sid": this.streamSid || "",
+        "x-tenant-id": this.instanceId || "",
       },
-      body: JSON.stringify({ transcription }),
+      body: JSON.stringify({ transcription, instanceId: this.instanceId }),
     });
 
     const apiDuration = Date.now() - startTime;

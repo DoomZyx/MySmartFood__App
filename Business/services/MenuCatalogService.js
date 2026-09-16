@@ -13,20 +13,26 @@ import {
   restaurantInfoFromProfile,
 } from "../mappers/pricingMapper.js";
 import { centsToEuros, eurosToCents, slugify } from "../mappers/legacyStatus.js";
+import {
+  findCatalogOption,
+  parseChoice,
+  selectedOptionNames,
+} from "../mappers/menuOptions.js";
 import { assertProduct, BusinessRuleError } from "../validators/businessRules.js";
+import * as TwilioBundle from "../../models/pg/TwilioBundle.js";
 
 export async function loadLegacyPricing(tenantId) {
   return withTenant(tenantId, (client) => loadLegacyPricingWithClient(client, tenantId));
 }
 
 export async function loadLegacyPricingWithClient(client, tenantId) {
-  const [profile, settings, hours, amenities, catalog] = await Promise.all([
-    EstablishmentProfile.findByTenantId(tenantId, client),
-    TenantSettings.find(client, tenantId),
-    OpeningHours.list(client, tenantId),
-    Amenity.listForTenant(client, tenantId),
-    Menu.loadCatalog(client, tenantId),
-  ]);
+  // Une seule query à la fois sur le client de transaction (pg@9 interdit le parallèle).
+  const profile = await EstablishmentProfile.findByTenantId(tenantId, client);
+  const settings = await TenantSettings.find(client, tenantId);
+  const hours = await OpeningHours.list(client, tenantId);
+  const amenities = await Amenity.listForTenant(client, tenantId);
+  const catalog = await Menu.loadCatalog(client, tenantId);
+  const bundle = await TwilioBundle.findByTenantId(tenantId);
   const restaurantInfo = restaurantInfoFromProfile(
     profile,
     hoursToLegacy(hours),
@@ -38,6 +44,7 @@ export async function loadLegacyPricingWithClient(client, tenantId) {
     restaurantInfo,
     menuPricing: catalogToMenuPricing(catalog),
     phoneLineEnabled: settings?.phoneLineEnabled !== false,
+    instancePhoneNumber: bundle?.phoneNumber || null,
     settings,
     amenities,
     version: "1.0",
@@ -51,6 +58,16 @@ export async function ensureDefaultsWithClient(client, tenantId) {
   if (existing.length === 0) {
     const defaults = getDefaultPricingConfig();
     await persistPricing(client, tenantId, defaults);
+  } else {
+    const hours = await OpeningHours.list(client, tenantId);
+    if (hours.length === 0) {
+      const defaults = getDefaultPricingConfig();
+      await OpeningHours.replaceAll(
+        client,
+        tenantId,
+        hoursFromLegacy(defaults.restaurantInfo.horairesOuverture)
+      );
+    }
   }
   return loadLegacyPricingWithClient(client, tenantId);
 }
@@ -95,6 +112,30 @@ export async function persistPricing(client, tenantId, payload) {
     );
   }
   await Amenity.ensureDefaults(client, tenantId);
+  if (
+    restaurantInfo.accessibilitePmr !== undefined &&
+    restaurantInfo.accessibilitePmr !== null
+  ) {
+    await Amenity.upsert(client, tenantId, {
+      slug: "pmr",
+      status: restaurantInfo.accessibilitePmr ? "available" : "unavailable",
+    });
+  }
+  if (
+    restaurantInfo.nombreChaisesBebe !== undefined &&
+    restaurantInfo.nombreChaisesBebe !== null &&
+    restaurantInfo.nombreChaisesBebe !== ""
+  ) {
+    const quantity = Math.max(
+      0,
+      parseInt(restaurantInfo.nombreChaisesBebe, 10) || 0
+    );
+    await Amenity.upsert(client, tenantId, {
+      slug: "highchair",
+      status: quantity > 0 ? "available" : "unavailable",
+      quantity,
+    });
+  }
   if (payload.menuPricing) {
     await replaceMenu(client, tenantId, payload.menuPricing);
   }
@@ -161,13 +202,15 @@ export async function persistProductRelations(client, tenantId, itemId, product)
       const choix = Array.isArray(optionData)
         ? optionData
         : optionData?.choix || optionData?.options || [];
-      const names = choix.map((entry) => (typeof entry === "string" ? entry : entry.nom || entry.name));
+      const parsedChoices = choix
+        .map((entry) => parseChoice(entry))
+        .filter((entry) => entry.nom);
       const group = await Menu.upsertOptionGroup(client, tenantId, {
         name: optionData?.nom || slug,
         slug: `${itemId.slice(0, 8)}-${slugify(slug)}`,
         selectionType: optionData?.type === "multiple" || optionData?.max > 1 ? "multiple" : "single",
         minSelect: optionData?.min ?? (optionData?.obligatoire ? 1 : 0),
-        maxSelect: optionData?.max || (optionData?.type === "multiple" ? names.length || 1 : 1),
+        maxSelect: optionData?.max || (optionData?.type === "multiple" ? parsedChoices.length || 1 : 1),
         isRequired: Boolean(optionData?.obligatoire),
         sortOrder: groupSort,
         legacyPayload: { ...optionData, slug },
@@ -177,7 +220,11 @@ export async function persistProductRelations(client, tenantId, itemId, product)
         client,
         tenantId,
         group.id,
-        names.map((name, index) => ({ name, sortOrder: index }))
+        parsedChoices.map((entry, index) => ({
+          name: entry.nom,
+          priceCents: eurosToCents(entry.prix),
+          sortOrder: index,
+        }))
       );
       await Menu.linkItemGroup(client, tenantId, itemId, group.id);
     }
@@ -286,13 +333,37 @@ export async function resolveCatalogPrice(client, tenantId, line) {
   if (!item.isAvailable) {
     throw new BusinessRuleError(`Produit indisponible: ${item.name}`);
   }
+  const catalogOptions = await Menu.listItemOptionPrices(client, tenantId, item.id);
+  const selectedOptions = {
+    ...(line.options || {}),
+  };
+  if (line.personnalisation && typeof line.personnalisation === "object") {
+    if (line.personnalisation.viandes) selectedOptions.viandes = line.personnalisation.viandes;
+    if (line.personnalisation.sauce) selectedOptions.sauces = line.personnalisation.sauce;
+    if (line.personnalisation.crudites) selectedOptions.crudites = line.personnalisation.crudites;
+    if (line.personnalisation.extras) selectedOptions.extras = line.personnalisation.extras;
+  }
+  const pricedOptions = [];
+  let surchargeCents = 0;
+  for (const [groupKey, value] of Object.entries(selectedOptions)) {
+    for (const optionName of selectedOptionNames(value)) {
+      const match = findCatalogOption(catalogOptions, groupKey, optionName);
+      const priceCents = match?.priceCents || 0;
+      surchargeCents += priceCents;
+      pricedOptions.push({
+        groupName: match?.groupName || groupKey,
+        optionName: match?.optionName || optionName,
+        priceCents,
+      });
+    }
+  }
   return {
     menuItemId: item.id,
     label: item.name,
     category: line.categorie || null,
     quantity: Number(line.quantite) || 1,
-    unitPriceCents: item.priceCents,
+    unitPriceCents: item.priceCents + surchargeCents,
     composition: line.composition || item.compositionText || null,
-    options: line.options || {},
+    options: pricedOptions.length ? pricedOptions : line.options || {},
   };
 }

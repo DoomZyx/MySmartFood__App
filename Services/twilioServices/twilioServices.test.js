@@ -51,4 +51,26 @@ describe("twilioService", () => {
 
     expect(xml).not.toContain('name="callerNumber"');
   });
+
+  it("accepte un PUBLIC_HOST complet comme hôte de stream", () => {
+    delete process.env.VOICE_STREAM_URL;
+    const xml = generateTwiml("https://tunnel.example", "/v1/abc/media-stream");
+    expect(xml).toContain('url="wss://tunnel.example/v1/abc/media-stream"');
+    expect(xml).not.toContain("wss://https://");
+  });
+
+  it("passe le jeton stream en paramètre TwiML, pas dans l'URL", () => {
+    delete process.env.VOICE_STREAM_URL;
+    const token = "ff3e05bf-2da5-465c-a7a2-f635021f49a9.1789109599.abc123def456abc123";
+    const xml = generateTwiml(
+      "tunnel.example",
+      "/v1/abc/media-stream",
+      null,
+      "abc",
+      token,
+    );
+    expect(xml).toContain('url="wss://tunnel.example/v1/abc/media-stream"');
+    expect(xml).not.toContain(`media-stream/${token}`);
+    expect(xml).toContain(`<Parameter name="streamToken" value="${token}" />`);
+  });
 });

@@ -43,7 +43,7 @@ const TENANT_TABLES = [
   "menu_item_option_groups",
   "menu_compositions",
   "order_item_options",
-  "mongo_import_refs",
+  "legacy_id_refs",
   "migration_rejections",
 ];
 

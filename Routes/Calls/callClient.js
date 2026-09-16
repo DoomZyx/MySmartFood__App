@@ -3,7 +3,7 @@ import { withTenant } from "../../database/transaction.js";
 import * as Client from "../../models/pg/Client.js";
 import * as Order from "../../models/pg/Order.js";
 import * as Reservation from "../../models/pg/Reservation.js";
-import * as MongoImport from "../../models/pg/MongoImport.js";
+import * as LegacyIdMap from "../../models/pg/LegacyIdMap.js";
 import { clientToLegacy } from "../../Business/mappers/orderMapper.js";
 
 const UUID_PATTERN =
@@ -19,8 +19,8 @@ export default async function callClientRoutes(fastify) {
         let clientId = UUID_PATTERN.test(rawId) ? rawId : null;
         if (!clientId) {
           clientId =
-            (await MongoImport.findRef(db, tenantId, "clients", rawId)) ||
-            (await MongoImport.findRef(db, tenantId, "call_sessions", rawId));
+            (await LegacyIdMap.findRef(db, tenantId, "clients", rawId)) ||
+            (await LegacyIdMap.findRef(db, tenantId, "call_sessions", rawId));
         }
         let client = clientId ? await Client.findById(db, tenantId, clientId) : null;
         if (!client) {

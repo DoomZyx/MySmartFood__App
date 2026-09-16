@@ -3,8 +3,46 @@
  * Valide les noms, prix, options et personnalisations contre le catalogue
  */
 
-import PricingModel from "../../models/pricing.js";
+import { PricingService } from "../../Business/services/PricingService.js";
 import { callLogger } from "../logging/logger.js";
+import { formatOptionChoices, parseChoice } from "../../Business/mappers/menuOptions.js";
+
+function catalogFromPricingDoc(pricingDoc) {
+  if (!pricingDoc?.menuPricing) return null;
+  const menu = {};
+  Object.keys(pricingDoc.menuPricing).forEach((cat) => {
+    const block = pricingDoc.menuPricing[cat] || {};
+    menu[cat] = {
+      nom: block.nom,
+      produits: (block.produits || [])
+        .filter((p) => p.disponible)
+        .map((p) => ({
+          nom: p.nom,
+          description: p.description,
+          prix: p.prixBase,
+          disponible: p.disponible,
+          options: p.options,
+          maxViandes: p.maxViandes,
+          personnalisable: p.personnalisable,
+        })),
+    };
+  });
+  return { restaurantInfo: pricingDoc.restaurantInfo, menu };
+}
+
+async function loadCatalog(instanceId) {
+  if (!instanceId) return null;
+  try {
+    const pricingDoc = await PricingService.getPricing(instanceId);
+    return catalogFromPricingDoc(pricingDoc);
+  } catch {
+    return null;
+  }
+}
+
+function choiceLabel(entry) {
+  return parseChoice(entry).nom;
+}
 
 /**
  * Normalise une chaîne pour la comparaison (enlève accents, met en minuscule)
@@ -79,7 +117,7 @@ function findProductInPricing(nomProduit, categorie, pricing) {
  * @param {string} streamSid - ID du stream pour logging
  * @returns {Promise<Object>} - { isValid: boolean, produit: Object|null, matchType: string, errors: Array }
  */
-export async function validateProductName(nomProduit, categorie, streamSid = "unknown") {
+export async function validateProductName(nomProduit, categorie, streamSid = "unknown", catalog = null) {
   try {
     if (!nomProduit || !categorie) {
       return {
@@ -90,8 +128,8 @@ export async function validateProductName(nomProduit, categorie, streamSid = "un
       };
     }
 
-    const pricingDoc = await PricingModel.findOne();
-    if (!pricingDoc) {
+    const pricing = catalog || (await loadCatalog());
+    if (!pricing) {
       return {
         isValid: false,
         produit: null,
@@ -100,30 +138,6 @@ export async function validateProductName(nomProduit, categorie, streamSid = "un
       };
     }
 
-    // Préparer l'objet pricing pour la recherche
-    const pricing = {
-      restaurantInfo: pricingDoc.restaurantInfo,
-      menu: {},
-    };
-
-    Object.keys(pricingDoc.menuPricing).forEach((cat) => {
-      pricing.menu[cat] = {
-        nom: pricingDoc.menuPricing[cat].nom,
-        produits: pricingDoc.menuPricing[cat].produits
-          .filter((p) => p.disponible)
-          .map((p) => ({
-            nom: p.nom,
-            description: p.description,
-            prix: p.prixBase,
-            disponible: p.disponible,
-            options: p.options,
-            maxViandes: p.maxViandes,
-            personnalisable: p.personnalisable,
-          })),
-      };
-    });
-
-    // Chercher le produit
     const result = findProductInPricing(nomProduit, categorie, pricing);
 
     if (!result) {
@@ -235,21 +249,21 @@ export function validateTacosPersonalization(personnalisation, produit, streamSi
     const viandesInvalides = [];
 
     personnalisation.viandes.forEach((viande) => {
-      const viandeNormalisee = normalizeString(viande);
+      const viandeNormalisee = normalizeString(choiceLabel(viande));
       const viandeTrouvee = viandesDisponibles.find(
-        (v) => normalizeString(v) === viandeNormalisee
+        (v) => normalizeString(choiceLabel(v)) === viandeNormalisee
       );
 
       if (viandeTrouvee) {
-        viandesValides.push(viandeTrouvee); // Utiliser le nom exact du catalogue
+        viandesValides.push(choiceLabel(viandeTrouvee));
       } else {
-        viandesInvalides.push(viande);
+        viandesInvalides.push(choiceLabel(viande) || String(viande));
       }
     });
 
     if (viandesInvalides.length > 0) {
       errors.push(
-        `Viandes invalides : ${viandesInvalides.join(", ")}. Options disponibles : ${viandesDisponibles.join(", ")}`
+        `Viandes invalides : ${viandesInvalides.join(", ")}. Options disponibles : ${formatOptionChoices(viandesDisponibles)}`
       );
     }
 
@@ -275,23 +289,22 @@ export function validateTacosPersonalization(personnalisation, produit, streamSi
   // Valider la sauce
   if (personnalisation.sauce) {
     const saucesDisponibles = produit.options.sauces?.choix || [];
-    const sauceNormalisee = normalizeString(personnalisation.sauce);
+    const sauceNormalisee = normalizeString(choiceLabel(personnalisation.sauce));
     const sauceTrouvee = saucesDisponibles.find(
-      (s) => normalizeString(s) === sauceNormalisee
+      (s) => normalizeString(choiceLabel(s)) === sauceNormalisee
     );
 
     if (sauceTrouvee) {
-      corrected.sauce = sauceTrouvee; // Utiliser le nom exact du catalogue
+      corrected.sauce = choiceLabel(sauceTrouvee);
     } else {
       errors.push(
-        `Sauce invalide : ${personnalisation.sauce}. Options disponibles : ${saucesDisponibles.join(", ")}`
+        `Sauce invalide : ${personnalisation.sauce}. Options disponibles : ${formatOptionChoices(saucesDisponibles)}`
       );
-      // Utiliser la sauce par défaut si disponible
       if (saucesDisponibles.length > 0) {
-        corrected.sauce = saucesDisponibles[0];
+        corrected.sauce = choiceLabel(saucesDisponibles[0]);
         callLogger.info(streamSid, "Sauce invalide remplacée par défaut", {
           sauceOriginale: personnalisation.sauce,
-          sauceDefaut: saucesDisponibles[0],
+          sauceDefaut: corrected.sauce,
           event: "sauce_corrected",
         });
       } else {
@@ -327,9 +340,9 @@ export function validateTacosPersonalization(personnalisation, produit, streamSi
  * @param {string} streamSid - ID du stream pour logging
  * @returns {Promise<Object>} - { prix: number, corrected: boolean }
  */
-export async function validateProductPrice(nomProduit, categorie, prixGPT, streamSid = "unknown") {
+export async function validateProductPrice(nomProduit, categorie, prixGPT, streamSid = "unknown", catalog = null) {
   try {
-    const validation = await validateProductName(nomProduit, categorie, streamSid);
+    const validation = await validateProductName(nomProduit, categorie, streamSid, catalog);
 
     if (!validation.isValid || !validation.produit) {
       return {
@@ -377,7 +390,7 @@ export async function validateProductPrice(nomProduit, categorie, prixGPT, strea
  * @param {string} streamSid - ID du stream pour logging
  * @returns {Promise<Object>} - { validatedProducts: Array, errors: Array, warnings: Array, hasErrors: boolean }
  */
-export async function validateAllProducts(produits, streamSid = "unknown") {
+export async function validateAllProducts(produits, streamSid = "unknown", instanceId = null) {
   const validatedProducts = [];
   const errors = [];
   const warnings = [];
@@ -391,13 +404,16 @@ export async function validateAllProducts(produits, streamSid = "unknown") {
     };
   }
 
+  const catalog = instanceId ? await loadCatalog(instanceId) : await loadCatalog();
+
   for (const produit of produits) {
     try {
       // Valider le nom et trouver le produit dans le catalogue
       const nameValidation = await validateProductName(
         produit.nom,
         produit.categorie,
-        streamSid
+        streamSid,
+        catalog
       );
 
       if (!nameValidation.isValid) {
@@ -435,7 +451,8 @@ export async function validateAllProducts(produits, streamSid = "unknown") {
         produit.nom,
         produit.categorie,
         produit.prixUnitaire,
-        streamSid
+        streamSid,
+        catalog
       );
       produitValide.prixUnitaire = priceValidation.prix;
 
@@ -489,7 +506,7 @@ export async function validateAllProducts(produits, streamSid = "unknown") {
  * @param {string} streamSid - Stream ID pour logging
  * @returns {Promise<Object>} - {isValid, validatedProduct, errors, warnings}
  */
-export async function validateProduct(product, streamSid = "unknown") {
+export async function validateProduct(product, streamSid = "unknown", instanceId = null) {
   const errors = [];
   const warnings = [];
   
@@ -501,9 +518,11 @@ export async function validateProduct(product, streamSid = "unknown") {
       warnings: []
     };
   }
+
+  const catalog = await loadCatalog(instanceId);
   
   // 1. Valider nom et trouver produit dans catalogue
-  const nameValidation = await validateProductName(product.nom, product.categorie, streamSid);
+  const nameValidation = await validateProductName(product.nom, product.categorie, streamSid, catalog);
   
   if (!nameValidation.isValid) {
     return {
@@ -515,7 +534,7 @@ export async function validateProduct(product, streamSid = "unknown") {
   }
   
   // 2. Recalculer prix depuis catalogue
-  const priceValidation = await validateProductPrice(product.nom, product.categorie, product.prixUnitaire, streamSid);
+  const priceValidation = await validateProductPrice(product.nom, product.categorie, product.prixUnitaire, streamSid, catalog);
   
   if (!priceValidation.corrected) {
     errors.push(priceValidation.error || "Impossible de récupérer le prix depuis le catalogue");

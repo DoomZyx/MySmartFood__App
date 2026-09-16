@@ -1,5 +1,8 @@
 import * as OnboardingDocument from "../../models/pg/OnboardingDocument.js";
 import * as EstablishmentProfile from "../../models/pg/EstablishmentProfile.js";
+import * as Amenity from "../../models/pg/Amenity.js";
+import { withTenant } from "../../database/transaction.js";
+import { profileToWebsite } from "../mappers/websiteProfile.js";
 import { transition } from "../../models/pg/ProvisioningJob.js";
 import {
   purgeDocumentFile,
@@ -61,9 +64,58 @@ export function validateEstablishmentBody(body) {
   return profile;
 }
 
+export function parseOptionalBoolean(value) {
+  if (value === true || value === "true" || value === "yes") return true;
+  if (value === false || value === "false" || value === "no") return false;
+  return null;
+}
+
+export function parseOptionalChairCount(value) {
+  if (value == null || value === "") return null;
+  const quantity = parseInt(String(value), 10);
+  if (Number.isNaN(quantity) || quantity < 0 || quantity > 999) {
+    const err = new Error("nombreChaisesBebe doit être entre 0 et 999");
+    err.statusCode = 400;
+    throw err;
+  }
+  return quantity;
+}
+
+async function persistWebsiteAmenities(tenantId, body) {
+  const accessibilitePmr = parseOptionalBoolean(body.accessibilitePmr);
+  const nombreChaisesBebe = parseOptionalChairCount(body.nombreChaisesBebe);
+  if (accessibilitePmr === null && nombreChaisesBebe === null) return;
+  await withTenant(tenantId, async (client) => {
+    await Amenity.ensureDefaults(client, tenantId);
+    if (accessibilitePmr !== null) {
+      await Amenity.upsert(client, tenantId, {
+        slug: "pmr",
+        status: accessibilitePmr ? "available" : "unavailable",
+      });
+    }
+    if (nombreChaisesBebe !== null) {
+      await Amenity.upsert(client, tenantId, {
+        slug: "highchair",
+        status: nombreChaisesBebe > 0 ? "available" : "unavailable",
+        quantity: nombreChaisesBebe,
+      });
+    }
+  });
+}
+
+export async function loadWebsiteProfile(tenantId) {
+  const profile = await EstablishmentProfile.findByTenantId(tenantId);
+  if (!profile) return {};
+  const amenities = await withTenant(tenantId, (client) =>
+    Amenity.listForTenant(client, tenantId)
+  );
+  return profileToWebsite(profile, amenities);
+}
+
 export async function saveProfile(tenantId, body) {
   const profile = validateEstablishmentBody(body);
   await EstablishmentProfile.upsert(tenantId, profile);
+  await persistWebsiteAmenities(tenantId, body);
   return EstablishmentProfile.findByTenantId(tenantId);
 }
 
@@ -92,6 +144,7 @@ export async function submitOnboardingDossier({ tenantId, userId, body, files })
   }
 
   await EstablishmentProfile.upsert(tenantId, profile);
+  await persistWebsiteAmenities(tenantId, body);
 
   const retentionDays = Number(process.env.DOCUMENT_RETENTION_DAYS) || 90;
   const retentionUntil = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000);

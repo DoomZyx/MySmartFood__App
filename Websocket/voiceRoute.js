@@ -78,6 +78,13 @@ async function probeVoiceTarget(target, timeoutMs) {
   }
 }
 
+function asTextFrame(data) {
+  if (Buffer.isBuffer(data)) {
+    return data.toString("utf8");
+  }
+  return data;
+}
+
 /**
  * @param {import("ws")} twilioWs
  * @param {Buffer[]|string[]} queuedMessages
@@ -91,7 +98,7 @@ export function proxyTwilioToVoice(twilioWs, queuedMessages, targetUrl, options 
 
     const onTwilioMessage = (data) => {
       if (upstream.readyState === WebSocket.OPEN) {
-        upstream.send(data);
+        upstream.send(asTextFrame(data));
       }
     };
 
@@ -109,7 +116,7 @@ export function proxyTwilioToVoice(twilioWs, queuedMessages, targetUrl, options 
         options.onOpen();
       }
       for (const msg of queuedMessages) {
-        upstream.send(msg);
+        upstream.send(asTextFrame(msg));
       }
       twilioWs.on("message", onTwilioMessage);
       callLogger.info(null, "VOICE LOCAL: Media Stream branche sur le Voice Service", {

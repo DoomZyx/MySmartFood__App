@@ -6,6 +6,17 @@ import { notifDebugLog } from "../../Services/logging/notifDebugLog.js";
 import { retryWithBackoff } from "../../Services/utils/retryWithBackoff.js";
 import { resolveRuntimeTenantId } from "../../utils/runtimeTenant.js";
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function tenantIdFromProcessCallRequest(request) {
+  return resolveRuntimeTenantId(
+    request.headers["x-tenant-id"] ||
+      request.body?.instanceId ||
+      request.instanceId
+  );
+}
+
 function logStep(streamSid, step, detail = "") {
   const msg = `[process-call] ${step}${detail ? " " + detail : ""}`;
   notifDebugLog(msg);
@@ -47,10 +58,18 @@ export default async function processCallRoutes(fastify, options) {
       const transcriptionLen = transcription.trim().length;
       logStep(streamSid, "2. Transcription presente", "length=" + transcriptionLen);
 
-      logStep(streamSid, "3. Appel extractCallData (GPT)");
+      logStep(streamSid, "3. Tenant + extractCallData (GPT)");
+      const instanceId = tenantIdFromProcessCallRequest(request);
+      if (!UUID_PATTERN.test(instanceId)) {
+        logStep(streamSid, "ERREUR: tenant manquant pour extraire l'appel", instanceId);
+        return reply.code(400).send({
+          error: "Établissement manquant pour extraire l'appel",
+        });
+      }
+      logStep(streamSid, "3b. Tenant", instanceId);
       let extractedData;
       try {
-        extractedData = await extractCallData(transcription, streamSid);
+        extractedData = await extractCallData(transcription, streamSid, instanceId);
         notifDebugLog("process-call: extractCallData ok nom=" + (extractedData?.nom ?? "?") + " type_demande=" + (extractedData?.type_demande ?? "?"));
       } catch (extractError) {
         logStep(streamSid, "ERREUR: extractCallData a echoue", extractError?.message || String(extractError));
@@ -86,8 +105,6 @@ export default async function processCallRoutes(fastify, options) {
       logStep(streamSid, "5b. Branche traitement -> ProcessCallService.process");
       const saveStartTime = Date.now();
       callLogger.apiCallStarted(streamSid, "ProcessCallService.process");
-
-      const instanceId = resolveRuntimeTenantId(request.instanceId);
       let result;
       try {
         result = await retryWithBackoff(

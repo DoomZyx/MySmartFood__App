@@ -31,15 +31,15 @@ const REPEAT_INDICATOR_PHRASES = [
   "je n ai pas compris",
 ];
 
-/** Phrases indiquant que l'IA annonce un transfert (on exécute le transfert Twilio) */
-const ASSISTANT_TRANSFER_PHRASES = [
+/** Phrases : l'IA annonce qu'elle transfère maintenant (pas une question, pas "un instant"). */
+const ASSISTANT_TRANSFER_COMMIT = [
   "je vais vous transférer",
   "je vais te transférer",
-  "transférer vers quelqu'un",
-  "transférer vers un humain",
-  "transfert vers le restaurant",
-  "transfère vers",
-  "patienter un instant",
+  "je vous transfère vers",
+  "je te transfère vers",
+  "je vous mets en relation",
+  "l'appel va être transféré",
+  "l appel va etre transfere",
 ];
 
 const FAILURE_THRESHOLD = 3;
@@ -47,6 +47,34 @@ const TRANSFER_MESSAGE =
   "Je vais vous transférer vers quelqu'un du restaurant, merci de patienter.";
 
 let twilioClient = null;
+
+function foldFr(text) {
+  return String(text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/['’]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Ne garde que les phrases déclaratives. Une offre ("voulez-vous que je transfère ?")
+ * ne doit pas déclencher le Dial Twilio.
+ */
+function declarativeParts(text) {
+  const folded = foldFr(text);
+  if (!folded) return "";
+  if (!folded.includes("?")) return folded;
+  return folded
+    .split("?")
+    .slice(0, -1)
+    .concat(folded.endsWith("?") ? [] : [folded.split("?").pop()])
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((part) => !/\b(voulez[- ]vous|preferez[- ]vous|souhaitez[- ]vous|je peux vous transfer|ou que je transfer)\b/.test(part))
+    .join(" ");
+}
 
 function getTwilioClient() {
   if (twilioClient) return twilioClient;
@@ -93,11 +121,9 @@ export function shouldTransferToHuman(conversationState) {
  */
 export function isAssistantTransferIntent(assistantText) {
   if (!assistantText || typeof assistantText !== "string") return false;
-  const normalized = assistantText.toLowerCase().trim();
-  for (const phrase of ASSISTANT_TRANSFER_PHRASES) {
-    if (normalized.includes(phrase)) return true;
-  }
-  return false;
+  const statements = declarativeParts(assistantText);
+  if (!statements) return false;
+  return ASSISTANT_TRANSFER_COMMIT.some((phrase) => statements.includes(foldFr(phrase)));
 }
 
 /**
@@ -203,9 +229,9 @@ export async function hangupDueToSilence(callSid) {
  * @param {"human_request"|"ai_failure"|"conversation_blocked"|"ai_transfer_intent"} reason - Raison du transfert
  * @returns {Promise<boolean>} true si le transfert a été envoyé, false sinon
  */
-export async function transferToHuman(callSid, transcript, reason) {
+export async function transferToHuman(callSid, transcript, reason, instanceId) {
   if (!callSid) return false;
-  const transferNumber = await PhoneLineService.getTransferNumber();
+  const transferNumber = await PhoneLineService.getTransferNumber(instanceId);
   const twiml = buildTransferTwiml(transferNumber);
   const client = getTwilioClient();
   if (!client) {

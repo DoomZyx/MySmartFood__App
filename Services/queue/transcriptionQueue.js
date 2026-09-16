@@ -4,7 +4,6 @@
  */
 
 import { callLogger } from "../logging/logger.js";
-import { extractCallData } from "../gptServices/extractCallData.js";
 import fetch from "node-fetch";
 
 /**
@@ -31,7 +30,7 @@ const processingInterval = 30000; // Traiter la queue toutes les 30 secondes
  * @param {string} transcription - Transcription à traiter
  * @param {number} retries - Nombre de tentatives déjà effectuées (défaut: 0)
  */
-export function enqueueTranscription(streamSid, transcription, retries = 0) {
+export function enqueueTranscription(streamSid, transcription, retries = 0, instanceId = null) {
   const now = Date.now();
   const backoffDelay = Math.min(1000 * Math.pow(2, retries), 300000); // Max 5 minutes
   const nextRetry = new Date(now + backoffDelay);
@@ -40,6 +39,7 @@ export function enqueueTranscription(streamSid, transcription, retries = 0) {
     streamSid,
     transcription,
     retries,
+    instanceId,
     createdAt: new Date(now),
     nextRetry,
   };
@@ -59,7 +59,7 @@ export function enqueueTranscription(streamSid, transcription, retries = 0) {
  * @param {QueueItem} item - Item à traiter
  */
 async function processQueueItem(item) {
-  const { streamSid, transcription, retries } = item;
+  const { streamSid, transcription, retries, instanceId } = item;
 
   // Vérifier si c'est le moment de retry
   if (Date.now() < item.nextRetry.getTime()) {
@@ -94,18 +94,20 @@ async function processQueueItem(item) {
       event: "queue_item_processing",
     });
 
-    // Essayer d'extraire les données
-    const extractedData = await extractCallData(transcription, streamSid);
-
-    // Si succès, essayer de sauvegarder
-    const apiUrl = `http://localhost:${process.env.PORT || 8080}/api/callsdata`;
+    const apiUrl = `http://localhost:${process.env.PORT || 8080}/api/process-call`;
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-api-key": process.env.X_API_KEY,
+        "x-internal-secret":
+          process.env.SMARTCRM_INTERNAL_SECRET ||
+          process.env.WEBSITE_INTERNAL_SECRET ||
+          process.env.X_API_KEY,
+        "x-stream-sid": streamSid || "",
+        "x-tenant-id": instanceId || "",
       },
-      body: JSON.stringify(extractedData),
+      body: JSON.stringify({ transcription, instanceId }),
     });
 
     if (response.ok) {
@@ -123,7 +125,7 @@ async function processQueueItem(item) {
     } else {
       // Échec - réajouter à la queue avec retry + 1
       processing.delete(streamSid);
-      enqueueTranscription(streamSid, transcription, retries + 1);
+      enqueueTranscription(streamSid, transcription, retries + 1, instanceId);
 
       callLogger.warn(streamSid, "Échec sauvegarde transcription en queue, réajoutée", {
         status: response.status,
@@ -134,7 +136,7 @@ async function processQueueItem(item) {
   } catch (error) {
     // Erreur - réajouter à la queue avec retry + 1
     processing.delete(streamSid);
-    enqueueTranscription(streamSid, transcription, retries + 1);
+    enqueueTranscription(streamSid, transcription, retries + 1, instanceId);
 
     callLogger.error(streamSid, error, {
       source: "transcriptionQueue",

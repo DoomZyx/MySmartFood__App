@@ -2,7 +2,7 @@ import { withTenant } from "../../database/transaction.js";
 import * as Order from "../../models/pg/Order.js";
 import * as Reservation from "../../models/pg/Reservation.js";
 import * as TenantSettings from "../../models/pg/TenantSettings.js";
-import * as MongoImport from "../../models/pg/MongoImport.js";
+import * as LegacyIdMap from "../../models/pg/LegacyIdMap.js";
 import { OrderService } from "./OrderService.js";
 import { orderToLegacy, reservationToLegacy } from "../mappers/orderMapper.js";
 import { mapOrderStatusToPg, mapReservationStatusToPg } from "../mappers/legacyStatus.js";
@@ -14,7 +14,7 @@ const UUID_PATTERN =
 
 async function resolveId(client, tenantId, collection, rawId) {
   if (UUID_PATTERN.test(rawId)) return rawId;
-  const mapped = await MongoImport.findRef(client, tenantId, collection, rawId);
+  const mapped = await LegacyIdMap.findRef(client, tenantId, collection, rawId);
   if (!mapped) throw new BusinessRuleError("Ressource non trouvée", 404);
   return mapped;
 }

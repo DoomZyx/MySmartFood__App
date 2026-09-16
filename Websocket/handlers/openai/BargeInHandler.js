@@ -242,7 +242,8 @@ export class BargeInHandler {
         const ok = await transferToHuman(
           callSid,
           this.state.lastUserTranscript,
-          "human_request"
+          "human_request",
+          this.state.instanceId
         );
         if (ok) this.state.transferTriggered = true;
         return;
@@ -251,7 +252,8 @@ export class BargeInHandler {
         const ok = await transferToHuman(
           callSid,
           this.state.lastUserTranscript || this.state.transcription,
-          "ai_failure"
+          "ai_failure",
+          this.state.instanceId
         );
         if (ok) this.state.transferTriggered = true;
         return;

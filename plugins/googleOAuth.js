@@ -3,11 +3,17 @@ import { URL } from "node:url";
 import oauthPlugin from "@fastify/oauth2";
 import logger from "../Services/logging/logger.js";
 import { loginWithGoogleProfile } from "../Business/services/AccountAuthService.js";
-import { cookieOptions, setSessionCookie } from "../middleware/sessionAuth.js";
-import { frontendUrlFromRequest, siteUrl } from "../utils/publicUrls.js";
+import { startPlatformOAuthChallenge } from "../Business/services/PlatformAdminAuthService.js";
+import {
+  cookieOptions,
+  setPlatformPendingCookie,
+  setSessionCookie,
+} from "../middleware/sessionAuth.js";
+import { frontendUrlFromRequest, platformAdminPath, siteUrl } from "../utils/publicUrls.js";
 
 const OAUTH_RETURN_COOKIE = "oauth_return";
 const OAUTH_STATE_COOKIE = "oauth2-redirect-state";
+const OAUTH_INTENT_COOKIE = "oauth_intent";
 
 function oauthCookieOpts() {
   return {
@@ -129,6 +135,12 @@ export async function registerGoogleOAuth(fastify) {
         ...cookieOptions(),
         maxAge: 600,
       });
+      const intent = String(request.query?.return || "").toLowerCase();
+      if (intent === "platform") {
+        reply.setCookie(OAUTH_INTENT_COOKIE, "platform", oauthCookieOpts());
+      } else {
+        reply.clearCookie(OAUTH_INTENT_COOKIE, { path: "/" });
+      }
     }
   });
 
@@ -136,6 +148,13 @@ export async function registerGoogleOAuth(fastify) {
     const returnTo = readCookie(request, OAUTH_RETURN_COOKIE) || siteUrl();
     const fail = (reason) => {
       logger.error({ err: reason }, "Callback Google");
+      const intent = readCookie(request, OAUTH_INTENT_COOKIE);
+      reply.clearCookie(OAUTH_INTENT_COOKIE, { path: "/" });
+      if (intent === "platform") {
+        const dest = new URL(platformAdminPath(), returnTo);
+        dest.searchParams.set("oauth", "denied");
+        return reply.redirect(dest.toString());
+      }
       const url = new URL("/login", returnTo);
       url.searchParams.set("error", "auth_failed");
       return reply.redirect(url.toString());
@@ -164,8 +183,15 @@ export async function registerGoogleOAuth(fastify) {
 
       reply.clearCookie(OAUTH_STATE_COOKIE, { path: "/" });
       reply.clearCookie(OAUTH_RETURN_COOKIE, { path: "/" });
+      const intent = readCookie(request, OAUTH_INTENT_COOKIE);
+      reply.clearCookie(OAUTH_INTENT_COOKIE, { path: "/" });
 
       if (result.linkRequired) {
+        if (intent === "platform") {
+          const denied = new URL(platformAdminPath(), returnTo);
+          denied.searchParams.set("oauth", "denied");
+          return reply.redirect(denied.toString());
+        }
         const url = new URL("/login", returnTo);
         url.searchParams.set("google_link", "required");
         url.searchParams.set("token", result.linkToken);
@@ -173,6 +199,19 @@ export async function registerGoogleOAuth(fastify) {
       }
 
       setSessionCookie(reply, result.user);
+
+      if (intent === "platform") {
+        const dest = new URL(platformAdminPath(), returnTo);
+        try {
+          const totpStep = await startPlatformOAuthChallenge(result.user);
+          setPlatformPendingCookie(reply, result.user, totpStep);
+          dest.searchParams.set("oauth", "ok");
+        } catch {
+          dest.searchParams.set("oauth", "denied");
+        }
+        return reply.redirect(dest.toString());
+      }
+
       return reply.redirect(`${returnTo}/api/auth/callback`);
     } catch (err) {
       return fail(err.message);

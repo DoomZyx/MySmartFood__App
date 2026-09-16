@@ -127,7 +127,7 @@ export async function sessionPayload(user) {
     role: item.role,
     status: item.status,
   }));
-  const first = tenants[0] || null;
+  const first = tenants.find((item) => item.status === "active") || tenants[0] || null;
   let planSlug = null;
   let planId = null;
   let planName = null;

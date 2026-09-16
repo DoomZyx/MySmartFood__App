@@ -2,6 +2,7 @@ import logger from "../../Services/logging/logger.js";
 import {
   getFullSnapshot,
   getMetricsPayload,
+  toRestaurantSnapshot,
 } from "../../Services/monitoring/monitoringService.js";
 import { getRecentAlerts } from "../../Services/alerting/alertService.js";
 
@@ -14,7 +15,10 @@ export class MonitoringController {
    */
   static async getSnapshot(request, reply) {
     try {
-      const data = await getFullSnapshot();
+      const snapshot = await getFullSnapshot();
+      const data = request.user?.isPlatformAdmin
+        ? snapshot
+        : toRestaurantSnapshot(snapshot, request.tenant?.id);
       return reply.code(200).send({ success: true, data });
     } catch (error) {
       logger.error({ err: error?.message }, "Erreur snapshot monitoring");

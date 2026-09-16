@@ -70,7 +70,8 @@ export class TranscriptionHandler {
           const ok = await transferToHuman(
             callSid,
             data.transcript,
-            "human_request"
+            "human_request",
+            this.state.instanceId
           );
           if (ok) this.state.transferTriggered = true;
         }

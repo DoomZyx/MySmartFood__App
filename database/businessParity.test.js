@@ -87,7 +87,11 @@ describeIf("parité métier PostgreSQL", () => {
     expect(second.samples[0]?.pgId).toBe(first.samples[0]?.pgId);
 
     const pricing = await loadLegacyPricing(tenantId);
-    expect(pricing.menuPricing.tacos.produits[0].options.viandes.choix).toContain("Poulet");
+    expect(
+      pricing.menuPricing.tacos.produits[0].options.viandes.choix.map(
+        (choice) => choice.nom || choice
+      )
+    ).toContain("Poulet");
     expect(pricing.restaurantInfo.horairesOuverture.mardi.ouvert).toBe(false);
     expect(pricing.amenities.find((item) => item.slug === "pmr").status).toBe("unknown");
 

@@ -15,9 +15,11 @@ import {
   setSessionCookie,
 } from "../../middleware/sessionAuth.js";
 import * as User from "../../models/pg/User.js";
-import * as EstablishmentProfile from "../../models/pg/EstablishmentProfile.js";
-import { saveProfile, submitOnboardingDossier } from "../../Business/services/DocumentComplianceService.js";
-import { profileToWebsite } from "../../Business/mappers/websiteProfile.js";
+import {
+  loadWebsiteProfile,
+  saveProfile,
+  submitOnboardingDossier,
+} from "../../Business/services/DocumentComplianceService.js";
 import { AccountProfileService } from "../../Business/services/AccountProfileService.js";
 import {
   countryCodeFromLabel,
@@ -115,8 +117,7 @@ export const AccountAuthController = {
   async getWebsiteProfile(request, reply) {
     const tenantId = await firstTenantId(request.user.id);
     if (!tenantId) return reply.send({});
-    const profile = await EstablishmentProfile.findByTenantId(tenantId);
-    return reply.send(profileToWebsite(profile));
+    return reply.send(await loadWebsiteProfile(tenantId));
   },
 
   async updateWebsiteProfile(request, reply) {
@@ -126,8 +127,8 @@ export const AccountAuthController = {
         name: body.nomEtablissement || body.businessName,
         countryCode: countryCodeFromLabel(body.pays || body.country),
       });
-      const profile = await saveProfile(tenantId, body);
-      return reply.send(profileToWebsite(profile));
+      await saveProfile(tenantId, body);
+      return reply.send(await loadWebsiteProfile(tenantId));
     } catch (error) {
       return reply.code(error.statusCode || 500).send({
         error: error.message,

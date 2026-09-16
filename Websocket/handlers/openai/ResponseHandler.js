@@ -90,7 +90,8 @@ export class ResponseHandler {
         const ok = await transferToHuman(
           callSid,
           this.state.transcription,
-          "ai_transfer_intent"
+          "ai_transfer_intent",
+          this.state.instanceId
         );
         if (ok) this.state.transferTriggered = true;
       }
@@ -105,7 +106,8 @@ export class ResponseHandler {
           const ok = await transferToHuman(
             callSid,
             this.state.transcription,
-            "ai_failure"
+            "ai_failure",
+            this.state.instanceId
           );
           if (ok) this.state.transferTriggered = true;
         }

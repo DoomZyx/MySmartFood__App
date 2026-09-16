@@ -1,5 +1,7 @@
-export function profileToWebsite(profile) {
+export function profileToWebsite(profile, amenities = []) {
   if (!profile) return {};
+  const pmr = amenities.find((item) => item.slug === "pmr");
+  const highchair = amenities.find((item) => item.slug === "highchair");
   return {
     nomEtablissement: profile.businessName,
     adresse: profile.addressLine,
@@ -11,5 +13,9 @@ export function profileToWebsite(profile) {
     nombreCouverts: profile.seatCount,
     typeCuisine: profile.cuisineType,
     twilioNumberUsage: profile.phoneNumberUsage,
+    accessibilitePmr:
+      pmr?.status === "available" ? true : pmr?.status === "unavailable" ? false : null,
+    nombreChaisesBebe:
+      highchair?.status === "unknown" ? null : highchair?.quantity ?? null,
   };
 }

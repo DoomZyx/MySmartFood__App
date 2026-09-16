@@ -1,5 +1,8 @@
-import PricingModel from "../../models/pricing.js";
 import { PricingService } from "../../Business/services/PricingService.js";
+import {
+  formatAmenitiesForPrompt,
+  formatOptionChoices,
+} from "../../Business/mappers/menuOptions.js";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -13,7 +16,8 @@ export function buildGptPricingFromDoc(pricing) {
   const gptPricing = {
     restaurantInfo: pricing.restaurantInfo,
     menu: {},
-    availability: pricing.verifierDisponibilite ? pricing.verifierDisponibilite() : false
+    availability: pricing.verifierDisponibilite ? pricing.verifierDisponibilite() : false,
+    amenities: pricing.amenities,
   };
   const menuPricing = pricing.menuPricing || {};
   Object.keys(menuPricing).forEach((categorie) => {
@@ -40,13 +44,8 @@ export async function getPricingForGPT(instanceId) {
       instanceId != null && String(instanceId).trim() !== ""
         ? String(instanceId).trim()
         : String(process.env.INSTANCE_ID || "").trim();
-    if (UUID_PATTERN.test(id)) {
-      return await PricingService.getPricingForGPT(id);
-    }
-    const filter = id ? { instanceId: id } : {};
-    const pricing = await PricingModel.findOne(filter);
-    if (!pricing) return null;
-    return buildGptPricingFromDoc(pricing);
+    if (!UUID_PATTERN.test(id)) return null;
+    return await PricingService.getPricingForGPT(id);
   } catch (error) {
     console.error("Erreur lors de la récupération des tarifs pour GPT:", error);
     return null;
@@ -101,6 +100,8 @@ Email : ${pricing.restaurantInfo.email || "Non renseigné"}
 HORAIRES D'OUVERTURE :
 ${formattedHoraires}
 
+${formatAmenitiesForPrompt(pricing.restaurantInfo, pricing.amenities)}
+
 ========================================
 MENU ET TARIFS :
 ========================================
@@ -118,7 +119,7 @@ ${category.produits.map(produit => {
   if (produit.options && Object.keys(produit.options).length > 0) {
     productLine += '\n  OPTIONS PERSONNALISABLES :';
     Object.entries(produit.options).forEach(([key, optionData]) => {
-      productLine += `\n  • ${optionData.nom} : ${optionData.choix.join(', ')}`;
+      productLine += `\n  • ${optionData.nom} : ${formatOptionChoices(optionData.choix)}`;
     });
   }
   
@@ -130,21 +131,12 @@ ${category.produits.map(produit => {
 INSTRUCTIONS IMPORTANTES :
 ========================================
 1. Les prix affichés sont les prix finaux TTC
-2. Vérifie les horaires d'ouverture avant de confirmer une commande
-3. Tu peux donner l'adresse, le téléphone ou l'email si le client le demande
-4. Informe le client du délai de préparation estimé
-
-EXEMPLE DE PRISE DE COMMANDE AVEC OPTIONS :
-Client : "Je veux un menu tacos double"
-Toi : "Quelle viande souhaitez-vous dans le tacos ?"
-Client : "Poulet"
-Toi : "Et comme sauce ?"
-Client : "Samourai"
-Toi : "Des crudités ?"
-Client : "Oui salade et tomates"
-Toi : "Et quelle boisson avec votre menu ?"
-Client : "Un coca"
-Toi : "Ce sera pour quelle heure ?"
+2. Si une option a un supplément (+X.XX€), ajoute-le au prix du plat et annonce-le au client
+3. Si l'heure est hors horaires, propose UNE prochaine dispo, sans lister tous les créneaux
+4. Tu peux donner l'adresse, le téléphone ou l'email si le client le demande
+5. Ne donne un délai de préparation que s'il figure dans les données. N'invente jamais un délai
+6. Pour l'accès PMR et les chaises bébé, utilise uniquement la section EQUIPEMENTS. Ne jamais inventer.
+7. Options : demande seulement ce qui manque, en une question si possible. Ne liste pas le menu.
 `;
 
   enrichedPrompt += pricingInfo;
@@ -165,30 +157,15 @@ export async function generateEnrichedPrompt(basePrompt, instanceId) {
 // Calculer le prix total d'une commande (retourne uniquement TTC)
 export async function calculateOrderTotal(orderItems, instanceId) {
   try {
-    const filter = instanceId != null && String(instanceId).trim() !== "" ? { instanceId: String(instanceId).trim() } : {};
-    const pricingDoc = await PricingModel.findOne(filter);
-    if (!pricingDoc) {
+    const gptPricing = await getPricingForGPT(instanceId);
+    if (!gptPricing?.menu) {
       return { total: 0 };
     }
 
     const pricing = {
-      restaurantInfo: pricingDoc.restaurantInfo,
-      menu: {}
+      restaurantInfo: gptPricing.restaurantInfo,
+      menu: gptPricing.menu,
     };
-
-    // Simplifier le menu pour la recherche
-    Object.keys(pricingDoc.menuPricing).forEach(categorie => {
-      pricing.menu[categorie] = {
-        nom: pricingDoc.menuPricing[categorie].nom,
-        produits: pricingDoc.menuPricing[categorie].produits
-          .filter(p => p.disponible)
-          .map(p => ({
-            nom: p.nom,
-            description: p.description,
-            prix: p.prixBase
-          }))
-      };
-    });
 
     let total = 0;
     

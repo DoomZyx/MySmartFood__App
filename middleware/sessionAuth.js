@@ -3,6 +3,10 @@ import * as User from "../models/pg/User.js";
 import logger from "../Services/logging/logger.js";
 
 export const JWT_COOKIE_NAME = process.env.JWT_COOKIE_NAME || "smartcrm_token";
+export const PLATFORM_ADMIN_COOKIE_NAME =
+  process.env.PLATFORM_ADMIN_COOKIE_NAME || "smartcrm_platform";
+export const PLATFORM_PENDING_COOKIE_NAME =
+  process.env.PLATFORM_PENDING_COOKIE_NAME || "smartcrm_platform_pending";
 
 function jwtSecret() {
   const secret = process.env.JWT_SECRET;
@@ -38,8 +42,76 @@ export function setSessionCookie(reply, user) {
   reply.setCookie(JWT_COOKIE_NAME, signSessionToken(user), cookieOptions());
 }
 
+export function platformCookieOptions() {
+  const isProduction = process.env.NODE_ENV === "production";
+  return {
+    ...cookieOptions(),
+    sameSite: isProduction ? "strict" : "lax",
+    maxAge: 4 * 60 * 60,
+  };
+}
+
+export function signPlatformToken(user) {
+  return jwt.sign(
+    { userId: user.id, scope: "platform-admin" },
+    jwtSecret(),
+    { expiresIn: process.env.PLATFORM_ADMIN_EXPIRES_IN || "4h" }
+  );
+}
+
+export function setPlatformSessionCookie(reply, user) {
+  reply.setCookie(
+    PLATFORM_ADMIN_COOKIE_NAME,
+    signPlatformToken(user),
+    platformCookieOptions()
+  );
+}
+
+export function clearPlatformSessionCookie(reply) {
+  reply.clearCookie(PLATFORM_ADMIN_COOKIE_NAME, {
+    ...platformCookieOptions(),
+    maxAge: 0,
+  });
+}
+
+export function pendingCookieOptions() {
+  return {
+    ...cookieOptions(),
+    sameSite: "lax",
+    maxAge: 10 * 60,
+  };
+}
+
+export function setPlatformPendingCookie(reply, user, step) {
+  const token = jwt.sign(
+    { userId: user.id, scope: "platform-pending", step },
+    jwtSecret(),
+    { expiresIn: "10m" }
+  );
+  reply.setCookie(PLATFORM_PENDING_COOKIE_NAME, token, pendingCookieOptions());
+}
+
+export function clearPlatformPendingCookie(reply) {
+  reply.clearCookie(PLATFORM_PENDING_COOKIE_NAME, {
+    ...pendingCookieOptions(),
+    maxAge: 0,
+  });
+}
+
 export function clearSessionCookie(reply) {
   reply.clearCookie(JWT_COOKIE_NAME, { ...cookieOptions(), maxAge: 0 });
+  clearPlatformSessionCookie(reply);
+  clearPlatformPendingCookie(reply);
+}
+
+function readNamedCookieToken(request, name) {
+  const raw = request.cookies?.[name];
+  if (!raw) return null;
+  if (typeof request.unsignCookie === "function") {
+    const unsigned = request.unsignCookie(raw);
+    if (unsigned?.valid && looksLikeJwt(unsigned.value)) return unsigned.value;
+  }
+  return looksLikeJwt(raw) ? raw : null;
 }
 
 function looksLikeJwt(token) {
@@ -47,13 +119,7 @@ function looksLikeJwt(token) {
 }
 
 function readCookieToken(request) {
-  const raw = request.cookies?.[JWT_COOKIE_NAME];
-  if (!raw) return null;
-  if (typeof request.unsignCookie === "function") {
-    const unsigned = request.unsignCookie(raw);
-    if (unsigned?.valid && looksLikeJwt(unsigned.value)) return unsigned.value;
-  }
-  return looksLikeJwt(raw) ? raw : null;
+  return readNamedCookieToken(request, JWT_COOKIE_NAME);
 }
 
 function readToken(request) {
@@ -87,10 +153,47 @@ export async function requireAuth(request, reply) {
   }
 }
 
+export async function requirePlatformPending(request, reply, expectedStep) {
+  const token = readNamedCookieToken(request, PLATFORM_PENDING_COOKIE_NAME);
+  if (!token) {
+    return reply.code(401).send({ error: "Vérification back-office requise" });
+  }
+  try {
+    const decoded = jwt.verify(token, jwtSecret());
+    if (decoded.scope !== "platform-pending") {
+      return reply.code(401).send({ error: "Vérification back-office requise" });
+    }
+    if (expectedStep && decoded.step !== expectedStep) {
+      return reply.code(403).send({ error: "Étape 2FA invalide" });
+    }
+    const user = await User.findById(decoded.userId);
+    if (!user?.isPlatformAdmin) {
+      return reply.code(403).send({ error: "Accès refusé" });
+    }
+    request.user = user;
+    request.platformPendingStep = decoded.step;
+  } catch {
+    return reply.code(401).send({ error: "Vérification back-office requise" });
+  }
+}
+
 export async function requirePlatformAdmin(request, reply) {
   await requireAuth(request, reply);
   if (reply.sent) return;
   if (!request.user.isPlatformAdmin) {
     return reply.code(403).send({ error: "Accès refusé" });
+  }
+  const platformToken = readNamedCookieToken(request, PLATFORM_ADMIN_COOKIE_NAME);
+  if (!platformToken) {
+    return reply.code(403).send({ error: "Vérification back-office requise" });
+  }
+  try {
+    const decoded = jwt.verify(platformToken, jwtSecret());
+    if (decoded.scope !== "platform-admin" || decoded.userId !== request.user.id) {
+      return reply.code(403).send({ error: "Vérification back-office requise" });
+    }
+    request.platformVerified = true;
+  } catch {
+    return reply.code(403).send({ error: "Vérification back-office requise" });
   }
 }

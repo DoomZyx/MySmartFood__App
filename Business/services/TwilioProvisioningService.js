@@ -6,7 +6,7 @@ import * as Tenant from "../../models/pg/Tenant.js";
 import { transition } from "../../models/pg/ProvisioningJob.js";
 import { readEncryptedDocument } from "../../utils/documentCrypto.js";
 import { withTenant } from "../../database/transaction.js";
-import { voiceWebhookUrl } from "../../utils/voiceWebhookUrl.js";
+import { incomingNumberVoiceUpdate } from "../../utils/voiceWebhookUrl.js";
 import logger from "../../Services/logging/logger.js";
 
 function twilioClient() {
@@ -115,11 +115,11 @@ async function purchaseLocalNumber(tenantId, bundleSid) {
     return;
   }
 
+  const voiceUpdate = await incomingNumberVoiceUpdate(tenant.slug);
   const purchased = await client.incomingPhoneNumbers.create({
     phoneNumber: available[0].phoneNumber,
     bundleSid,
-    voiceUrl: voiceWebhookUrl(tenant.slug),
-    voiceMethod: "POST",
+    ...(voiceUpdate || {}),
   });
 
   await TwilioBundle.updateStatus(bundleSid, "twilio-approved", {

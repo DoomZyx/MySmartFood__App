@@ -4,13 +4,83 @@ import { resolveRuntimeTenantId } from "../../utils/runtimeTenant.js";
 
 dotenv.config();
 
-function internalHeaders() {
+const LLM_SUCCESS_MESSAGE =
+  "Enregistrement réussi. Confirme oralement en une phrase courte (nom et heure) puis clôture. Ne lis aucun identifiant.";
+
+function minutesOfSlot(slot) {
+  const [hours, minutes] = String(slot || "").split(":").map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return null;
+  }
+  return hours * 60 + minutes;
+}
+
+function formatMinutes(totalMinutes) {
+  const hours = Math.floor(totalMinutes / 60) % 24;
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+/** Compacte une liste HH:MM en fenêtres pour éviter que le LLM récite tous les créneaux. */
+export function compactSlotWindows(slots, stepMinutes = 30) {
+  const minutes = [...new Set((slots || []).map(minutesOfSlot).filter((value) => value != null))].sort(
+    (a, b) => a - b,
+  );
+  if (minutes.length === 0) {
+    return [];
+  }
+  const windows = [];
+  let start = minutes[0];
+  let previous = minutes[0];
+  for (let index = 1; index < minutes.length; index += 1) {
+    const current = minutes[index];
+    if (current <= previous + stepMinutes) {
+      previous = current;
+      continue;
+    }
+    windows.push({ debut: formatMinutes(start), fin: formatMinutes(previous) });
+    start = current;
+    previous = current;
+  }
+  windows.push({ debut: formatMinutes(start), fin: formatMinutes(previous) });
+  return windows;
+}
+
+export function summarizeAvailabilityForLlm({
+  date,
+  slots = [],
+  message,
+  remainingCoversMidi,
+  remainingCoversSoir,
+}) {
+  const fenetres = compactSlotWindows(slots);
+  const result = {
+    success: true,
+    date,
+    closed: fenetres.length === 0,
+    fenetres,
+    instruction:
+      "Ne lis pas les créneaux. Confirme seulement si l'heure demandée est dans une fenêtre. Sinon propose une seule alternative.",
+  };
+  if (message) {
+    result.message = message;
+  }
+  if (remainingCoversMidi != null) {
+    result.remainingCoversMidi = remainingCoversMidi;
+  }
+  if (remainingCoversSoir != null) {
+    result.remainingCoversSoir = remainingCoversSoir;
+  }
+  return result;
+}
+
+function internalHeaders(instanceId) {
   return {
     "x-internal-secret":
       process.env.SMARTCRM_INTERNAL_SECRET ||
       process.env.WEBSITE_INTERNAL_SECRET ||
       process.env.X_API_KEY,
-    "x-tenant-id": resolveRuntimeTenantId(),
+    "x-tenant-id": resolveRuntimeTenantId(instanceId),
   };
 }
 
@@ -24,10 +94,10 @@ export class FunctionCallService {
    * @param {string} date - Date au format YYYY-MM-DD
    * @returns {Promise<Object>} Résultat avec les créneaux disponibles
    */
-  static async checkAvailability(date) {
+  static async checkAvailability(date, instanceId) {
     try {
       const baseUrl = `http://localhost:${process.env.PORT || 8080}`;
-      const headers = internalHeaders();
+      const headers = internalHeaders(instanceId);
 
       const [ordersResponse, reservationsResponse] = await Promise.all([
         fetch(`${baseUrl}/api/orders/ai/available-slots?date=${date}`, { headers }),
@@ -39,20 +109,14 @@ export class FunctionCallService {
       }
 
       const ordersData = await ordersResponse.json();
-      const result = {
-        success: true,
+      const resaData = reservationsResponse.ok ? await reservationsResponse.json() : {};
+      return summarizeAvailabilityForLlm({
         date,
         slots: ordersData.availableSlots || [],
         message: ordersData.message || "Disponibilités récupérées",
-      };
-
-      if (reservationsResponse.ok) {
-        const resaData = await reservationsResponse.json();
-        if (resaData.remainingCoversMidi != null) result.remainingCoversMidi = resaData.remainingCoversMidi;
-        if (resaData.remainingCoversSoir != null) result.remainingCoversSoir = resaData.remainingCoversSoir;
-      }
-
-      return result;
+        remainingCoversMidi: resaData.remainingCoversMidi,
+        remainingCoversSoir: resaData.remainingCoversSoir,
+      });
     } catch (error) {
       return {
         success: false,
@@ -66,7 +130,7 @@ export class FunctionCallService {
    * @param {Object} args - Arguments du rendez-vous (date, time, name, etc.)
    * @returns {Promise<Object>} Résultat de la création
    */
-  static async createAppointment(args) {
+  static async createAppointment(args, instanceId) {
     try {
       const baseUrl = `http://localhost:${process.env.PORT || 8080}`;
       const isReservation = args.type === "Réservation de table";
@@ -87,7 +151,7 @@ export class FunctionCallService {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...internalHeaders(),
+          ...internalHeaders(instanceId),
         },
         body: requestBody,
       });
@@ -170,8 +234,8 @@ export class FunctionCallService {
 
       return {
         success: true,
-        appointment: data?.data || data?.appointment || null,
-        message: data?.message || "Rendez-vous créé",
+        created: true,
+        message: data?.message || LLM_SUCCESS_MESSAGE,
       };
     } catch (error) {
       console.error("[FunctionCallService] Erreur createAppointment:", {

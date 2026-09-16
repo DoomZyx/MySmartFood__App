@@ -25,5 +25,8 @@ describe("getSystemMessage", () => {
     expect(prompt).toContain("Demande TOUJOURS quelle boisson");
     expect(prompt).toContain("Un seul récapitulatif final");
     expect(prompt).toContain("Ne demande JAMAIS son numéro");
+    expect(prompt).toContain("N'invente jamais un plat");
+    expect(prompt).toContain("Ce sera tout ?");
+    expect(prompt).not.toContain("Quelle boisson pour le premier menu");
   });
 });

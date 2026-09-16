@@ -1,8 +1,12 @@
 import {
   activateTenant,
   assignInboundNumber,
+  closeTenant,
+  getInbox,
   getTenant,
   listTenants,
+  rejectTenant,
+  suspendTenant,
 } from "../../Business/services/PlatformOnboardingService.js";
 import logger from "../../Services/logging/logger.js";
 
@@ -19,6 +23,7 @@ export const PlatformOnboardingController = {
     try {
       const tenants = await listTenants({
         status: request.query?.status,
+        queue: request.query?.queue,
         limit: request.query?.limit,
       });
       return reply.send({ tenants });
@@ -52,6 +57,45 @@ export const PlatformOnboardingController = {
     try {
       const tenant = await activateTenant(request.params.tenantId);
       return reply.send({ tenant });
+    } catch (error) {
+      return handleError(error, reply);
+    }
+  },
+
+  async reject(request, reply) {
+    try {
+      const tenant = await rejectTenant(
+        request.params.tenantId,
+        request.body?.reason
+      );
+      return reply.send({ tenant });
+    } catch (error) {
+      return handleError(error, reply);
+    }
+  },
+
+  async suspend(request, reply) {
+    try {
+      const tenant = await suspendTenant(request.params.tenantId);
+      return reply.send({ tenant });
+    } catch (error) {
+      return handleError(error, reply);
+    }
+  },
+
+  async close(request, reply) {
+    try {
+      const tenant = await closeTenant(request.params.tenantId);
+      return reply.send({ tenant });
+    } catch (error) {
+      return handleError(error, reply);
+    }
+  },
+
+  async inbox(request, reply) {
+    try {
+      const inbox = await getInbox();
+      return reply.send({ success: true, data: inbox });
     } catch (error) {
       return handleError(error, reply);
     }

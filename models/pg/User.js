@@ -187,6 +187,54 @@ export async function updateAccount(userId, { name, email, avatarUrl }) {
   return mapUser(result.rows[0]);
 }
 
+export async function findPlatformTotp(userId) {
+  try {
+    const result = await getPool().query(
+      `SELECT platform_totp_secret AS "secret",
+              platform_totp_enabled_at AS "enabledAt",
+              platform_totp_last_step AS "lastStep"
+         FROM users WHERE id = $1`,
+      [userId]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    if (error.code === "42703") {
+      const err = new Error("Migration 2FA manquante. Dans backend lancer: pnpm db:migrate");
+      err.statusCode = 503;
+      throw err;
+    }
+    throw error;
+  }
+}
+
+export async function savePlatformTotpSecret(userId, encryptedSecret) {
+  await getPool().query(
+    `UPDATE users
+        SET platform_totp_secret = $2,
+            platform_totp_enabled_at = NULL,
+            platform_totp_last_step = NULL
+      WHERE id = $1`,
+    [userId, encryptedSecret]
+  );
+}
+
+export async function enablePlatformTotp(userId, lastStep) {
+  await getPool().query(
+    `UPDATE users
+        SET platform_totp_enabled_at = NOW(),
+            platform_totp_last_step = $2
+      WHERE id = $1`,
+    [userId, lastStep]
+  );
+}
+
+export async function touchPlatformTotpStep(userId, lastStep) {
+  await getPool().query(
+    `UPDATE users SET platform_totp_last_step = $2 WHERE id = $1`,
+    [userId, lastStep]
+  );
+}
+
 export function publicUser(user) {
   if (!user) return null;
   return {

@@ -23,6 +23,18 @@ export async function findByTenantId(tenantId) {
   return result.rows[0] ? toCamelCase(result.rows[0]) : null;
 }
 
+export async function markRejected(tenantId, reason) {
+  const result = await getPool().query(
+    `UPDATE provisioning_jobs
+        SET state = 'bundle_rejected',
+            last_error = $2
+      WHERE tenant_id = $1
+      RETURNING id, tenant_id AS "tenantId", state, last_error AS "lastError"`,
+    [tenantId, reason || "Dossier refuse par le back-office"]
+  );
+  return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+}
+
 export async function markCompleted(tenantId) {
   const result = await getPool().query(
     `UPDATE provisioning_jobs

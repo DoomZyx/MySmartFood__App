@@ -3,7 +3,14 @@
  * Valide et nettoie les données avant sauvegarde
  */
 
-import PricingModel from "../../models/pricing.js";
+import { PricingService } from "../../Business/services/PricingService.js";
+import { DAYS_FR, splitInTimeZone, weekdayIndexFromYmd } from "../../utils/timeZone.js";
+import { resolveRuntimeTenantId } from "../../utils/runtimeTenant.js";
+import { withTenant } from "../../database/transaction.js";
+import * as TenantSettings from "../../models/pg/TenantSettings.js";
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Valide et nettoie un numéro de téléphone
@@ -58,7 +65,7 @@ export function validateTime(time) {
  * @param {string} date - Date de la commande (format YYYY-MM-DD ou "ASAP")
  * @returns {Promise<Object>} - { isValid: boolean, adjustedTime: string|null, reason: string }
  */
-export async function validateTimeAgainstOpeningHours(time, date = "ASAP") {
+export async function validateTimeAgainstOpeningHours(time, date = "ASAP", instanceId = null) {
   try {
     if (!time || typeof time !== "string") {
       return {
@@ -68,9 +75,8 @@ export async function validateTimeAgainstOpeningHours(time, date = "ASAP") {
       };
     }
 
-    const pricing = await PricingModel.findOne();
-    if (!pricing || !pricing.restaurantInfo?.horairesOuverture) {
-      // Si pas de configuration, accepter l'heure
+    const tenantId = resolveRuntimeTenantId(instanceId);
+    if (!UUID_PATTERN.test(tenantId)) {
       return {
         isValid: true,
         adjustedTime: time,
@@ -78,19 +84,29 @@ export async function validateTimeAgainstOpeningHours(time, date = "ASAP") {
       };
     }
 
-    // Déterminer le jour
-    let jour;
-    if (date === "ASAP") {
-      const maintenant = new Date();
-      const joursFr = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
-      jour = joursFr[maintenant.getDay()];
-    } else {
-      const dateObj = new Date(date);
-      const joursFr = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
-      jour = joursFr[dateObj.getDay()];
+    const horaires = await PricingService.getOpeningHours(tenantId);
+    const timeZone = await withTenant(tenantId, async (client) => {
+      const settings = await TenantSettings.find(client, tenantId);
+      return settings?.timezone || "Europe/Paris";
+    });
+    if (!horaires) {
+      return {
+        isValid: true,
+        adjustedTime: time,
+        reason: "Horaires non configurés",
+      };
     }
 
-    const horaire = pricing.restaurantInfo.horairesOuverture[jour];
+    let jour;
+    if (date === "ASAP") {
+      const now = splitInTimeZone(new Date(), timeZone);
+      jour = DAYS_FR[weekdayIndexFromYmd(now.date, timeZone)];
+    } else {
+      const ymd = String(date).slice(0, 10);
+      jour = DAYS_FR[weekdayIndexFromYmd(ymd, timeZone)];
+    }
+
+    const horaire = horaires[jour];
     if (!horaire || !horaire.ouvert) {
       return {
         isValid: false,

@@ -12,6 +12,8 @@ import {
 } from "../../Services/streamRegistry.js";
 import { config } from "../../Config/env.js";
 import { resolveRuntimeTenantId } from "../../utils/runtimeTenant.js";
+import { streamTokenFailureReason } from "../../utils/streamToken.js";
+import { recordCallFlow } from "../../Services/monitoring/callFlowTrace.js";
 
 function getInstanceIdFromEnv() {
   return resolveRuntimeTenantId();
@@ -21,6 +23,41 @@ function replayQueued(connection, queued) {
   for (const msg of queued) {
     connection.emit("message", msg);
   }
+}
+
+function streamTokenFromStart(data) {
+  const params = data?.start?.customParameters || {};
+  return params.streamToken || params.token || params.StreamToken || "";
+}
+
+function waitForTwilioStart(connection, timeoutMs = 20000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("start timeout"));
+    }, timeoutMs);
+    const onMessage = (message) => {
+      try {
+        const data = JSON.parse(message.toString());
+        if (data.event !== "start") return;
+        cleanup();
+        resolve(data);
+      } catch {
+        /* media binaire ignore */
+      }
+    };
+    const onClose = () => {
+      cleanup();
+      reject(new Error("websocket ferme avant start"));
+    };
+    const cleanup = () => {
+      clearTimeout(timer);
+      connection.off("message", onMessage);
+      connection.off("close", onClose);
+    };
+    connection.on("message", onMessage);
+    connection.once("close", onClose);
+  });
 }
 
 export default async function wsRoutes(fastify) {
@@ -74,6 +111,46 @@ export async function routeVoiceConnection(
     connection.off("message", trackStart);
     if (streamSid) unregisterStream(streamSid);
   });
+
+  if (connectionOptions?.requireStreamToken) {
+    try {
+      const startData = await waitForTwilioStart(connection);
+      const failure = streamTokenFailureReason(
+        instanceId,
+        streamTokenFromStart(startData),
+      );
+      if (failure) {
+        recordCallFlow({
+          tenantId: instanceId,
+          stage: "stream",
+          outcome: "hangup",
+          detail: `token media-stream: ${failure}`,
+        });
+        connection.close(1008, "Accès refusé");
+        return;
+      }
+      recordCallFlow({
+        tenantId: instanceId,
+        callSid: startData.start?.callSid || null,
+        stage: "stream",
+        outcome: "ok",
+        detail: "start Twilio authentifie",
+      });
+    } catch (error) {
+      recordCallFlow({
+        tenantId: instanceId,
+        stage: "stream",
+        outcome: "hangup",
+        detail: `token media-stream: ${error?.message || "start manquant"}`,
+      });
+      try {
+        connection.close(1008, "Accès refusé");
+      } catch {
+        /* deja ferme */
+      }
+      return;
+    }
+  }
 
   const startGpt = async (reason) => {
     updateRoute("openai-realtime", "connecting");

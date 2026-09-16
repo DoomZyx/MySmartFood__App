@@ -13,7 +13,7 @@ const OPENAI_TOOLS = [
     type: "function",
     name: "check_availability",
     description:
-      "Vérifier les créneaux disponibles pour une date donnée. La réponse peut contenir remainingCoversMidi et remainingCoversSoir (nombre de places restantes par service). Utilise ces infos pour les réservations : indique au client combien de places restent pour le midi et le soir. IMPORTANT: Il existe 2 services - SERVICE MIDI (11h-15h) et SERVICE SOIR (18h-00h). Chaque commande/réservation appartient à UN seul service.",
+      "Vérifier si une date est ouverte et les fenêtres midi/soir. La réponse contient des fenêtres (debut/fin), pas une liste à lire. remainingCoversMidi et remainingCoversSoir indiquent les places restantes. Ne récite jamais tous les créneaux : dis seulement si l'heure demandée est possible, sinon propose UNE alternative. Deux services : MIDI 11h-15h, SOIR 18h-00h. Une demande = un seul service. N'utilise cet outil que si l'heure manque, est hors horaires, ou si create_appointment renvoie COUVERTS_INSUFFISANTS.",
     parameters: {
       type: "object",
       properties: {
@@ -30,7 +30,7 @@ const OPENAI_TOOLS = [
     type: "function",
     name: "create_appointment",
     description:
-      "Créer un rendez-vous pour un client. IMPORTANT: Il existe 2 services - SERVICE MIDI (11h-15h) et SERVICE SOIR (18h-00h). Choisis l'heure en fonction du service demandé. Deux structures distinctes : (1) Réservation de table = même base que le modèle Reservation : nombrePersonnes obligatoire, commandes = [] ; (2) Commande à emporter = même base que le modèle Order : commandes = liste des plats.",
+      "Créer la réservation ou la commande à emporter uniquement après confirmation orale du client. Ne pas inventer de plat. Deux services : MIDI 11h-15h, SOIR 18h-00h. (1) Réservation de table : nombrePersonnes obligatoire, commandes = [] ; (2) Commande à emporter : commandes = liste des plats (nom + quantite). Après succès, confirme en une phrase courte et clôture, sans lire d'identifiant.",
     parameters: {
       type: "object",
       properties: {

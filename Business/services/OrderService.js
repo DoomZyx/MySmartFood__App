@@ -3,13 +3,12 @@ import * as Order from "../../models/pg/Order.js";
 import * as Reservation from "../../models/pg/Reservation.js";
 import * as Client from "../../models/pg/Client.js";
 import * as TenantSettings from "../../models/pg/TenantSettings.js";
-import * as MongoImport from "../../models/pg/MongoImport.js";
+import * as LegacyIdMap from "../../models/pg/LegacyIdMap.js";
 import { resolveCatalogPrice } from "./MenuCatalogService.js";
 import * as OpeningHours from "../../models/pg/OpeningHours.js";
 import * as EstablishmentProfile from "../../models/pg/EstablishmentProfile.js";
 import { hoursToLegacy } from "../mappers/pricingMapper.js";
 import { slotKindForTime } from "../validators/businessRules.js";
-import { splitInTimeZone } from "../../utils/timeZone.js";
 import { commandesToItems, orderToLegacy, reservationToLegacy } from "../mappers/orderMapper.js";
 import {
   createdByFromSource,
@@ -25,7 +24,7 @@ import {
   BusinessRuleError,
   digitsOnly,
 } from "../validators/businessRules.js";
-import { toYmd, zonedTimeToUtc } from "../../utils/timeZone.js";
+import { toYmd, zonedTimeToUtc, splitInTimeZone, weekdayIndexFromYmd, DAYS_FR } from "../../utils/timeZone.js";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -240,7 +239,7 @@ export class OrderService {
 
   static async resolveLegacyId(tenantId, collection, rawId) {
     if (UUID_PATTERN.test(rawId)) return rawId;
-    return withTenant(tenantId, (client) => MongoImport.findRef(client, tenantId, collection, rawId));
+    return withTenant(tenantId, (client) => LegacyIdMap.findRef(client, tenantId, collection, rawId));
   }
 
   static async searchOrders() {
@@ -257,15 +256,7 @@ async function remainingCoversInTx(client, tenantId, ymd, heure, timeZone) {
   const maxCouverts = profile?.seatCount;
   if (!maxCouverts) return null;
   const hours = await OpeningHours.list(client, tenantId);
-  const dayName = [
-    "dimanche",
-    "lundi",
-    "mardi",
-    "mercredi",
-    "jeudi",
-    "vendredi",
-    "samedi",
-  ][new Date(`${ymd}T00:00:00`).getDay()];
+  const dayName = DAYS_FR[weekdayIndexFromYmd(ymd, timeZone)];
   const dayHours = hoursToLegacy(hours)[dayName];
   const kind = slotKindForTime(heure, dayHours);
   const from = zonedTimeToUtc(ymd, "00:00", timeZone);

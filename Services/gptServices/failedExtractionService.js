@@ -1,92 +1,77 @@
-import FailedExtractionModel from "../../models/failedExtraction.js";
+import { withTenant } from "../../database/transaction.js";
+import * as FailedExtraction from "../../models/pg/FailedExtraction.js";
 import { callLogger } from "../logging/logger.js";
+import { resolveRuntimeTenantId } from "../../utils/runtimeTenant.js";
 
-/**
- * Service pour gérer les extractions échouées
- * Sauvegarde les transcriptions dont l'extraction a échoué pour traitement manuel
- */
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function tenantIdOrNull(instanceId) {
+  const id = resolveRuntimeTenantId(instanceId);
+  return UUID_PATTERN.test(id) ? id : null;
+}
+
 export class FailedExtractionService {
-  /**
-   * Sauvegarde une transcription dont l'extraction a échoué
-   * @param {string} streamSid - ID du stream
-   * @param {string} transcription - Transcription brute
-   * @param {Error} error - Erreur rencontrée
-   * @param {number} tentatives - Nombre de tentatives effectuées
-   * @returns {Promise<Object>} - Document sauvegardé
-   */
-  static async saveFailedExtraction(streamSid, transcription, error, tentatives = 0) {
-    try {
-      const errorData = {
-        message: error.message || "Erreur inconnue",
-        stack: error.stack,
-        status: error.status || (error.response && error.response.status),
-        code: error.code,
-      };
-
-      const failedExtraction = await FailedExtractionModel.create({
-        streamSid,
-        transcription,
-        error: errorData,
-        statut: "extraction_echouee",
-        tentatives_extraction: tentatives,
+  static async saveFailedExtraction(streamSid, transcription, error, tentatives = 0, instanceId = null) {
+    const tenantId = tenantIdOrNull(instanceId);
+    if (!tenantId) {
+      callLogger.warn(streamSid, "Extraction échouée non persistée : tenant manquant", {
+        event: "failed_extraction_skipped",
       });
+      return null;
+    }
+    try {
+      const saved = await withTenant(tenantId, (client) =>
+        FailedExtraction.create(client, tenantId, {
+          streamSid,
+          transcript: transcription,
+          errorMessage: error?.message || "Erreur inconnue",
+          errorStack: error?.stack || null,
+          attempts: tentatives,
+          status: "extraction_echouee",
+          legacyPayload: {
+            status: error?.status || (error?.response && error.response.status) || null,
+            code: error?.code || null,
+          },
+        })
+      );
 
       callLogger.info(streamSid, "Transcription brute sauvegardée pour traitement manuel", {
-        failedExtractionId: failedExtraction._id,
-        error: errorData.message,
+        failedExtractionId: saved.id,
+        error: error?.message,
         tentatives,
         event: "failed_extraction_saved",
       });
 
-      return failedExtraction;
+      return saved;
     } catch (saveError) {
-      // Si la sauvegarde échoue, logger l'erreur mais ne pas throw
-      // pour éviter de masquer l'erreur originale
       callLogger.error(streamSid, saveError, {
         source: "FailedExtractionService",
         context: "save_failed_extraction",
-        originalError: error.message,
+        originalError: error?.message,
       });
       return null;
     }
   }
 
-  /**
-   * Récupère les extractions échouées en attente de traitement
-   * @param {Object} options - Options de recherche
-   * @param {number} options.limit - Nombre de résultats (défaut: 50)
-   * @param {number} options.skip - Nombre de résultats à sauter
-   * @returns {Promise<Array>} - Liste des extractions échouées
-   */
   static async getPendingExtractions(options = {}) {
+    const tenantId = tenantIdOrNull(options.instanceId);
+    if (!tenantId) return [];
     const { limit = 50, skip = 0 } = options;
-
-    return FailedExtractionModel.find({
-      statut: { $in: ["extraction_echouee", "en_attente_traitement"] },
-    })
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
-      .lean();
-  }
-
-  /**
-   * Marque une extraction comme traitée
-   * @param {string} id - ID de l'extraction
-   * @returns {Promise<Object>} - Document mis à jour
-   */
-  static async markAsProcessed(id) {
-    return FailedExtractionModel.findByIdAndUpdate(
-      id,
-      {
-        statut: "traite",
-        traiteAt: new Date(),
-      },
-      { new: true }
+    return withTenant(tenantId, (client) =>
+      FailedExtraction.listPending(client, tenantId, { limit, offset: skip })
     );
   }
+
+  static async markAsProcessed(id, instanceId = null) {
+    const tenantId = tenantIdOrNull(instanceId);
+    if (!tenantId) return null;
+    return withTenant(tenantId, (client) => FailedExtraction.markProcessed(client, tenantId, id));
+  }
+
+  static async countSince(since, instanceId = null) {
+    const tenantId = tenantIdOrNull(instanceId);
+    if (!tenantId) return null;
+    return withTenant(tenantId, (client) => FailedExtraction.countSince(client, tenantId, since));
+  }
 }
-
-
-
-

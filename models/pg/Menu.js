@@ -227,18 +227,41 @@ export async function replaceCompositions(client, tenantId, itemId, rows) {
   }
 }
 
+export async function listItemOptionPrices(client, tenantId, itemId) {
+  const result = await client.query(
+    `SELECT g.name AS group_name, g.slug, g.legacy_payload,
+            o.name AS option_name, o.price_cents
+       FROM menu_item_option_groups lig
+       JOIN menu_option_groups g
+         ON g.id = lig.group_id AND g.tenant_id = lig.tenant_id
+       JOIN menu_options o
+         ON o.group_id = g.id AND o.tenant_id = lig.tenant_id
+      WHERE lig.tenant_id = $1 AND lig.item_id = $2 AND o.is_available = TRUE
+      ORDER BY g.sort_order, o.sort_order`,
+    [tenantId, itemId]
+  );
+  return result.rows.map(toCamelCase);
+}
+
 export async function loadCatalog(client, tenantId) {
-  const [categories, items, groups, options, links, compositions] = await Promise.all([
-    listCategories(client, tenantId),
-    listItems(client, tenantId),
-    client.query(`SELECT * FROM menu_option_groups WHERE tenant_id = $1 ORDER BY sort_order`, [tenantId]),
-    client.query(`SELECT * FROM menu_options WHERE tenant_id = $1 ORDER BY sort_order`, [tenantId]),
-    client.query(`SELECT * FROM menu_item_option_groups WHERE tenant_id = $1`, [tenantId]),
-    client.query(
-      `SELECT * FROM menu_compositions WHERE tenant_id = $1 ORDER BY sort_order`,
-      [tenantId]
-    ),
-  ]);
+  const categories = await listCategories(client, tenantId);
+  const items = await listItems(client, tenantId);
+  const groups = await client.query(
+    `SELECT * FROM menu_option_groups WHERE tenant_id = $1 ORDER BY sort_order`,
+    [tenantId]
+  );
+  const options = await client.query(
+    `SELECT * FROM menu_options WHERE tenant_id = $1 ORDER BY sort_order`,
+    [tenantId]
+  );
+  const links = await client.query(
+    `SELECT * FROM menu_item_option_groups WHERE tenant_id = $1`,
+    [tenantId]
+  );
+  const compositions = await client.query(
+    `SELECT * FROM menu_compositions WHERE tenant_id = $1 ORDER BY sort_order`,
+    [tenantId]
+  );
   return {
     categories,
     items,

@@ -146,6 +146,7 @@ export async function handleWebSocketConnection(connection, request, instanceId,
     // Handlers créés dès la connexion (streamSid = null) pour recevoir media avant "start"
     const onUserVoiceActivity = () => silenceMonitor?.onUserVoiceActivity();
     openAIHandler = new OpenAIHandler(null, connection, callLogger, openAiWs, /** @type {(() => void) | null} */ (onUserVoiceActivity));
+    openAIHandler.state.instanceId = resolvedInstanceId;
     twilioHandler = new TwilioHandler(
       null,
       callLogger,
@@ -155,7 +156,7 @@ export async function handleWebSocketConnection(connection, request, instanceId,
         }
       }
     );
-    transcriptionHandler = new TranscriptionHandler(null, callLogger);
+    transcriptionHandler = new TranscriptionHandler(null, callLogger, resolvedInstanceId);
 
     // ==========================================
     // HANDLER MESSAGES TWILIO
@@ -175,6 +176,10 @@ export async function handleWebSocketConnection(connection, request, instanceId,
           twilioHandler.setStreamSid(streamSid);
           transcriptionHandler.setStreamSid(streamSid);
           transcriptionHandler.setCallerNumber(callerNumber);
+          transcriptionHandler.setInstanceId(resolvedInstanceId);
+          if (openAIHandler?.state) {
+            openAIHandler.state.instanceId = resolvedInstanceId;
+          }
           silenceMonitor.start(streamSid);
           twilioHandler.handleMessage(data);
           const callSid = data.start?.callSid || null;

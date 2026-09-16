@@ -11,6 +11,11 @@ export function dashboardUrl() {
   return trimUrl(process.env.DASHBOARD_URL, "https://dashboard.mysmartfood.fr");
 }
 
+export function platformAdminPath() {
+  const raw = String(process.env.PLATFORM_ADMIN_PATH || "/x/bXlzbWFydGZvb2QtcGxhdGZvcm0tYWRtaW4").trim();
+  return raw.startsWith("/") ? raw : `/${raw}`;
+}
+
 export function frontendUrlFromRequest(request) {
   const hint = String(request?.query?.return || "").toLowerCase();
   if (hint === "dashboard") return dashboardUrl();

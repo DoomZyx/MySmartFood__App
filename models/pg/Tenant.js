@@ -74,7 +74,7 @@ const PLATFORM_TENANT_JOINS = `
     SELECT phone_number, phone_number_sid, status
       FROM twilio_bundles
      WHERE tenant_id = t.id
-     ORDER BY updated_at DESC
+     ORDER BY (phone_number IS NOT NULL) DESC, updated_at DESC
      LIMIT 1
   ) b ON TRUE
   LEFT JOIN establishment_profiles ep ON ep.tenant_id = t.id
@@ -90,6 +90,26 @@ export async function findForPlatform(tenantId) {
   return result.rows[0] ? toCamelCase(result.rows[0]) : null;
 }
 
+export async function listPendingForPlatform({ limit = 100 } = {}) {
+  const cap = Math.min(Math.max(Number(limit) || 100, 1), 200);
+  const result = await getPool().query(
+    `SELECT ${PLATFORM_TENANT_SELECT}
+     ${PLATFORM_TENANT_JOINS}
+      WHERE t.status <> 'closed'
+        AND (
+          t.status IN ('pending_compliance', 'pending_payment')
+          OR (
+            ep.documents_submitted_at IS NOT NULL
+            AND t.status NOT IN ('active', 'suspended')
+          )
+        )
+      ORDER BY COALESCE(ep.documents_submitted_at, t.created_at) DESC
+      LIMIT $1`,
+    [cap]
+  );
+  return result.rows.map((row) => toCamelCase(row));
+}
+
 export async function listForPlatform({ status, limit = 100 } = {}) {
   const cap = Math.min(Math.max(Number(limit) || 100, 1), 200);
   const result = await getPool().query(
@@ -100,6 +120,19 @@ export async function listForPlatform({ status, limit = 100 } = {}) {
       ORDER BY t.created_at DESC
       LIMIT $2`,
     [status || null, cap]
+  );
+  return result.rows.map((row) => toCamelCase(row));
+}
+
+export async function listFleetForPlatform({ limit = 100 } = {}) {
+  const cap = Math.min(Math.max(Number(limit) || 100, 1), 200);
+  const result = await getPool().query(
+    `SELECT ${PLATFORM_TENANT_SELECT}
+     ${PLATFORM_TENANT_JOINS}
+      WHERE t.status IN ('active', 'suspended')
+      ORDER BY t.status ASC, COALESCE(t.activated_at, t.created_at) DESC
+      LIMIT $1`,
+    [cap]
   );
   return result.rows.map((row) => toCamelCase(row));
 }

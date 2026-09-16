@@ -8,6 +8,11 @@ const TENANT_ID = {
 
 export default async function platformAdminRoutes(fastify) {
   fastify.addHook("preHandler", requirePlatformAdmin);
+  const csrf = fastify.csrfProtection ? [fastify.csrfProtection] : [];
+
+  fastify.get("/inbox", {
+    handler: PlatformOnboardingController.inbox,
+  });
 
   fastify.get("/tenants", {
     schema: {
@@ -15,6 +20,7 @@ export default async function platformAdminRoutes(fastify) {
         type: "object",
         properties: {
           status: { type: "string" },
+          queue: { type: "string", enum: ["pending", "fleet"] },
           limit: { type: "integer", minimum: 1, maximum: 200 },
         },
       },
@@ -34,6 +40,8 @@ export default async function platformAdminRoutes(fastify) {
   });
 
   fastify.post("/tenants/:tenantId/assign-phone", {
+    onRequest: csrf,
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
     schema: {
       params: {
         type: "object",
@@ -52,6 +60,8 @@ export default async function platformAdminRoutes(fastify) {
   });
 
   fastify.post("/tenants/:tenantId/activate", {
+    onRequest: csrf,
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
     schema: {
       params: {
         type: "object",
@@ -60,5 +70,50 @@ export default async function platformAdminRoutes(fastify) {
       },
     },
     handler: PlatformOnboardingController.activate,
+  });
+
+  fastify.post("/tenants/:tenantId/suspend", {
+    onRequest: csrf,
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    schema: {
+      params: {
+        type: "object",
+        required: ["tenantId"],
+        properties: { tenantId: TENANT_ID },
+      },
+    },
+    handler: PlatformOnboardingController.suspend,
+  });
+
+  fastify.post("/tenants/:tenantId/close", {
+    onRequest: csrf,
+    config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    schema: {
+      params: {
+        type: "object",
+        required: ["tenantId"],
+        properties: { tenantId: TENANT_ID },
+      },
+    },
+    handler: PlatformOnboardingController.close,
+  });
+
+  fastify.post("/tenants/:tenantId/reject", {
+    onRequest: csrf,
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    schema: {
+      params: {
+        type: "object",
+        required: ["tenantId"],
+        properties: { tenantId: TENANT_ID },
+      },
+      body: {
+        type: "object",
+        properties: {
+          reason: { type: "string", maxLength: 500 },
+        },
+      },
+    },
+    handler: PlatformOnboardingController.reject,
   });
 }

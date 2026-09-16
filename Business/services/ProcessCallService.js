@@ -14,7 +14,7 @@ export class ProcessCallService {
    * @returns {Promise<Object>} { reservation, order }
    */
   static async process(extractedData, options = {}) {
-    const instanceId = options.instanceId || "inst_default";
+    const instanceId = options.instanceId;
     const {
       nom,
       telephone,
@@ -32,7 +32,8 @@ export class ProcessCallService {
           instanceId,
         });
       } catch (err) {
-        logger.error({ err: err?.message }, "Erreur création réservation (processCall)");
+        logger.error({ err: err?.message, instanceId }, "Erreur création réservation (processCall)");
+        throw err;
       }
     }
 
@@ -46,7 +47,8 @@ export class ProcessCallService {
           instanceId,
         });
       } catch (err) {
-        logger.error({ err: err?.message }, "Erreur création commande (processCall)");
+        logger.error({ err: err?.message, instanceId }, "Erreur création commande (processCall)");
+        throw err;
       }
     }
 

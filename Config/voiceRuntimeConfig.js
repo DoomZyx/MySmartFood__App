@@ -6,7 +6,7 @@ import { getSystemMessage } from "./prompts.js";
 import { generateEnrichedPromptWithPricing } from "../Services/gptServices/pricingService.js";
 import { getSessionUpdatePayload } from "../Services/gptServices/gptServices.js";
 import { callLogger } from "../Services/logging/logger.js";
-import { loadLegacyPricing } from "../Business/services/MenuCatalogService.js";
+import { ensureDefaults } from "../Business/services/MenuCatalogService.js";
 import { resolveRuntimeTenantId } from "../utils/runtimeTenant.js";
 
 const UUID_PATTERN =
@@ -18,7 +18,7 @@ function resolveInstanceId(instanceId) {
 
 export async function getVoiceRuntimeConfig(instanceId) {
   const id = resolveInstanceId(instanceId);
-  const pricing = UUID_PATTERN.test(id) ? await loadLegacyPricing(id) : null;
+  const pricing = UUID_PATTERN.test(id) ? await ensureDefaults(id) : null;
   const restaurantInfo = pricing?.restaurantInfo || null;
   const gptPricing = pricing
     ? {

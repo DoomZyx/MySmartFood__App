@@ -22,28 +22,43 @@ function normalizeInstanceId(value) {
  * @param {string} [streamPath] - Chemin du stream WebSocket (défaut: /media-stream). Ex Gateway: /v1/inst_xxx/media-stream
  * @param {string|null} [callerNumber] - Numéro appelant fourni par Twilio
  * @param {string|null} [instanceId] - Instance métier associée à l'appel
+ * @param {string|null} [streamToken] - Jeton d'auth du media-stream (paramètre Twilio, pas l'URL)
  */
 export function generateTwiml(
   host,
   streamPath = "/media-stream",
   callerNumber = null,
   instanceId = null,
+  streamToken = null,
 ) {
   const path = streamPath.startsWith("/") ? streamPath : `/${streamPath}`;
   const fromEnv =
     process.env.VOICE_STREAM_URL != null
       ? String(process.env.VOICE_STREAM_URL).trim()
       : "";
-  const streamUrl = fromEnv || `wss://${host}${path}`;
+  let streamHost = String(host || "").trim();
+  try {
+    if (streamHost.includes("://")) streamHost = new URL(streamHost).host;
+  } catch {
+    streamHost = streamHost.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  }
+  const streamUrl = fromEnv || `wss://${streamHost}${path}`;
   const escaped = escapeXmlAttribute(streamUrl);
   const normalizedCallerNumber = normalizeCallerPhone(callerNumber);
   const normalizedInstanceId = normalizeInstanceId(instanceId);
+  const safeStreamToken =
+    typeof streamToken === "string" && /^[A-Za-z0-9._-]{16,256}$/.test(streamToken.trim())
+      ? streamToken.trim()
+      : null;
   const customParameters = [
     normalizedCallerNumber
       ? `<Parameter name="callerNumber" value="${escapeXmlAttribute(normalizedCallerNumber)}" />`
       : null,
     normalizedInstanceId
       ? `<Parameter name="instanceId" value="${escapeXmlAttribute(normalizedInstanceId)}" />`
+      : null,
+    safeStreamToken
+      ? `<Parameter name="streamToken" value="${escapeXmlAttribute(safeStreamToken)}" />`
       : null,
   ].filter(Boolean);
   const parametersXml =

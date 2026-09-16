@@ -12,9 +12,19 @@ let pool = null;
  * La vérification du certificat n'est jamais désactivée implicitement : il faut
  * DATABASE_SSL=disable, refusé en production.
  */
+function isLoopbackDatabaseUrl(connectionString = process.env.DATABASE_URL || "") {
+  return /@(127\.0\.0\.1|localhost)[:/]/.test(connectionString);
+}
+
 export function buildSslConfig() {
   const mode = (process.env.DATABASE_SSL || "").trim().toLowerCase();
   const isProduction = process.env.NODE_ENV === "production";
+  const loopback = isLoopbackDatabaseUrl();
+
+  // Postgres sur la meme machine (127.0.0.1) : pas de TLS, meme en preprod/prod.
+  if (loopback && (mode === "disable" || !mode)) {
+    return false;
+  }
 
   if (mode === "disable") {
     if (isProduction) {
@@ -82,6 +92,29 @@ export function getPool() {
     throw new Error("Pool PostgreSQL non initialisé. Appeler connectDatabase() au démarrage.");
   }
   return pool;
+}
+
+/** Sonde readiness : ne lève pas, utilisée par /api/health et le snapshot admin. */
+export async function pingDatabase() {
+  if (!pool) {
+    return { status: "error", ready: false, error: "not_initialized" };
+  }
+  const startedAt = Date.now();
+  try {
+    await pool.query("SELECT 1");
+    return {
+      status: "ok",
+      ready: true,
+      latencyMs: Date.now() - startedAt,
+    };
+  } catch {
+    return {
+      status: "error",
+      ready: false,
+      error: "unreachable",
+      latencyMs: Date.now() - startedAt,
+    };
+  }
 }
 
 export async function closeDatabase() {

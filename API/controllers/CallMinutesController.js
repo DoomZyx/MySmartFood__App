@@ -3,6 +3,7 @@ import {
   getClientQuota,
   listCallMonitoring
 } from "../../Services/callMinutes/callMinutesService.js";
+import { resolveRuntimeTenantId } from "../../utils/runtimeTenant.js";
 
 /**
  * Controller suivi des minutes d'appel et monitoring.
@@ -16,7 +17,7 @@ export class CallMinutesController {
   static async getActiveWithElapsed(request, reply) {
     try {
       const clientId = request.query.clientId ?? undefined;
-      const instanceId = request.instanceId || "inst_default";
+      const instanceId = resolveRuntimeTenantId(request.instanceId);
       const calls = await getActiveCallsWithElapsed(clientId, instanceId);
       if (calls.length === 0) {
         return reply.send({ active: false, elapsedSeconds: 0, elapsedMinutes: 0 });
@@ -52,7 +53,7 @@ export class CallMinutesController {
   static async getQuota(request, reply) {
     try {
       const clientId = request.query.clientId ?? undefined;
-      const instanceId = request.instanceId || "inst_default";
+      const instanceId = resolveRuntimeTenantId(request.instanceId);
       const quota = await getClientQuota(clientId, null, instanceId);
       return reply.send(quota);
     } catch (error) {
@@ -68,7 +69,7 @@ export class CallMinutesController {
   static async getMonitoring(request, reply) {
     try {
       const clientId = request.query.clientId ?? undefined;
-      const instanceId = request.instanceId || "inst_default";
+      const instanceId = resolveRuntimeTenantId(request.instanceId);
       const limit = request.query.limit ?? 50;
       const skip = request.query.skip ?? 0;
       const list = await listCallMonitoring(clientId, { limit, skip }, instanceId);

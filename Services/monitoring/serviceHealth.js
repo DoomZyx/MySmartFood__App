@@ -48,6 +48,36 @@ function sanitizeActiveSessions(value) {
   }));
 }
 
+const TELEMETRY_STAGES = ["node", "vad", "stt", "llm", "tts"];
+
+function sanitizeLatencyRow(row) {
+  if (!row || typeof row !== "object") return null;
+  const count = Number(row.count);
+  if (!Number.isFinite(count) || count <= 0) return null;
+  const last = Number(row.last);
+  const average = Number(row.average);
+  const min = Number(row.min);
+  const max = Number(row.max);
+  return {
+    count: Math.max(0, Math.floor(count)),
+    last: Number.isFinite(last) ? Math.max(0, Math.round(last)) : 0,
+    average: Number.isFinite(average) ? Math.max(0, Math.round(average)) : 0,
+    min: Number.isFinite(min) ? Math.max(0, Math.round(min)) : 0,
+    max: Number.isFinite(max) ? Math.max(0, Math.round(max)) : 0,
+  };
+}
+
+function sanitizeTelemetry(payload) {
+  const latency = payload?.telemetry?.latency_ms;
+  if (!latency || typeof latency !== "object") return null;
+  const latency_ms = {};
+  for (const stage of TELEMETRY_STAGES) {
+    const row = sanitizeLatencyRow(latency[stage]);
+    if (row) latency_ms[stage] = row;
+  }
+  return Object.keys(latency_ms).length > 0 ? { latency_ms } : null;
+}
+
 /**
  * Sonde un endpoint de santé sans propager son indisponibilité au snapshot admin.
  */
@@ -60,7 +90,14 @@ export async function probeHealthService(
   } = {},
 ) {
   if (!url) {
-    return { service: disabledService(), engines: null };
+    return {
+      service: disabledService(),
+      engines: null,
+      components: null,
+      activeSessions: [],
+      llmProviderActive: null,
+      telemetry: null,
+    };
   }
 
   const controller = new AbortController();
@@ -111,6 +148,7 @@ export async function probeHealthService(
           : null,
       activeSessions: sanitizeActiveSessions(payload?.active_sessions),
       llmProviderActive: sanitizeIdentifier(payload?.llm_provider_active),
+      telemetry: sanitizeTelemetry(payload),
     };
   } catch (error) {
     return {
@@ -125,6 +163,7 @@ export async function probeHealthService(
       components: null,
       activeSessions: [],
       llmProviderActive: null,
+      telemetry: null,
     };
   } finally {
     clearTimeout(timer);
@@ -145,11 +184,12 @@ function aggregateVoiceServerHealth(results) {
   const usingOpenAiFallback = results.some(
     (result) => result.llmProviderActive === "openai",
   );
-  const status = allHealthy && !usingOpenAiFallback
-    ? "healthy"
-    : healthyResults.length > 0
-      ? "degraded"
-      : "unhealthy";
+  const status =
+    reachableResults.length > 0 && (allHealthy || usingOpenAiFallback)
+      ? "healthy"
+      : healthyResults.length > 0
+        ? "degraded"
+        : "unhealthy";
   let message = null;
   if (usingOpenAiFallback) {
     message = "openai-fallback-active";
@@ -183,7 +223,86 @@ function aggregateVoiceServerHealth(results) {
       usingOpenAiFallback
         ? "openai"
         : representative?.llmProviderActive || null,
+    telemetry: representative?.telemetry || null,
   };
+}
+
+function resolveGatewayHealthUrl() {
+  const explicit = String(process.env.GATEWAY_HEALTH_URL || "").trim();
+  if (explicit) {
+    return { url: explicit, explicit: true };
+  }
+  const port = String(process.env.GATEWAY_PORT || "3001").trim() || "3001";
+  return { url: `http://127.0.0.1:${port}/health`, explicit: false };
+}
+
+function resolveFallbackApiUrl() {
+  const base = String(process.env.OPENAI_BASE_URL || "https://api.openai.com/v1")
+    .trim()
+    .replace(/\/$/, "");
+  const model =
+    String(process.env.OPENAI_MODEL || "gpt-4o-mini").trim() || "gpt-4o-mini";
+  return `${base}/models/${encodeURIComponent(model)}`;
+}
+
+function discardResponseBody(response) {
+  const body = response?.body;
+  if (body && typeof body.cancel === "function") {
+    Promise.resolve(body.cancel()).catch(() => {});
+  }
+}
+
+/**
+ * TTFB HTTPS froid = TCP + TLS 1.3 + HTTP (3 allers-retours).
+ * RTT reseau ≈ TTFB / 3.
+ */
+export function estimateNetworkRttMs(httpsTtfbMs) {
+  const ttfb = Number(httpsTtfbMs);
+  if (!Number.isFinite(ttfb) || ttfb < 0) return null;
+  return Math.max(0, Math.round(ttfb / 3));
+}
+
+/**
+ * Mesure le temps jusqu'aux en-tetes d'un GET leger (un modele), pas le catalogue /v1/models.
+ */
+export async function probeFallbackApi({
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  fetchImpl = globalThis.fetch,
+} = {}) {
+  const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
+  if (!apiKey) {
+    return { configured: false, reachable: false, latencyMs: null };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const startedAt = Date.now();
+
+  try {
+    if (typeof fetchImpl !== "function") {
+      throw new Error("fetch unavailable");
+    }
+    const response = await fetchImpl(resolveFallbackApiUrl(), {
+      method: "GET",
+      signal: controller.signal,
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const latencyMs = estimateNetworkRttMs(Date.now() - startedAt);
+    discardResponseBody(response);
+    return {
+      configured: true,
+      reachable: response.ok || response.status === 401,
+      latencyMs,
+    };
+  } catch {
+    return {
+      configured: true,
+      reachable: false,
+      latencyMs: estimateNetworkRttMs(Date.now() - startedAt),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function getExternalHealthSnapshot(options = {}) {
@@ -192,7 +311,7 @@ export async function getExternalHealthSnapshot(options = {}) {
     voiceTargets.length > 0
       ? voiceTargets.map((target) => target.monitoringUrl)
       : [DEFAULT_VOICE_MONITORING_URL];
-  const gatewayUrl = String(process.env.GATEWAY_HEALTH_URL || "").trim();
+  const gatewayTarget = resolveGatewayHealthUrl();
   const voiceProbeOptions = {
     ...options,
     headers: {
@@ -201,17 +320,21 @@ export async function getExternalHealthSnapshot(options = {}) {
     },
   };
 
-  const [voiceResults, gateway] = await Promise.all([
+  const [voiceResults, gatewayProbe, fallbackApi] = await Promise.all([
     Promise.all(
       voiceUrls.map((voiceUrl) =>
         probeHealthService(voiceUrl, voiceProbeOptions),
       ),
     ),
-    gatewayUrl
-      ? probeHealthService(gatewayUrl, options)
-      : Promise.resolve({ service: disabledService(), engines: null }),
+    probeHealthService(gatewayTarget.url, options),
+    probeFallbackApi(options),
   ]);
 
+  const gateway =
+    !gatewayTarget.explicit && !gatewayProbe.service.reachable
+      ? { service: disabledService(), engines: null }
+      : gatewayProbe;
+
   const voiceServer = aggregateVoiceServerHealth(voiceResults);
-  return { voiceServer, gateway };
+  return { voiceServer, gateway, fallbackApi };
 }

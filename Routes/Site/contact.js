@@ -52,9 +52,25 @@ export default async function contactRoutes(fastify) {
   });
 
   fastify.patch("/:id/status", {
+    onRequest: fastify.csrfProtection ? [fastify.csrfProtection] : [],
     preHandler: [requirePlatformAdmin],
+    config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+    schema: {
+      params: {
+        type: "object",
+        required: ["id"],
+        properties: { id: { type: "string", format: "uuid" } },
+      },
+      body: {
+        type: "object",
+        required: ["status"],
+        properties: {
+          status: { type: "string", enum: ["nouveau", "en_cours", "traite", "archive"] },
+        },
+      },
+    },
     handler: async (request, reply) => {
-      const contact = await Contact.updateStatus(request.params.id, request.body?.status);
+      const contact = await Contact.updateStatus(request.params.id, request.body.status);
       if (!contact) return reply.code(404).send({ error: "Contact non trouvé ou statut invalide" });
       return { success: true, data: contact };
     },

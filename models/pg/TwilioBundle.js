@@ -20,28 +20,92 @@ export async function findByTenantId(tenantId) {
             phone_number AS "phoneNumber", phone_number_sid AS "phoneNumberSid"
        FROM twilio_bundles
       WHERE tenant_id = $1
-      ORDER BY updated_at DESC
+      ORDER BY (phone_number IS NOT NULL) DESC, updated_at DESC
       LIMIT 1`,
     [tenantId]
   );
   return result.rows[0] ? toCamelCase(result.rows[0]) : null;
 }
 
+function normalizeInboundPhone(value) {
+  return String(value || "").replace(/[^\d+]/g, "");
+}
+
+export async function findTenantForInboundCall({ phoneNumber, slug } = {}) {
+  const to = normalizeInboundPhone(phoneNumber);
+  if (to) {
+    const byPhone = await getPool().query(
+      `SELECT t.id, t.slug, t.status, b.phone_number AS "phoneNumber"
+         FROM twilio_bundles b
+         JOIN tenants t ON t.id = b.tenant_id
+        WHERE regexp_replace(COALESCE(b.phone_number, ''), '[^0-9+]', '', 'g') = $1
+          AND t.status <> 'closed'
+        LIMIT 1`,
+      [to]
+    );
+    if (byPhone.rows[0]) return toCamelCase(byPhone.rows[0]);
+  }
+  const safeSlug = String(slug || "").trim();
+  if (safeSlug) {
+    const bySlug = await getPool().query(
+      `SELECT t.id, t.slug, t.status
+         FROM tenants t
+        WHERE t.slug = $1
+          AND t.status <> 'closed'
+        LIMIT 1`,
+      [safeSlug]
+    );
+    if (bySlug.rows[0]) return toCamelCase(bySlug.rows[0]);
+  }
+  return null;
+}
+
 export async function findByPhoneNumber(phoneNumber) {
   const result = await getPool().query(
-    `SELECT id, tenant_id AS "tenantId", bundle_sid AS "bundleSid",
-            phone_number AS "phoneNumber", phone_number_sid AS "phoneNumberSid"
-       FROM twilio_bundles
-      WHERE phone_number = $1
+    `SELECT b.id, b.tenant_id AS "tenantId", b.bundle_sid AS "bundleSid",
+            b.phone_number AS "phoneNumber", b.phone_number_sid AS "phoneNumberSid"
+       FROM twilio_bundles b
+       JOIN tenants t ON t.id = b.tenant_id
+      WHERE b.phone_number = $1
+        AND t.status <> 'closed'
       LIMIT 1`,
     [phoneNumber]
   );
   return result.rows[0] ? toCamelCase(result.rows[0]) : null;
 }
 
+export async function releaseNumber(tenantId) {
+  await getPool().query(
+    `UPDATE twilio_bundles
+        SET phone_number = NULL,
+            phone_number_sid = NULL
+      WHERE tenant_id = $1`,
+    [tenantId]
+  );
+}
+
 export async function assignNumber(tenantId, { phoneNumber, phoneNumberSid, bundleSid }) {
-  const existing = await findByTenantId(tenantId);
-  if (existing) {
+  const existing = await getPool().query(
+    `SELECT id
+       FROM twilio_bundles
+      WHERE tenant_id = $1
+      ORDER BY (phone_number_sid = $2) DESC,
+               (phone_number IS NOT NULL) DESC,
+               updated_at DESC
+      LIMIT 1`,
+    [tenantId, phoneNumberSid]
+  );
+  const targetId = existing.rows[0]?.id || null;
+
+  if (targetId) {
+    await getPool().query(
+      `UPDATE twilio_bundles
+          SET phone_number = NULL
+        WHERE tenant_id = $1
+          AND id <> $2
+          AND phone_number = $3`,
+      [tenantId, targetId, phoneNumber]
+    );
     const result = await getPool().query(
       `UPDATE twilio_bundles
           SET phone_number = $2,
@@ -51,7 +115,7 @@ export async function assignNumber(tenantId, { phoneNumber, phoneNumberSid, bund
         WHERE id = $1
         RETURNING id, tenant_id AS "tenantId", bundle_sid AS "bundleSid", status,
                   phone_number AS "phoneNumber", phone_number_sid AS "phoneNumberSid"`,
-      [existing.id, phoneNumber, phoneNumberSid]
+      [targetId, phoneNumber, phoneNumberSid]
     );
     return toCamelCase(result.rows[0]);
   }

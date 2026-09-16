@@ -82,7 +82,10 @@ export function itemToLegacyProduct(item, catalog) {
   for (const group of groups) {
     const choix = catalog.options
       .filter((option) => option.groupId === group.id)
-      .map((option) => option.name);
+      .map((option) => ({
+        nom: option.name,
+        prix: centsToEuros(option.priceCents),
+      }));
     const legacySlug = group.legacyPayload?.slug || group.slug;
     options[legacySlug] = {
       nom: group.name,
@@ -130,6 +133,8 @@ export function catalogToMenuPricing(catalog) {
 }
 
 export function restaurantInfoFromProfile(profile, horaires, amenities = []) {
+  const pmr = amenities.find((item) => item.slug === "pmr");
+  const highchair = amenities.find((item) => item.slug === "highchair");
   return {
     nom: profile?.businessName || "Mon Restaurant",
     adresse: profile?.rawAddress || profile?.addressLine || "",
@@ -138,6 +143,10 @@ export function restaurantInfoFromProfile(profile, horaires, amenities = []) {
     nombreCouverts: profile?.seatCount || 0,
     typeCuisine: profile?.cuisineType || "",
     horairesOuverture: horaires,
+    accessibilitePmr:
+      pmr?.status === "available" ? true : pmr?.status === "unavailable" ? false : null,
+    nombreChaisesBebe:
+      highchair?.status === "unknown" ? null : highchair?.quantity ?? null,
     equipements: amenities.map((item) => ({
       slug: item.slug,
       label: item.label,

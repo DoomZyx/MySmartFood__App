@@ -83,7 +83,7 @@ export class PricingService {
 
   static async getPricingForGPT(instanceId) {
     const tenantId = resolveTenantId(instanceId);
-    const pricing = await loadLegacyPricing(tenantId);
+    const pricing = await ensureDefaults(tenantId);
     const menu = {};
     for (const [slug, category] of Object.entries(pricing.menuPricing || {})) {
       menu[slug] = {

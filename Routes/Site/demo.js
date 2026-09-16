@@ -48,4 +48,29 @@ export default async function demoRoutes(fastify) {
       return { success: true, data: demo };
     },
   });
+
+  fastify.patch("/:id/status", {
+    onRequest: fastify.csrfProtection ? [fastify.csrfProtection] : [],
+    preHandler: [requirePlatformAdmin],
+    config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+    schema: {
+      params: {
+        type: "object",
+        required: ["id"],
+        properties: { id: { type: "string", format: "uuid" } },
+      },
+      body: {
+        type: "object",
+        required: ["status"],
+        properties: {
+          status: { type: "string", enum: ["nouveau", "en_cours", "traite", "archive"] },
+        },
+      },
+    },
+    handler: async (request, reply) => {
+      const demo = await Demo.updateStatus(request.params.id, request.body.status);
+      if (!demo) return reply.code(404).send({ error: "Démo non trouvée ou statut invalide" });
+      return { success: true, data: demo };
+    },
+  });
 }

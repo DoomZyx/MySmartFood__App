@@ -7,16 +7,18 @@ Observabilite du process Node : logs stdout, sondes publiques, snapshot admin, a
 | Endpoint | Role | Codes |
 |---|---|---|
 | `GET /api/ping` | Process vivant + uptime | 200 |
-| `GET /api/health` | Readiness MongoDB | 200 / 503 |
+| `GET /api/health` | Readiness PostgreSQL | 200 / 503 |
 | `GET /api/status` | Runtime (env, uptime, heap, rss, etat DB) | 200 |
 
-`/api/status` reste 200 si MongoDB est down (le champ `db` le signale). `/api/health` renvoie 503.
+`/api/status` reste 200 si PostgreSQL est down (le champ `db` le signale). `/api/health` renvoie 503.
 
-## Snapshot admin (JWT admin)
+## Snapshot (session dashboard)
+
+Accessible aux restaurateurs (abonnement actif) et aux admins plateforme.
 
 | Endpoint | Role |
 |---|---|
-| `GET /api/monitoring` | Etat global : process, HTTP, extraction, circuit breaker, streams, queue, alertes |
+| `GET /api/monitoring` | Etat des services. Vue complete (process/HTTP) pour admin plateforme, vue diagnostic pour le restaurant |
 | `GET /api/monitoring/metrics` | Compteurs HTTP + extraction + circuit breaker |
 | `GET /api/monitoring/alerts` | Dernieres alertes (`?limit=1-50`) |
 
@@ -30,14 +32,14 @@ Les metriques HTTP, extraction et alertes sont **in-memory** : elles se reinitia
 - HTTP : volume, 2xx/4xx/5xx, latence avg/p95/max (hors sondes `/ping` `/health` `/status`)
 - Extraction GPT : succes, erreurs STT/parsing, telephones/heures invalides, echecs consecutifs
 - OpenAI : etat du circuit breaker
-- Services : Backend, Voice Server et Gateway avec disponibilite et latence
+- Services : Backend, PostgreSQL, Voice Server et Gateway avec disponibilite et latence
 - Moteurs vocaux : VAD, STT, LLM et TTS remontes par le Voice Server
 - Runtime : appels actifs sanitizes, route, etape, fournisseur, sockets notifications et queue transcription
 - Persistance : extractions en echec sur 24 h (MongoDB)
 
 Le snapshot conserve les anciens champs et ajoute :
 
-- `services.backend`, `services.voiceServer`, `services.gateway`
+- `services.backend`, `services.postgres`, `services.voiceServer`, `services.gateway`
 - `engines.vad`, `engines.stt`, `engines.llm`, `engines.tts`
 - `runtime.activeCalls`
 - `fallbackOpenAI`
@@ -51,11 +53,11 @@ Configuration des sondes :
   santé si absent
 - `VOICE_SERVICE_URLS` : bases HTTP des réplicas, séparées par des virgules ;
   prioritaire sur les variables historiques
-- `GATEWAY_HEALTH_URL` : endpoint `/health` du Gateway, optionnel
+- `GATEWAY_HEALTH_URL` : endpoint `/health` du Gateway ; sinon sonde `127.0.0.1:$GATEWAY_PORT` (défaut 3001). Si cette sonde locale échoue et que l'URL n'est pas forcée, le gateway reste `disabled`.
 
 Chaque sonde a un timeout court et ne fait jamais echouer la reponse admin.
 Un service configure mais injoignable fait passer le statut global a
-`degraded`. MongoDB indisponible produit `unhealthy`.
+`degraded`. PostgreSQL indisponible produit `unhealthy`.
 
 ## Alertes
 
@@ -82,7 +84,7 @@ Stdout/stderr uniquement (`Services/logging/logger.js`). Les secrets sont masque
 
 ## Interface administrateur
 
-La page `/admin/services` interroge `GET /api/monitoring` toutes les cinq
+La page `/monitoring` interroge `GET /api/monitoring` toutes les cinq
 secondes. Elle est protegee par le role administrateur et affiche les services,
 les moteurs vocaux, le fallback OpenAI, les appels actifs et les alertes.
 

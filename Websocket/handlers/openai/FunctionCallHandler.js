@@ -61,10 +61,10 @@ export class FunctionCallHandler {
 
       switch (functionName) {
         case "check_availability":
-          result = await FunctionCallService.checkAvailability(args.date);
+          result = await FunctionCallService.checkAvailability(args.date, this.state.instanceId);
           break;
         case "create_appointment":
-          result = await FunctionCallService.createAppointment(args);
+          result = await FunctionCallService.createAppointment(args, this.state.instanceId);
           break;
         default:
           result = { error: `Fonction inconnue: ${functionName}` };

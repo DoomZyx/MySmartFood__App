@@ -1,6 +1,7 @@
 import { requireAuth } from "./sessionAuth.js";
 import { requireActiveSubscription, resolveTenant } from "./tenantContext.js";
 import { timingSafeEqualString } from "../utils/timingSafe.js";
+import { resolveRuntimeTenantId } from "../utils/runtimeTenant.js";
 import * as Tenant from "../models/pg/Tenant.js";
 
 const UUID_PATTERN =
@@ -18,10 +19,12 @@ export async function requireTenantAccess(request, reply) {
     request.headers["x-internal-secret"] || request.headers["x-api-key"];
 
   if (expected && provided && timingSafeEqualString(expected, provided)) {
-    const selector =
-      (typeof request.headers["x-tenant-id"] === "string" && request.headers["x-tenant-id"].trim()) ||
-      (typeof request.instanceId === "string" ? request.instanceId : "") ||
-      String(process.env.INSTANCE_ID || "").trim();
+    const selector = resolveRuntimeTenantId(
+      (typeof request.headers["x-tenant-id"] === "string" &&
+        request.headers["x-tenant-id"].trim()) ||
+        (typeof request.instanceId === "string" ? request.instanceId : "") ||
+        "",
+    );
     // Clé interne + inst_default : on laisse la session cookie résoudre le tenant.
     if (!UUID_PATTERN.test(selector)) {
       await requireAuth(request, reply);
