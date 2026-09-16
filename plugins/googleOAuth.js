@@ -144,7 +144,7 @@ export async function registerGoogleOAuth(fastify) {
     }
   });
 
-  fastify.get("/api/auth/google/callback", async (request, reply) => {
+  const handleGoogleCallback = async (request, reply) => {
     const returnTo = readCookie(request, OAUTH_RETURN_COOKIE) || siteUrl();
     const fail = (reason) => {
       logger.error({ err: reason }, "Callback Google");
@@ -216,5 +216,9 @@ export async function registerGoogleOAuth(fastify) {
     } catch (err) {
       return fail(err.message);
     }
-  });
+  };
+
+  // Chemin canonique + alias : Google Cloud Console pointe parfois vers /api/auth/callback.
+  fastify.get("/api/auth/google/callback", handleGoogleCallback);
+  fastify.get("/api/auth/callback", handleGoogleCallback);
 }

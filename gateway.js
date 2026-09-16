@@ -13,6 +13,7 @@ import fastifyFormBody from "@fastify/formbody";
 import fastifyWs from "@fastify/websocket";
 import "./Config/env.js";
 import { connectDatabase } from "./database/pool.js";
+import { assertRequiredSchema } from "./database/assertRequiredSchema.js";
 import { start as startAudioWorker } from "./workers/audioWorker.js";
 import { start as startLlmWorker } from "./workers/llmWorker.js";
 import logger from "./Services/logging/logger.js";
@@ -47,6 +48,7 @@ if (cluster.isPrimary) {
  */
 async function startGatewayServer() {
   await connectDatabase();
+  await assertRequiredSchema();
   const fastify = Fastify({
     logger: {
       level: process.env.LOG_LEVEL || "info",

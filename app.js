@@ -17,6 +17,7 @@ import notificationRoutes from "./Routes/Ws/notifications.js";
 import pingRoutes from "./Routes/Ping/ping.js";
 import monitoringRoutes from "./Routes/Monitoring/monitoring.js";
 import { connectDatabase } from "./database/pool.js";
+import { assertRequiredSchema } from "./database/assertRequiredSchema.js";
 import { registerSecurityPlugins, buildCorsOrigin } from "./plugins/security.js";
 import { registerGoogleOAuth } from "./plugins/googleOAuth.js";
 import accountAuthRoutes from "./Routes/Auth/accountAuth.js";
@@ -52,6 +53,7 @@ if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL manquant : PostgreSQL est obligatoire");
 }
 await connectDatabase();
+await assertRequiredSchema();
 
 // audit-fix: exiger variables critiques au démarrage (pas de fallback en prod)
 const requiredEnv = [
