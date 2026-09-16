@@ -18,10 +18,18 @@ describe("voiceWebhookUrl", () => {
     resetVoicePublicHostCache();
   });
 
-  it("construit le webhook unique sans slug", () => {
+  it("construit le webhook isole par slug", () => {
     delete process.env.VOICE_GATEWAY_PUBLIC_HOST;
     process.env.PUBLIC_HOST = "https://tunnel.example";
     expect(voiceWebhookUrl("chez-test")).toBe(
+      "https://tunnel.example/twilio/chez-test/incoming-call"
+    );
+  });
+
+  it("ignore un slug invalide et retombe sur le webhook unique", () => {
+    delete process.env.VOICE_GATEWAY_PUBLIC_HOST;
+    process.env.PUBLIC_HOST = "https://tunnel.example";
+    expect(voiceWebhookUrl("../admin")).toBe(
       "https://tunnel.example/twilio/incoming-call"
     );
   });
@@ -53,7 +61,7 @@ describe("voiceWebhookUrl", () => {
     delete process.env.VOICE_GATEWAY_PUBLIC_HOST;
     process.env.PUBLIC_HOST = "https://tunnel.example";
     await expect(incomingNumberVoiceUpdate("chez-test")).resolves.toEqual({
-      voiceUrl: "https://tunnel.example/twilio/incoming-call",
+      voiceUrl: "https://tunnel.example/twilio/chez-test/incoming-call",
       voiceMethod: "POST",
       voiceApplicationSid: "",
       trunkSid: "",

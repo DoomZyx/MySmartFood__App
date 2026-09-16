@@ -1,6 +1,6 @@
 /**
- * Webhook vocal Twilio unique : le numéro appelé identifie le restaurant.
- * Un seul tunnel public (ngrok → API 8080) suffit en local.
+ * Webhook vocal Twilio par établissement : /twilio/:slug/incoming-call.
+ * Le numéro appelé doit appartenir à ce slug (isolation).
  */
 
 function trimHost(value) {
@@ -75,9 +75,19 @@ export async function resolveVoicePublicHost() {
   return host;
 }
 
-export function voiceWebhookUrl(_slug, host = process.env.VOICE_GATEWAY_PUBLIC_HOST || process.env.PUBLIC_HOST || "") {
+export function sanitizeTenantSlug(value) {
+  const text = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(text)) return null;
+  return text;
+}
+
+export function voiceWebhookUrl(slug, host = process.env.VOICE_GATEWAY_PUBLIC_HOST || process.env.PUBLIC_HOST || "") {
   const resolved = trimHost(host);
   if (!resolved) return null;
+  const safeSlug = sanitizeTenantSlug(slug);
+  if (safeSlug) return `${resolved}/twilio/${safeSlug}/incoming-call`;
   return `${resolved}/twilio/incoming-call`;
 }
 

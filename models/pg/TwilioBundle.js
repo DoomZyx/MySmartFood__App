@@ -1,5 +1,6 @@
 import { getPool } from "../../database/pool.js";
 import { toCamelCase } from "../../utils/rowMapper.js";
+import { sanitizeTenantSlug } from "../../utils/voiceWebhookUrl.js";
 
 export async function upsertBundle(data) {
   const result = await getPool().query(
@@ -33,6 +34,22 @@ function normalizeInboundPhone(value) {
 
 export async function findTenantForInboundCall({ phoneNumber, slug } = {}) {
   const to = normalizeInboundPhone(phoneNumber);
+  const safeSlug = sanitizeTenantSlug(slug);
+
+  if (to && safeSlug) {
+    const matched = await getPool().query(
+      `SELECT t.id, t.slug, t.status, b.phone_number AS "phoneNumber"
+         FROM twilio_bundles b
+         JOIN tenants t ON t.id = b.tenant_id
+        WHERE regexp_replace(COALESCE(b.phone_number, ''), '[^0-9+]', '', 'g') = $1
+          AND t.slug = $2
+          AND t.status <> 'closed'
+        LIMIT 1`,
+      [to, safeSlug]
+    );
+    return matched.rows[0] ? toCamelCase(matched.rows[0]) : null;
+  }
+
   if (to) {
     const byPhone = await getPool().query(
       `SELECT t.id, t.slug, t.status, b.phone_number AS "phoneNumber"
@@ -45,7 +62,7 @@ export async function findTenantForInboundCall({ phoneNumber, slug } = {}) {
     );
     if (byPhone.rows[0]) return toCamelCase(byPhone.rows[0]);
   }
-  const safeSlug = String(slug || "").trim();
+
   if (safeSlug) {
     const bySlug = await getPool().query(
       `SELECT t.id, t.slug, t.status
