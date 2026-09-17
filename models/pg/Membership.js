@@ -5,7 +5,8 @@ export async function listByUserId(userId) {
   const result = await getPool().query(
     `SELECT m.id, m.tenant_id AS "tenantId", m.user_id AS "userId", m.role,
             m.phone, m.job_title AS "jobTitle", m.department,
-            t.slug, t.name, t.status, t.country_code AS "countryCode"
+            t.slug, t.name, t.status, t.country_code AS "countryCode",
+            t.onboarded_by AS "onboardedBy"
        FROM tenant_memberships m
        JOIN tenants t ON t.id = m.tenant_id
       WHERE m.user_id = $1
@@ -19,7 +20,8 @@ export async function findMembership(userId, tenantId) {
   const result = await getPool().query(
     `SELECT m.id, m.tenant_id AS "tenantId", m.user_id AS "userId", m.role,
             m.phone, m.job_title AS "jobTitle", m.department,
-            t.slug, t.name, t.status, t.country_code AS "countryCode"
+            t.slug, t.name, t.status, t.country_code AS "countryCode",
+            t.onboarded_by AS "onboardedBy"
        FROM tenant_memberships m
        JOIN tenants t ON t.id = m.tenant_id
       WHERE m.user_id = $1 AND m.tenant_id = $2

@@ -1,7 +1,10 @@
 import * as Membership from "../models/pg/Membership.js";
 import * as Subscription from "../models/pg/Subscription.js";
 import * as EstablishmentProfile from "../models/pg/EstablishmentProfile.js";
-import { isPaidSubscription } from "../Business/services/RestaurantDashboardAccess.js";
+import {
+  isPaidSubscription,
+  isRestaurantDashboardReady,
+} from "../Business/services/RestaurantDashboardAccess.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -53,6 +56,7 @@ export async function resolveTenant(request, reply) {
     name: membership.name,
     status: membership.status,
     role: membership.role,
+    onboardedBy: membership.onboardedBy || "self",
   };
   request.instanceId = membership.tenantId;
 }
@@ -88,14 +92,19 @@ export async function requireRestaurantDashboard(request, reply) {
     await requireActiveSubscription(request, reply);
     if (reply.sent) return;
   }
+  const profile = await EstablishmentProfile.findByTenantId(request.tenant.id);
+  if (isRestaurantDashboardReady(
+    request.subscription,
+    profile?.documentsSubmittedAt,
+    request.tenant
+  )) {
+    return;
+  }
   if (!isPaidSubscription(request.subscription)) {
     return reply.code(402).send({ error: "Abonnement non réglé" });
   }
-  const profile = await EstablishmentProfile.findByTenantId(request.tenant.id);
-  if (!profile?.documentsSubmittedAt) {
-    return reply.code(403).send({
-      error: "Dossier établissement incomplet",
-      message: "Transmettez les informations et pièces demandées dans Mon espace.",
-    });
-  }
+  return reply.code(403).send({
+    error: "Dossier établissement incomplet",
+    message: "Transmettez les informations et pièces demandées dans Mon espace.",
+  });
 }

@@ -9,7 +9,7 @@ import { websitePlanIdFromSlug } from "../mappers/websitePlan.js";
 import { dashboardUrl } from "../../utils/publicUrls.js";
 import { decryptGoogleId } from "../../utils/accountIdentifierCrypto.js";
 import {
-  isPaidSubscription,
+  hasActiveRestaurantAccess,
   isRestaurantDashboardReady,
 } from "./RestaurantDashboardAccess.js";
 
@@ -130,6 +130,7 @@ export async function sessionPayload(user) {
     name: item.name,
     role: item.role,
     status: item.status,
+    onboardedBy: item.onboardedBy || "self",
   }));
   const first = tenants.find((item) => item.status === "active") || tenants[0] || null;
   let planSlug = null;
@@ -148,10 +149,11 @@ export async function sessionPayload(user) {
     const profile = await EstablishmentProfile.findByTenantId(first.id);
     twilioDocsSubmittedAt = profile?.documentsSubmittedAt || null;
   }
-  const hasActiveSubscription = isPaidSubscription(subscription);
+  const hasActiveSubscription = hasActiveRestaurantAccess(subscription, first);
   const accessUnlocked = isRestaurantDashboardReady(
     subscription,
-    twilioDocsSubmittedAt
+    twilioDocsSubmittedAt,
+    first
   );
   const publicUser = User.publicUser(user);
   return {

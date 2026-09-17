@@ -2,7 +2,9 @@ import {
   activateTenant,
   assignInboundNumber,
   closeTenant,
+  createPlatformTenant,
   getInbox,
+  updatePlatformTenant,
   getTenant,
   listTenants,
   rejectTenant,
@@ -36,6 +38,24 @@ export const PlatformOnboardingController = {
     try {
       const tenant = await getTenant(request.params.tenantId);
       return reply.send({ tenant });
+    } catch (error) {
+      return handleError(error, reply);
+    }
+  },
+
+  async create(request, reply) {
+    try {
+      const result = await createPlatformTenant(request.body);
+      return reply.code(201).send(result);
+    } catch (error) {
+      return handleError(error, reply);
+    }
+  },
+
+  async update(request, reply) {
+    try {
+      const result = await updatePlatformTenant(request.params.tenantId, request.body);
+      return reply.send(result);
     } catch (error) {
       return handleError(error, reply);
     }

@@ -4,8 +4,9 @@ import { toCamelCase } from "../../utils/rowMapper.js";
 export async function findById(id) {
   const result = await getPool().query(
     `SELECT id, slug, name, status, country_code AS "countryCode",
-            owner_user_id AS "ownerUserId", activated_at AS "activatedAt",
-            created_at AS "createdAt"
+            owner_user_id AS "ownerUserId", onboarded_by AS "onboardedBy",
+            openai_api_key AS "openaiApiKey", openai_model AS "openaiModel",
+            activated_at AS "activatedAt", created_at AS "createdAt"
        FROM tenants WHERE id = $1`,
     [id]
   );
@@ -14,22 +15,66 @@ export async function findById(id) {
 
 export async function findBySlug(slug) {
   const result = await getPool().query(
-    `SELECT id, slug, name, status, country_code AS "countryCode"
+    `SELECT id, slug, name, status, country_code AS "countryCode",
+            onboarded_by AS "onboardedBy"
        FROM tenants WHERE slug = $1`,
     [slug]
   );
   return result.rows[0] ? toCamelCase(result.rows[0]) : null;
 }
 
-export async function createTenant(client, { slug, name, ownerUserId, countryCode = "FR", status = "pending_payment" }) {
+export async function createTenant(client, {
+  slug,
+  name,
+  ownerUserId,
+  countryCode = "FR",
+  status = "pending_payment",
+  onboardedBy = "self",
+}) {
   const db = client || getPool();
   const result = await db.query(
-    `INSERT INTO tenants (slug, name, owner_user_id, country_code, status)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING id, slug, name, status, country_code AS "countryCode", owner_user_id AS "ownerUserId"`,
-    [slug, name, ownerUserId, countryCode, status]
+    `INSERT INTO tenants (
+        slug, name, owner_user_id, country_code, status, onboarded_by, activated_at
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $5 = 'active' THEN NOW() ELSE NULL END)
+     RETURNING id, slug, name, status, country_code AS "countryCode",
+               owner_user_id AS "ownerUserId", onboarded_by AS "onboardedBy"`,
+    [slug, name, ownerUserId, countryCode, status, onboardedBy]
   );
   return toCamelCase(result.rows[0]);
+}
+
+export async function updateDetails(client, tenantId, { name, countryCode } = {}) {
+  const db = client || getPool();
+  const result = await db.query(
+    `UPDATE tenants
+        SET name = COALESCE($2, name),
+            country_code = COALESCE($3, country_code)
+      WHERE id = $1 AND status <> 'closed'
+      RETURNING id`,
+    [tenantId, name || null, countryCode || null]
+  );
+  return result.rowCount > 0;
+}
+
+export async function updateOpenAi(client, tenantId, { apiKey, model } = {}) {
+  const db = client || getPool();
+  const sets = [];
+  const values = [tenantId];
+  if (apiKey !== undefined) {
+    values.push(apiKey);
+    sets.push(`openai_api_key = $${values.length}`);
+  }
+  if (model !== undefined) {
+    values.push(model);
+    sets.push(`openai_model = $${values.length}`);
+  }
+  if (sets.length === 0) return false;
+  const result = await db.query(
+    `UPDATE tenants SET ${sets.join(", ")} WHERE id = $1 AND status <> 'closed' RETURNING id`,
+    values
+  );
+  return result.rowCount > 0;
 }
 
 export async function updateStatus(client, tenantId, status, extra = {}) {
@@ -46,8 +91,10 @@ export async function updateStatus(client, tenantId, status, extra = {}) {
 
 const PLATFORM_TENANT_SELECT = `
   t.id, t.slug, t.name, t.status, t.country_code AS "countryCode",
-  t.owner_user_id AS "ownerUserId", t.created_at AS "createdAt",
-  t.activated_at AS "activatedAt",
+  t.owner_user_id AS "ownerUserId", t.onboarded_by AS "onboardedBy",
+  t.created_at AS "createdAt", t.activated_at AS "activatedAt",
+  (t.openai_api_key IS NOT NULL AND btrim(t.openai_api_key) <> '') AS "openaiKeyConfigured",
+  t.openai_model AS "openaiModel",
   u.email AS "ownerEmail", u.name AS "ownerName",
   p.slug AS "planSlug", p.name AS "planName",
   s.status AS "subscriptionStatus",
@@ -55,7 +102,12 @@ const PLATFORM_TENANT_SELECT = `
   b.phone_number AS "phoneNumber", b.phone_number_sid AS "phoneNumberSid",
   b.status AS "bundleStatus",
   ep.phone AS "restaurantPhone", ep.business_name AS "businessName",
-  ep.documents_submitted_at AS "documentsSubmittedAt"
+  ep.address_line AS "addressLine", ep.postal_code AS "postalCode",
+  ep.city, ep.country AS "profileCountry", ep.email AS "restaurantEmail",
+  ep.seat_count AS "seatCount", ep.cuisine_type AS "cuisineType",
+  ep.phone_number_usage AS "phoneNumberUsage",
+  ep.documents_submitted_at AS "documentsSubmittedAt",
+  docs.document_kinds AS "documentKinds"
 `;
 
 const PLATFORM_TENANT_JOINS = `
@@ -78,6 +130,11 @@ const PLATFORM_TENANT_JOINS = `
      LIMIT 1
   ) b ON TRUE
   LEFT JOIN establishment_profiles ep ON ep.tenant_id = t.id
+  LEFT JOIN LATERAL (
+    SELECT COALESCE(array_agg(kind ORDER BY kind), ARRAY[]::text[]) AS document_kinds
+      FROM onboarding_documents d
+     WHERE d.tenant_id = t.id AND d.purged_at IS NULL
+  ) docs ON TRUE
 `;
 
 export async function findForPlatform(tenantId) {

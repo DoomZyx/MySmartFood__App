@@ -7,6 +7,27 @@ const TENANT_ID = {
   format: "uuid",
 };
 
+const TENANT_BODY_PROPERTIES = {
+  email: { type: "string", format: "email", maxLength: 255 },
+  password: { type: "string", minLength: 8, maxLength: 128 },
+  name: { type: "string", minLength: 1, maxLength: 200 },
+  ownerName: { type: "string", maxLength: 120 },
+  countryCode: { type: "string", enum: ["FR", "BE", "LU"] },
+  country: { type: "string", maxLength: 100 },
+  addressLine: { type: "string", maxLength: 300 },
+  postalCode: { type: "string", maxLength: 20 },
+  city: { type: "string", maxLength: 100 },
+  restaurantPhone: { type: "string", maxLength: 30 },
+  restaurantEmail: { type: "string", format: "email", maxLength: 255 },
+  seatCount: { type: "integer", minimum: 1, maximum: 999 },
+  cuisineType: { type: "string", maxLength: 100 },
+  phoneNumberUsage: { type: "string", maxLength: 2000 },
+  phoneNumber: { type: "string", maxLength: 20 },
+  phoneNumberSid: { type: "string", maxLength: 40 },
+  openaiApiKey: { type: "string", maxLength: 256 },
+  openaiModel: { type: "string", maxLength: 80 },
+};
+
 export default async function platformAdminRoutes(fastify) {
   fastify.addHook("preHandler", requirePlatformAdmin);
   const csrf = fastify.csrfProtection ? [fastify.csrfProtection] : [];
@@ -38,6 +59,36 @@ export default async function platformAdminRoutes(fastify) {
       },
     },
     handler: PlatformOnboardingController.get,
+  });
+
+  fastify.post("/tenants", {
+    onRequest: csrf,
+    config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    schema: {
+      body: {
+        type: "object",
+        required: ["email", "password", "name"],
+        properties: TENANT_BODY_PROPERTIES,
+      },
+    },
+    handler: PlatformOnboardingController.create,
+  });
+
+  fastify.patch("/tenants/:tenantId", {
+    onRequest: csrf,
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    schema: {
+      params: {
+        type: "object",
+        required: ["tenantId"],
+        properties: { tenantId: TENANT_ID },
+      },
+      body: {
+        type: "object",
+        properties: TENANT_BODY_PROPERTIES,
+      },
+    },
+    handler: PlatformOnboardingController.update,
   });
 
   fastify.post("/tenants/:tenantId/assign-phone", {

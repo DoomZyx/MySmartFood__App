@@ -1,0 +1,3 @@
+ALTER TABLE tenants
+  ADD COLUMN IF NOT EXISTS openai_api_key TEXT,
+  ADD COLUMN IF NOT EXISTS openai_model TEXT;

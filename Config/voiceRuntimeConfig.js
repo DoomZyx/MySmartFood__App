@@ -8,6 +8,8 @@ import { getSessionUpdatePayload } from "../Services/gptServices/gptServices.js"
 import { callLogger } from "../Services/logging/logger.js";
 import { ensureDefaults } from "../Business/services/MenuCatalogService.js";
 import { resolveRuntimeTenantId } from "../utils/runtimeTenant.js";
+import * as Tenant from "../models/pg/Tenant.js";
+import { resolveOpenAiCredentials } from "./openaiModels.js";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -53,11 +55,11 @@ export async function getVoiceRuntimeConfig(instanceId) {
     pricing?.settings?.voiceName ||
     process.env.OPENAI_VOICE?.trim() ||
     "ballad";
-  const model =
-    pricing?.settings?.voiceModel ||
-    process.env.OPENAI_MODEL?.trim() ||
-    "gpt-realtime-1.5";
-  const apiKey = process.env.OPENAI_API_KEY;
+  const tenant = UUID_PATTERN.test(id) ? await Tenant.findById(id) : null;
+  const { apiKey, model } = resolveOpenAiCredentials({
+    tenant,
+    settings: pricing?.settings,
+  });
   const sessionUpdatePayload = {
     type: "session.update",
     session: getSessionUpdatePayload(voice, enrichedInstructions),
