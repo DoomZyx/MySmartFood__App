@@ -4,13 +4,14 @@ import { useDemoModal } from "../../../contexts/DemoModalContext";
 import { useLoginModal } from "../../../contexts/LoginModalContext";
 import { useAuth } from "../../../hooks/useAuth";
 import { dashboardHomeHref } from "../../../utils/dashboardPath";
+import { PLATFORM_ADMIN_PATH } from "../../../utils/platformAdminPath";
 import "./HeaderActions.scss";
 
 const HeaderActions = () => {
   const { openDemoModal } = useDemoModal();
   const { openLoginModal } = useLoginModal();
   const { isAuthenticated, logout, user } = useAuth();
-  const showDashboard = Boolean(user?.isPlatformAdmin || user?.accessUnlocked);
+  const showDashboard = Boolean(user?.accessUnlocked);
 
   return (
     <div className={`header-actions${isAuthenticated ? " header-actions--authenticated" : ""}`}>
@@ -23,6 +24,11 @@ const HeaderActions = () => {
             <a href={dashboardHomeHref()} className="header-text-link">
               Tableau de bord
             </a>
+          )}
+          {user?.isPlatformAdmin && (
+            <Link to={PLATFORM_ADMIN_PATH} className="header-text-link">
+              Back-office
+            </Link>
           )}
           <button type="button" className="header-text-link header-text-link--button" onClick={logout}>
             Déconnexion

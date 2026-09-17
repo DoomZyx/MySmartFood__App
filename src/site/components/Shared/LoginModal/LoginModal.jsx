@@ -8,8 +8,8 @@ import {
   registerApi,
   loginWithGoogle,
 } from "../../../services/authService";
-import { canOpenDashboard } from "../../../services/syncDashboardSession";
-import { DASHBOARD_PATH, openDashboard } from "../../../utils/dashboardPath";
+import { followSiteAuthPath, isPlatformAdminUser } from "@shared/postSiteAuthPath";
+import AuthSuccessModal from "../AuthSuccessModal/AuthSuccessModal";
 import "./LoginModal.scss";
 
 const LoginModal = ({ isOpen, onClose }) => {
@@ -22,6 +22,7 @@ const LoginModal = ({ isOpen, onClose }) => {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [successUser, setSuccessUser] = useState(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -30,27 +31,18 @@ const LoginModal = ({ isOpen, onClose }) => {
       setConfirmPassword("");
       setError("");
       setIsRegisterMode(false);
+      setSuccessUser(null);
+      return;
     }
-  }, [isOpen]);
+    if (loginIntent?.error === "auth_failed") {
+      setError("La connexion Google a échoué. Réessayez depuis cette fenêtre.");
+    }
+  }, [isOpen, loginIntent]);
 
   const finishAuth = (user) => {
     setAuth(user);
     onClose();
-    if (loginIntent?.planId) {
-      navigate(`/onboarding?planId=${loginIntent.planId}`, { replace: true });
-    } else if (
-      canOpenDashboard(user) &&
-      (loginIntent?.from?.pathname?.startsWith("/app") ||
-        loginIntent?.from?.pathname?.startsWith(DASHBOARD_PATH))
-    ) {
-      navigate(loginIntent.from.pathname, { replace: true });
-    } else if (canOpenDashboard(user)) {
-      openDashboard(navigate);
-    } else if (loginIntent?.from?.pathname) {
-      navigate(loginIntent.from.pathname, { replace: true });
-    } else {
-      navigate("/mon-espace", { replace: true });
-    }
+    followSiteAuthPath(navigate, user, loginIntent);
   };
 
   const handleSubmit = async (e) => {
@@ -79,7 +71,13 @@ const LoginModal = ({ isOpen, onClose }) => {
       const user = isRegisterMode
         ? await registerApi(email.trim(), password)
         : await loginWithEmailPassword(email.trim(), password);
-      finishAuth(user);
+      setAuth(user);
+      if (isPlatformAdminUser(user)) {
+        onClose();
+        followSiteAuthPath(navigate, user, loginIntent);
+        return;
+      }
+      setSuccessUser(user);
     } catch (err) {
       setError(err.message || (isRegisterMode ? "Inscription impossible." : "Connexion impossible."));
     } finally {
@@ -113,6 +111,17 @@ const LoginModal = ({ isOpen, onClose }) => {
       document.body.style.overflow = "unset";
     };
   }, [isOpen, handleClose]);
+
+  if (successUser) {
+    return (
+      <AuthSuccessModal
+        isOpen
+        email={successUser.email}
+        title={isRegisterMode ? "Compte créé" : "Connexion réussie"}
+        onContinue={() => finishAuth(successUser)}
+      />
+    );
+  }
 
   if (!isOpen) return null;
 

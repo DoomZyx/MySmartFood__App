@@ -115,7 +115,7 @@ export function isAdmin() {
 export function hasDashboardAccess(session) {
   const user = session?.user || session || getCurrentUser();
   if (!user) return false;
-  if (user.isPlatformAdmin || user.role === "admin" || user.role === "owner") return true;
+  if (user.role === "admin" || user.role === "owner") return true;
   return Boolean(user.accessUnlocked || user.dashboardUnlockedAt);
 }
 

@@ -4,6 +4,7 @@ import {
   assignPlatformPhone,
   closePlatformTenant,
   confirmPlatformTotp,
+  elevateDevPlatformAdmin,
   fetchPlatformChallenge,
   fetchPlatformInbox,
   fetchPlatformSession,
@@ -39,6 +40,12 @@ export function usePlatformAdmin() {
         setTotpStep(null);
         return { elevated: true };
       }
+      const devSession = await elevateDevPlatformAdmin();
+      if (devSession?.platformVerified) {
+        setElevated(true);
+        setTotpStep(null);
+        return { elevated: true };
+      }
       const challenge = await fetchPlatformChallenge();
       setElevated(false);
       setTotpStep(challenge?.totpStep || null);
@@ -55,8 +62,13 @@ export function usePlatformAdmin() {
   const login = async ({ email, password, accessCode }) => {
     setError(null);
     const data = await loginPlatformAdmin({ email, password, accessCode });
-    setElevated(false);
-    setTotpStep(data.totpStep || null);
+    if (data.platformVerified) {
+      setElevated(true);
+      setTotpStep(null);
+    } else {
+      setElevated(false);
+      setTotpStep(data.totpStep || null);
+    }
     return data;
   };
 

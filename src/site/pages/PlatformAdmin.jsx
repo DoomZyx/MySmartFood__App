@@ -3,6 +3,7 @@ import { PageContainer, Hero, Section } from "../components";
 import { useAuth } from "../hooks/useAuth";
 import { usePlatformAdmin } from "../hooks/usePlatformAdmin";
 import { startPlatformGoogleLogin } from "../services/platformAdminService";
+import AuthSuccessModal from "../components/Shared/AuthSuccessModal/AuthSuccessModal";
 import "./PlatformAdmin.scss";
 
 const STATUS_LABELS = {
@@ -32,7 +33,7 @@ function formatDate(value) {
 }
 
 const PlatformAdmin = () => {
-  const { setAuth } = useAuth();
+  const { setAuth, user: authUser } = useAuth();
   const {
     tenants,
     fleet,
@@ -70,6 +71,8 @@ const PlatformAdmin = () => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [totpToken, setTotpToken] = useState("");
   const [oauthDenied, setOauthDenied] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const isDevBypass = import.meta.env.DEV;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -108,6 +111,12 @@ const PlatformAdmin = () => {
       setAuth(data.user);
       setPassword("");
       setAccessCode("");
+      if (data.platformVerified) {
+        setShowSuccess(true);
+        await loadInbox();
+        await loadFleet();
+        return;
+      }
       if (data.totpStep === "enroll") {
         await loadTotpSetup();
       }
@@ -126,6 +135,7 @@ const PlatformAdmin = () => {
       const user = await finishTotp(totpToken.trim());
       setAuth(user);
       setTotpToken("");
+      setShowSuccess(true);
       await loadInbox();
       await loadFleet();
     } catch (err) {
@@ -146,12 +156,13 @@ const PlatformAdmin = () => {
   if (!elevated) {
     return (
       <PageContainer>
-        <Hero
-          title="Back-office"
-          gradientText="sécurisé"
-          description="OAuth Google ou mot de passe, puis code Authenticator."
-        />
         <Section variant="alt">
+          <h1 className="platform-admin-login-title">Back-office MySmartFood</h1>
+          <p className="platform-admin-login-copy">
+            {isDevBypass
+              ? "En local : e-mail et mot de passe du compte admin plateforme suffisent."
+              : "Compte admin plateforme, code d'accès, puis Authenticator. N'utilisez pas le bouton Se connecter de la vitrine."}
+          </p>
           {totpStep ? (
             <form className="platform-admin-login" onSubmit={handleTotp}>
               {totpStep === "enroll" && totpSetup?.qrDataUrl && (
@@ -211,17 +222,21 @@ const PlatformAdmin = () => {
                 required
                 disabled={isLoggingIn}
               />
-              <label htmlFor="platform-access-code">Code d'accès</label>
-              <input
-                id="platform-access-code"
-                type="password"
-                value={accessCode}
-                onChange={(event) => setAccessCode(event.target.value)}
-                autoComplete="one-time-code"
-                required
-                minLength={8}
-                disabled={isLoggingIn}
-              />
+              {!isDevBypass && (
+                <>
+                  <label htmlFor="platform-access-code">Code d'accès</label>
+                  <input
+                    id="platform-access-code"
+                    type="password"
+                    value={accessCode}
+                    onChange={(event) => setAccessCode(event.target.value)}
+                    autoComplete="one-time-code"
+                    required
+                    minLength={8}
+                    disabled={isLoggingIn}
+                  />
+                </>
+              )}
               {(loginError || oauthDenied) && (
                 <p className="platform-admin-error" role="alert">
                   {loginError || "Connexion Google refusée pour le back-office."}
@@ -311,6 +326,13 @@ const PlatformAdmin = () => {
 
   return (
     <PageContainer>
+      {showSuccess && (
+        <AuthSuccessModal
+          isOpen
+          email={authUser?.email || email}
+          onContinue={() => setShowSuccess(false)}
+        />
+      )}
       <Hero
         title="Back-office"
         gradientText="demandes"

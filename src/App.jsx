@@ -20,12 +20,14 @@ import {
   ServiceIATelephonique,
   FonctionnalitesPrevues,
   Onboarding,
-  PlatformAdmin,
   ProtectedRoute as WebsiteProtectedRoute,
 } from "./app/WebsiteRoot";
-import { PLATFORM_ADMIN_PATH } from "@shared/platformAdminPath";
+import { PLATFORM_ADMIN_PATH, isPlatformAdminPath } from "@shared/platformAdminPath";
 import { DASHBOARD_PATH, openDashboard } from "@shared/dashboardPath";
 import { isDashboardPath, useWebsiteStyles } from "./app/WebsiteRoot";
+import { PlatformAdminScreen } from "./site/components/Shared/PlatformAdminShell/PlatformAdminShell";
+import { useAuth } from "./site/hooks/useAuth";
+import { isPlatformAdminUser } from "@shared/postSiteAuthPath";
 const DashboardRoot = lazy(() =>
   import("./app/DashboardRoot").then((mod) => ({ default: mod.DashboardRoot }))
 );
@@ -39,6 +41,31 @@ const ReservationsPage = lazy(() => import("./dashboard/Pages/ReservationsPage/R
 const Configuration = lazy(() => import("./dashboard/Pages/Configuration/Configuration"));
 
 const FLASH_ERROR_KEY = "app_flash_error";
+
+const PLATFORM_ADMIN_ENTRY_PATHS = new Set(["/", "/login", "/register", "/mon-espace", "/app"]);
+
+function UnknownRoute() {
+  const { pathname } = useLocation();
+  if (isPlatformAdminPath(pathname)) {
+    return <Navigate to={PLATFORM_ADMIN_PATH} replace />;
+  }
+  return <Navigate to="/" replace />;
+}
+
+function PlatformAdminEntryRedirect() {
+  const { user, isInitialized } = useAuth();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isInitialized || !isPlatformAdminUser(user)) return;
+    if (isPlatformAdminPath(pathname)) return;
+    if (!PLATFORM_ADMIN_ENTRY_PATHS.has(pathname)) return;
+    navigate(PLATFORM_ADMIN_PATH, { replace: true });
+  }, [isInitialized, user, pathname, navigate]);
+
+  return null;
+}
 
 function DashboardEntry() {
   const navigate = useNavigate();
@@ -111,8 +138,12 @@ function App() {
         </div>
       )}
       <WebsiteProviders>
+        <PlatformAdminEntryRedirect />
         <Suspense fallback={null}>
           <Routes>
+            <Route path="/bf-admin" element={<PlatformAdminScreen />} />
+            <Route path="/x/bXlzbWFydGZvb2QtcGxhdGZvcm0tYWRtaW4" element={<PlatformAdminScreen />} />
+
             <Route element={<StyledWebsiteLayout />}>
               <Route path="/" element={<Home />} />
               <Route path="/services" element={<Services />} />
@@ -127,6 +158,7 @@ function App() {
               <Route path="/register" element={<LoginRedirect />} />
               <Route path="/api/auth/google" element={<GoogleStartRedirect />} />
               <Route path="/api/auth/callback" element={<AuthCallback />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/api/auth/google/callback" element={<GoogleCallbackRedirect />} />
               <Route path="/access" element={<Access />} />
               <Route
@@ -145,7 +177,6 @@ function App() {
                   </WebsiteProtectedRoute>
                 }
               />
-              <Route path={PLATFORM_ADMIN_PATH} element={<PlatformAdmin />} />
             </Route>
 
             <Route path="/app" element={<DashboardEntry />} />
@@ -213,7 +244,7 @@ function App() {
               />
             </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<UnknownRoute />} />
           </Routes>
         </Suspense>
       </WebsiteProviders>

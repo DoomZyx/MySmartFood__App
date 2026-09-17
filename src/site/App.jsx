@@ -33,7 +33,7 @@ import ServiceIATelephonique from "./pages/ServiceIATelephonique";
 import FonctionnalitesPrevues from "./pages/FonctionnalitesPrevues";
 import Onboarding from "./pages/Onboarding";
 import PlatformAdmin from "./pages/PlatformAdmin";
-import { PLATFORM_ADMIN_PATH } from "./utils/platformAdminPath";
+import { PLATFORM_ADMIN_PATH, isPlatformAdminPath } from "./utils/platformAdminPath";
 import { openDashboard } from "./utils/dashboardPath";
 import { apiBaseUrl } from "./services/apiBase";
 
@@ -82,11 +82,19 @@ export function LoginRedirect() {
   const { openLoginModal } = useLoginModal();
 
   useEffect(() => {
+    const from = location.state?.from;
+    const fromPath = typeof from?.pathname === "string" ? from.pathname : "";
+    if (isPlatformAdminPath(fromPath)) {
+      navigate(fromPath || PLATFORM_ADMIN_PATH, { replace: true });
+      return;
+    }
     const planIdParam = searchParams.get("planId");
     const planId = planIdParam ? parseInt(planIdParam, 10) : undefined;
+    const authError = searchParams.get("error");
     openLoginModal({
       planId: Number.isInteger(planId) ? planId : undefined,
-      from: location.state?.from,
+      from,
+      error: authError,
     });
     navigate("/", { replace: true });
   }, [location.state?.from, searchParams, openLoginModal, navigate]);
@@ -159,9 +167,10 @@ function AppContent() {
             </ProtectedRoute>
           }
         />
-        <Route path={PLATFORM_ADMIN_PATH} element={<PlatformAdmin />} />
         <Route path="/app" element={<DashboardEntry />} />
       </Route>
+      <Route path="/bf-admin" element={<PlatformAdmin />} />
+      <Route path="/x/bXlzbWFydGZvb2QtcGxhdGZvcm0tYWRtaW4" element={<PlatformAdmin />} />
     </Routes>
   );
 }

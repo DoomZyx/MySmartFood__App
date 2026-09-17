@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { getCurrentUser } from "../services/authService";
-import { canOpenDashboard } from "../services/syncDashboardSession";
-import { openDashboard } from "../utils/dashboardPath";
+import { followSiteAuthPath, isPlatformAdminUser } from "@shared/postSiteAuthPath";
+import AuthSuccessModal from "../components/Shared/AuthSuccessModal/AuthSuccessModal";
 import "./AuthCallback.scss";
 
 /**
@@ -13,8 +13,9 @@ import "./AuthCallback.scss";
  */
 const AuthCallback = () => {
   const navigate = useNavigate();
-  const { setAuth, isAuthenticated, user } = useAuth();
+  const { setAuth, user } = useAuth();
   const [error, setError] = useState(null);
+  const [successUser, setSuccessUser] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -24,13 +25,11 @@ const AuthCallback = () => {
       if (cancelled) return;
       if (apiUser) {
         setAuth(apiUser);
-        if (canOpenDashboard(apiUser)) {
-          openDashboard(navigate);
-        } else {
-          navigate(apiUser.planId || apiUser.smartcrmInstanceId ? "/mon-espace" : "/onboarding", {
-            replace: true,
-          });
+        if (isPlatformAdminUser(apiUser)) {
+          followSiteAuthPath(navigate, apiUser);
+          return;
         }
+        setSuccessUser(apiUser);
       } else {
         setError("Échec de la connexion ou session expirée. Réessayez.");
       }
@@ -42,17 +41,21 @@ const AuthCallback = () => {
     };
   }, [setAuth, navigate]);
 
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      if (canOpenDashboard(user)) {
-        openDashboard(navigate);
-      } else {
-        navigate(user.planId || user.smartcrmInstanceId ? "/mon-espace" : "/onboarding", {
-          replace: true,
-        });
-      }
-    }
-  }, [isAuthenticated, user, navigate]);
+  const continueAfterSuccess = () => {
+    const current = successUser || user;
+    if (!current) return;
+    followSiteAuthPath(navigate, current);
+  };
+
+  if (successUser) {
+    return (
+      <AuthSuccessModal
+        isOpen
+        email={successUser.email}
+        onContinue={continueAfterSuccess}
+      />
+    );
+  }
 
   return (
     <div className="auth-callback">

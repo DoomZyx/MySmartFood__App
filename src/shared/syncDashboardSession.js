@@ -36,5 +36,5 @@ export function syncDashboardSession(user) {
 }
 
 export function canOpenDashboard(user) {
-  return Boolean(user?.isPlatformAdmin || user?.accessUnlocked || user?.dashboardUnlockedAt);
+  return Boolean(user?.accessUnlocked || user?.dashboardUnlockedAt);
 }

@@ -6,6 +6,7 @@ import { useDemoModal } from "../../contexts/DemoModalContext";
 import { useLoginModal } from "../../contexts/LoginModalContext";
 import { useAuth } from "../../hooks/useAuth";
 import { dashboardHomeHref } from "../../utils/dashboardPath";
+import { PLATFORM_ADMIN_PATH } from "../../utils/platformAdminPath";
 import "./Navigation.scss";
 
 const navItems = [
@@ -79,10 +80,15 @@ export function MobileNavMenu({ isOpen, onClose, menuRef }) {
               <Link to="/mon-espace" className="mobile-nav-link" onClick={onClose}>
                 Mon espace
               </Link>
-              {(user?.isPlatformAdmin || user?.accessUnlocked) && (
+              {user?.accessUnlocked && (
                 <a href={dashboardHomeHref()} className="mobile-nav-link" onClick={onClose}>
                   Tableau de bord
                 </a>
+              )}
+              {user?.isPlatformAdmin && (
+                <Link to={PLATFORM_ADMIN_PATH} className="mobile-nav-link" onClick={onClose}>
+                  Back-office
+                </Link>
               )}
               <button
                 type="button"

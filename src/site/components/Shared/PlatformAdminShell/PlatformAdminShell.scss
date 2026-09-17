@@ -1,0 +1,20 @@
+@use "../../../styles/variables" as *;
+
+.platform-admin-shell {
+  min-height: 100vh;
+  background: $bg-primary;
+  color: $text-primary;
+}
+
+.platform-admin-shell__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid $border-primary;
+  background: $bg-secondary;
+
+  span {
+    color: $text-muted;
+  }
+}

@@ -61,6 +61,23 @@ export function loginPlatformAdmin({ email, password, accessCode }) {
   });
 }
 
+export async function elevateDevPlatformAdmin() {
+  if (!import.meta.env.DEV) return null;
+  if (!API_BASE_URL) return null;
+  const response = await fetch(`${API_BASE_URL}/api/platform/dev-elevate`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (response.status === 401 || response.status === 403 || response.status === 404) {
+    return null;
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || data.message || "Élévation back-office refusée");
+  }
+  return data;
+}
+
 export function startPlatformGoogleLogin() {
   const base = apiBaseUrl();
   if (!base) {
