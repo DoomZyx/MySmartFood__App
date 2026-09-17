@@ -1,10 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 import { CreditCard, LayoutDashboard } from "lucide-react";
 import { PageContainer, Hero, Section } from "../components";
 import RestaurateurProfilForm from "../components/RestaurateurProfil/RestaurateurProfilForm";
 import { useAuth } from "../hooks/useAuth";
 import { usePricingData } from "../hooks/usePricingData";
-import { resendAccessEmailApi } from "../services/authService";
 import { canOpenDashboard } from "../services/syncDashboardSession";
 import { dashboardHomeHref } from "../utils/dashboardPath";
 import "./MonEspace.scss";
@@ -12,9 +11,6 @@ import "./MonEspace.scss";
 const MonEspace = () => {
   const { user } = useAuth();
   const { plans } = usePricingData();
-  const [resendError, setResendError] = useState("");
-  const [resendOk, setResendOk] = useState(false);
-  const [resending, setResending] = useState(false);
 
   const subscriptionLabel =
     user?.planName ||
@@ -24,8 +20,7 @@ const MonEspace = () => {
   const displaySubscription = subscriptionLabel || "Aucun abonnement actif";
   const hasAppAccess = canOpenDashboard(user);
   const hasTenant = Boolean(user?.smartcrmInstanceId || user?.planSlug || user?.hasActiveSubscription);
-  const waitingForToken = Boolean(user?.hasActiveSubscription) && !hasAppAccess;
-  const dossierPending = hasTenant && Boolean(user?.twilioDocsSubmittedAt) && !hasAppAccess;
+  const needsPayment = hasTenant && !user?.hasActiveSubscription;
   const needsDossier = hasTenant && !user?.twilioDocsSubmittedAt;
 
   return (
@@ -33,7 +28,7 @@ const MonEspace = () => {
       <Hero
         title="Mon "
         gradientText="espace"
-        description="Consultez votre abonnement, transmettez les pièces pour Twilio et les coordonnées de votre restaurant. L&apos;accès à l&apos;application sera activé après traitement manuel par notre équipe."
+        description="Consultez votre abonnement et transmettez les pièces demandées. Le tableau de bord reste fermé tant que le paiement Stripe et le dossier ne sont pas complets."
       />
       <Section variant="alt">
         <div className="mon-espace-form-wrapper">
@@ -66,45 +61,17 @@ const MonEspace = () => {
             </div>
           )}
 
-          {waitingForToken && (
+          {needsPayment && (
             <div className="mon-espace-instance-required">
               <LayoutDashboard className="mon-espace-instance-required-icon" />
               <div className="mon-espace-instance-required-content">
                 <h3 className="mon-espace-instance-required-title">
-                  Lien d&apos;accès
+                  Paiement requis
                 </h3>
                 <p className="mon-espace-instance-required-desc">
-                  Un e-mail avec un lien d&apos;accès a été envoyé après le paiement.
-                  Ouvrez-le pour activer le tableau de bord.
+                  Le tableau de bord s&apos;ouvre seulement après un abonnement
+                  Stripe réglé. Choisissez une offre dans Tarifs pour payer.
                 </p>
-                {resendOk && (
-                  <p className="mon-espace-instance-required-desc">
-                    Un nouveau lien a été envoyé.
-                  </p>
-                )}
-                {resendError && (
-                  <p className="mon-espace-instance-required-desc">{resendError}</p>
-                )}
-                <button
-                  type="button"
-                  className="mon-espace-app-access-link"
-                  disabled={resending}
-                  onClick={async () => {
-                    setResendError("");
-                    setResendOk(false);
-                    setResending(true);
-                    try {
-                      await resendAccessEmailApi();
-                      setResendOk(true);
-                    } catch (err) {
-                      setResendError(err.message);
-                    } finally {
-                      setResending(false);
-                    }
-                  }}
-                >
-                  {resending ? "Envoi..." : "Renvoyer le lien d'accès"}
-                </button>
               </div>
             </div>
           )}
@@ -120,27 +87,8 @@ const MonEspace = () => {
                   Joignez le KBIS (ou équivalent), la pièce d&apos;identité du
                   dirigeant recto et verso, une preuve d&apos;adresse de
                   l&apos;établissement (moins de 3 mois), et décrivez l&apos;usage
-                  prévu du numéro. Formats : PDF ou image. Après validation vous
-                  recevrez un e-mail : le lien vers l&apos;app sera disponible
-                  ici.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {dossierPending && (
-            <div className="mon-espace-instance-required">
-              <LayoutDashboard className="mon-espace-instance-required-icon" />
-              <div className="mon-espace-instance-required-content">
-                <h3 className="mon-espace-instance-required-title">
-                  Dossier en cours de traitement
-                </h3>
-                <p className="mon-espace-instance-required-desc">
-                  Nous avons bien reçu vos documents. Notre équipe finalise la
-                  configuration Twilio et votre instance. Vous recevrez un
-                  e-mail dès que l&apos;application sera accessible depuis cet
-                  espace (délai indicatif : 14 jours ouvrés maximum). Vous
-                  pouvez toujours mettre à jour vos coordonnées ci-dessous.
+                  prévu du numéro. Formats : PDF ou image. Sans ce dossier, le
+                  tableau de bord reste fermé.
                 </p>
               </div>
             </div>

@@ -59,6 +59,10 @@ const PlatformAdmin = () => {
     rejectTenant,
     markContact,
     markDemo,
+    staff,
+    loadStaff,
+    createStaff,
+    revokeStaff,
   } = usePlatformAdmin();
   const [tab, setTab] = useState("restaurants");
   const [phoneDrafts, setPhoneDrafts] = useState({});
@@ -72,7 +76,12 @@ const PlatformAdmin = () => {
   const [totpToken, setTotpToken] = useState("");
   const [oauthDenied, setOauthDenied] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [staffEmail, setStaffEmail] = useState("");
+  const [staffName, setStaffName] = useState("");
+  const [staffPassword, setStaffPassword] = useState("");
+  const [staffFormError, setStaffFormError] = useState(null);
   const isDevBypass = import.meta.env.DEV;
+  const canManageStaff = Boolean(authUser?.isPlatformOwner);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -84,9 +93,11 @@ const PlatformAdmin = () => {
     let cancelled = false;
     checkSession().then((result) => {
       if (cancelled) return;
+      if (result?.user) setAuth(result.user);
       if (result?.elevated) {
         loadInbox();
         loadFleet();
+        if (result.user?.isPlatformOwner) loadStaff();
       }
       if (result?.totpStep === "enroll") {
         loadTotpSetup().catch((err) => setLoginError(err.message));
@@ -95,7 +106,7 @@ const PlatformAdmin = () => {
     return () => {
       cancelled = true;
     };
-  }, [checkSession, loadInbox, loadFleet, loadTotpSetup]);
+  }, [checkSession, loadInbox, loadFleet, loadStaff, loadTotpSetup, setAuth]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -115,6 +126,7 @@ const PlatformAdmin = () => {
         setShowSuccess(true);
         await loadInbox();
         await loadFleet();
+        if (data.user?.isPlatformOwner) await loadStaff();
         return;
       }
       if (data.totpStep === "enroll") {
@@ -138,6 +150,7 @@ const PlatformAdmin = () => {
       setShowSuccess(true);
       await loadInbox();
       await loadFleet();
+      if (user?.isPlatformOwner) await loadStaff();
     } catch (err) {
       setLoginError(err.message);
     } finally {
@@ -322,6 +335,37 @@ const PlatformAdmin = () => {
     setTab(next);
     if (next === "actifs") loadFleet();
     if (next === "restaurants") loadInbox();
+    if (next === "comptes" && canManageStaff) loadStaff();
+  };
+
+  const handleCreateStaff = async (event) => {
+    event.preventDefault();
+    setStaffFormError(null);
+    try {
+      await createStaff({
+        email: staffEmail.trim(),
+        name: staffName.trim(),
+        password: staffPassword,
+      });
+      setStaffEmail("");
+      setStaffName("");
+      setStaffPassword("");
+    } catch (err) {
+      setStaffFormError(err.message);
+    }
+  };
+
+  const handleRevokeStaff = async (member) => {
+    const confirmed = window.confirm(
+      `Retirer l'accès back-office de ${member.email} ?`
+    );
+    if (!confirmed) return;
+    setStaffFormError(null);
+    try {
+      await revokeStaff(member.id);
+    } catch (err) {
+      setStaffFormError(err.message);
+    }
   };
 
   return (
@@ -369,6 +413,15 @@ const PlatformAdmin = () => {
             >
               Démos ({demos.length})
             </button>
+            {canManageStaff && (
+              <button
+                type="button"
+                className={tab === "comptes" ? "btn btn-primary" : "btn btn-secondary"}
+                onClick={() => openTab("comptes")}
+              >
+                Comptes ({staff.length})
+              </button>
+            )}
           </div>
 
           {error && (
@@ -779,6 +832,97 @@ const PlatformAdmin = () => {
                 </li>
               ))}
             </ul>
+          )}
+
+          {tab === "comptes" && canManageStaff && (
+            <>
+              <form className="platform-admin-login" onSubmit={handleCreateStaff}>
+                <h2>Créer un admin back-office</h2>
+                <p>
+                  Même accès que vous sur les restaurants et les instances.
+                  Seul votre compte gère les comptes.
+                </p>
+                <label>
+                  Nom
+                  <input
+                    type="text"
+                    value={staffName}
+                    onChange={(event) => setStaffName(event.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+                <label>
+                  E-mail
+                  <input
+                    type="email"
+                    required
+                    value={staffEmail}
+                    onChange={(event) => setStaffEmail(event.target.value)}
+                    autoComplete="off"
+                  />
+                </label>
+                <label>
+                  Mot de passe
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={staffPassword}
+                    onChange={(event) => setStaffPassword(event.target.value)}
+                    autoComplete="new-password"
+                  />
+                </label>
+                {staffFormError && (
+                  <p className="platform-admin-error" role="alert">
+                    {staffFormError}
+                  </p>
+                )}
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={busyId === "create-staff"}
+                >
+                  {busyId === "create-staff" ? "Création..." : "Créer le compte"}
+                </button>
+              </form>
+
+              {staff.length === 0 && !isLoading && (
+                <p className="platform-admin-empty">Aucun compte back-office listé.</p>
+              )}
+
+              <ul className="platform-admin-list">
+                {staff.map((member) => (
+                  <li key={member.id} className="platform-admin-card">
+                    <div className="platform-admin-card-head">
+                      <h2>{member.name || member.email}</h2>
+                      <span className="platform-admin-status">
+                        {member.isPlatformOwner ? "Propriétaire" : "Admin"}
+                      </span>
+                    </div>
+                    <dl className="platform-admin-meta">
+                      <div>
+                        <dt>E-mail</dt>
+                        <dd>{member.email}</dd>
+                      </div>
+                      <div>
+                        <dt>Dernière connexion</dt>
+                        <dd>{formatDate(member.lastLoginAt)}</dd>
+                      </div>
+                    </dl>
+                    {!member.isPlatformOwner && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={busyId === member.id}
+                        onClick={() => handleRevokeStaff(member)}
+                      >
+                        Retirer l'accès
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </div>
       </Section>

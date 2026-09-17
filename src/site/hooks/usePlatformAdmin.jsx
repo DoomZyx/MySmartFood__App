@@ -4,14 +4,17 @@ import {
   assignPlatformPhone,
   closePlatformTenant,
   confirmPlatformTotp,
+  createPlatformStaff,
   elevateDevPlatformAdmin,
   fetchPlatformChallenge,
   fetchPlatformInbox,
   fetchPlatformSession,
+  fetchPlatformStaff,
   fetchPlatformTenants,
   fetchPlatformTotpSetup,
   loginPlatformAdmin,
   rejectPlatformTenant,
+  revokePlatformStaff,
   suspendPlatformTenant,
   verifyPlatformTotp,
   updateContactStatus,
@@ -23,6 +26,7 @@ export function usePlatformAdmin() {
   const [fleet, setFleet] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [demos, setDemos] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [busyId, setBusyId] = useState(null);
@@ -38,13 +42,13 @@ export function usePlatformAdmin() {
       if (session?.platformVerified) {
         setElevated(true);
         setTotpStep(null);
-        return { elevated: true };
+        return { elevated: true, user: session.user || null };
       }
       const devSession = await elevateDevPlatformAdmin();
       if (devSession?.platformVerified) {
         setElevated(true);
         setTotpStep(null);
-        return { elevated: true };
+        return { elevated: true, user: devSession.user || null };
       }
       const challenge = await fetchPlatformChallenge();
       setElevated(false);
@@ -240,6 +244,50 @@ export function usePlatformAdmin() {
     }
   };
 
+  const loadStaff = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await fetchPlatformStaff();
+      setStaff(data.staff || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const createStaff = async ({ email, password, name }) => {
+    setBusyId("create-staff");
+    try {
+      const data = await createPlatformStaff({ email, password, name });
+      if (data.staff) {
+        setStaff((current) => {
+          const others = current.filter((item) => item.id !== data.staff.id);
+          return [...others, data.staff].sort((left, right) => {
+            if (left.isPlatformOwner !== right.isPlatformOwner) {
+              return left.isPlatformOwner ? -1 : 1;
+            }
+            return String(left.createdAt || "").localeCompare(String(right.createdAt || ""));
+          });
+        });
+      }
+      return data.staff;
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const revokeStaff = async (userId) => {
+    setBusyId(userId);
+    try {
+      await revokePlatformStaff(userId);
+      setStaff((current) => current.filter((item) => item.id !== userId));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const markDemo = async (id, status) => {
     setBusyId(id);
     try {
@@ -283,5 +331,9 @@ export function usePlatformAdmin() {
     rejectTenant,
     markContact,
     markDemo,
+    staff,
+    loadStaff,
+    createStaff,
+    revokeStaff,
   };
 }

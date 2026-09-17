@@ -23,11 +23,12 @@ export function syncDashboardSession(user) {
           ? "admin"
           : "user",
       isPlatformAdmin: Boolean(user.isPlatformAdmin),
+      isPlatformOwner: Boolean(user.isPlatformOwner),
       planId: user.planId || null,
       planSlug: user.planSlug || null,
       planName: user.planName || null,
       hasActiveSubscription: Boolean(user.hasActiveSubscription),
-      accessUnlocked: Boolean(user.accessUnlocked || user.dashboardUnlockedAt),
+      accessUnlocked: Boolean(user.accessUnlocked),
       smartcrmInstanceId: tenantId || null,
     })
   );
@@ -36,5 +37,5 @@ export function syncDashboardSession(user) {
 }
 
 export function canOpenDashboard(user) {
-  return Boolean(user?.accessUnlocked || user?.dashboardUnlockedAt);
+  return Boolean(user?.accessUnlocked);
 }

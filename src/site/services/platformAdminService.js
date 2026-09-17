@@ -174,3 +174,20 @@ export function updateDemoStatus(id, status) {
     body: JSON.stringify({ status }),
   });
 }
+
+export function fetchPlatformStaff() {
+  return platformRequest("/api/platform/staff");
+}
+
+export function createPlatformStaff({ email, password, name }) {
+  return platformMutate("/api/platform/staff", {
+    method: "POST",
+    body: JSON.stringify({ email, password, name }),
+  });
+}
+
+export function revokePlatformStaff(userId) {
+  return platformMutate(`/api/platform/staff/${userId}/revoke`, {
+    method: "POST",
+  });
+}

@@ -59,11 +59,12 @@ export function persistSession({ user, tenants }) {
       avatar: user.avatarUrl || user.avatar || null,
       role,
       isPlatformAdmin: Boolean(user.isPlatformAdmin),
+      isPlatformOwner: Boolean(user.isPlatformOwner),
       planId: user.planId || null,
       planSlug: user.planSlug || null,
       planName: user.planName || null,
       hasActiveSubscription: Boolean(user.hasActiveSubscription),
-      accessUnlocked: Boolean(user.accessUnlocked || user.dashboardUnlockedAt),
+      accessUnlocked: Boolean(user.accessUnlocked),
       smartcrmInstanceId: first || user.smartcrmInstanceId || null,
     })
   );
