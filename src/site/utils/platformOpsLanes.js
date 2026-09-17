@@ -120,6 +120,10 @@ export function restaurantsByStage(restaurants) {
   return buckets;
 }
 
+function withCount(id, label, count) {
+  return { id, label, count };
+}
+
 export function buildOpsGroups({
   restaurants,
   contacts,
@@ -128,50 +132,60 @@ export function buildOpsGroups({
   canManageStaff,
 }) {
   const stages = restaurantsByStage(restaurants);
-  const inboxCount =
-    stages.pending_payment.length +
-    stages.pending_compliance.length +
-    stages.ready.length +
-    contacts.length +
-    demos.length;
-
   const groups = [
     {
-      title: "Suivi",
-      lanes: [{ id: "inbox", label: "À traiter", count: inboxCount }],
-    },
-    {
-      title: "Onboarding",
-      lanes: [
-        { id: "create", label: "Nouveau client", count: null },
-        { id: "pending_payment", label: "Paiement", count: stages.pending_payment.length },
-        {
-          id: "pending_compliance",
-          label: "Conformité",
-          count: stages.pending_compliance.length,
-        },
-        { id: "ready", label: "Prêt à activer", count: stages.ready.length },
-        { id: "active", label: "Actifs", count: stages.active.length },
-        { id: "suspended", label: "Suspendus", count: stages.suspended.length },
-      ],
-    },
-    {
-      title: "Demandes",
-      lanes: [
-        { id: "contacts", label: "Contacts", count: contacts.length },
-        { id: "demos", label: "Démos", count: demos.length },
-      ],
+      id: "action",
+      title: null,
+      lanes: [{ id: "create", label: "Nouveau client", count: null, variant: "primary" }],
     },
   ];
 
+  const waiting = [
+    withCount("ready", "Prêt à activer", stages.ready.length),
+    withCount("pending_compliance", "Dossier à compléter", stages.pending_compliance.length),
+    withCount("pending_payment", "Paiement", stages.pending_payment.length),
+  ].filter((lane) => lane.count > 0);
+
+  if (waiting.length) {
+    groups.push({ id: "waiting", title: "À valider", lanes: waiting });
+  }
+
+  const fleetLanes = [withCount("active", "Actifs", stages.active.length)];
+  if (stages.suspended.length > 0) {
+    fleetLanes.push(withCount("suspended", "Suspendus", stages.suspended.length));
+  }
+  groups.push({ id: "fleet", title: "Restaurants", lanes: fleetLanes });
+
+  const messages = [
+    withCount("contacts", "Contacts", contacts.length),
+    withCount("demos", "Démos", demos.length),
+  ].filter((lane) => lane.count > 0);
+
+  if (messages.length) {
+    groups.push({ id: "messages", title: "Messages", lanes: messages });
+  }
+
   if (canManageStaff) {
     groups.push({
+      id: "team",
       title: "Équipe",
-      lanes: [{ id: "staff", label: "Comptes", count: staff.length }],
+      lanes: [withCount("staff", "Comptes", staff.length)],
     });
   }
 
   return groups;
+}
+
+export function firstUsefulLane(groups) {
+  const waiting = groups.find((group) => group.id === "waiting");
+  if (waiting?.lanes?.length) return waiting.lanes[0].id;
+  const messages = groups.find((group) => group.id === "messages");
+  if (messages?.lanes?.length) return messages.lanes[0].id;
+  return "active";
+}
+
+export function laneIdsFromGroups(groups) {
+  return groups.flatMap((group) => group.lanes.map((lane) => lane.id));
 }
 
 export function itemsForLane(lane, { restaurants, contacts, demos, staff }) {
@@ -196,7 +210,7 @@ export const EMPTY_LABELS = {
   inbox: "Aucune demande en attente.",
   create: "",
   pending_payment: "Aucun dossier en attente de paiement.",
-  pending_compliance: "Aucun dossier en conformité.",
+  pending_compliance: "Aucun dossier à compléter.",
   ready: "Aucun dossier prêt à activer.",
   active: "Aucune instance active.",
   suspended: "Aucune instance suspendue.",

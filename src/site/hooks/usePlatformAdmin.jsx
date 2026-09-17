@@ -6,7 +6,10 @@ import {
   confirmPlatformTotp,
   createPlatformStaff,
   createPlatformTenant,
+  fetchPlatformTenantUsers,
+  updatePlatformStaff,
   updatePlatformTenant,
+  updatePlatformTenantUser,
   elevateDevPlatformAdmin,
   fetchPlatformChallenge,
   fetchPlatformInbox,
@@ -18,6 +21,7 @@ import {
   rejectPlatformTenant,
   revokePlatformStaff,
   suspendPlatformTenant,
+  uploadPlatformTenantDocument,
   verifyPlatformTotp,
   updateContactStatus,
   updateDemoStatus,
@@ -29,6 +33,8 @@ export function usePlatformAdmin() {
   const [contacts, setContacts] = useState([]);
   const [demos, setDemos] = useState([]);
   const [staff, setStaff] = useState([]);
+  const [tenantUsers, setTenantUsers] = useState({});
+  const [tenantUsersLoading, setTenantUsersLoading] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [busyId, setBusyId] = useState(null);
@@ -144,6 +150,17 @@ export function usePlatformAdmin() {
     setFleet((current) =>
       current.map((item) => (item.id === tenant.id ? tenant : item))
     );
+  };
+
+  const uploadTenantDocument = async (tenantId, kind, file) => {
+    setBusyId(`${tenantId}:${kind}`);
+    try {
+      const data = await uploadPlatformTenantDocument(tenantId, kind, file);
+      if (data.tenant) replaceTenant(data.tenant);
+      return data;
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const assignPhone = async (tenantId, payload) => {
@@ -286,6 +303,40 @@ export function usePlatformAdmin() {
     }
   };
 
+  const loadTenantUsers = useCallback(async (tenantId) => {
+    if (!tenantId) return [];
+    setTenantUsersLoading((current) => ({ ...current, [tenantId]: true }));
+    try {
+      const data = await fetchPlatformTenantUsers(tenantId);
+      const users = data.users || [];
+      setTenantUsers((current) => ({ ...current, [tenantId]: users }));
+      return users;
+    } finally {
+      setTenantUsersLoading((current) => ({ ...current, [tenantId]: false }));
+    }
+  }, []);
+
+  const updateTenantUser = async (tenantId, userId, payload) => {
+    setBusyId(userId);
+    try {
+      const data = await updatePlatformTenantUser(tenantId, userId, payload);
+      if (data.users) {
+        setTenantUsers((current) => ({ ...current, [tenantId]: data.users }));
+      } else if (data.user) {
+        setTenantUsers((current) => ({
+          ...current,
+          [tenantId]: (current[tenantId] || []).map((item) =>
+            item.id === data.user.id ? data.user : item
+          ),
+        }));
+      }
+      if (data.tenant) replaceTenant(data.tenant);
+      return data;
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const createStaff = async ({ email, password, name }) => {
     setBusyId("create-staff");
     try {
@@ -312,6 +363,21 @@ export function usePlatformAdmin() {
     try {
       await revokePlatformStaff(userId);
       setStaff((current) => current.filter((item) => item.id !== userId));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const updateStaff = async (userId, payload) => {
+    setBusyId(userId);
+    try {
+      const data = await updatePlatformStaff(userId, payload);
+      if (data.staff) {
+        setStaff((current) =>
+          current.map((item) => (item.id === data.staff.id ? data.staff : item))
+        );
+      }
+      return data.staff;
     } finally {
       setBusyId(null);
     }
@@ -365,6 +431,12 @@ export function usePlatformAdmin() {
     staff,
     loadStaff,
     createStaff,
+    updateStaff,
     revokeStaff,
+    tenantUsers,
+    tenantUsersLoading,
+    loadTenantUsers,
+    updateTenantUser,
+    uploadTenantDocument,
   };
 }

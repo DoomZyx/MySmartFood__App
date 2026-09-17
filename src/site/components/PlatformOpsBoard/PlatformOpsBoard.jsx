@@ -5,15 +5,22 @@ import "./PlatformOpsBoard.scss";
 
 function LaneButton({ lane, current, onSelect }) {
   const active = lane.id === current;
+  const className = [
+    "platform-ops-lane",
+    lane.variant === "primary" ? "is-primary" : "",
+    active ? "is-active" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   return (
     <button
       type="button"
-      className={active ? "platform-ops-lane is-active" : "platform-ops-lane"}
+      className={className}
       aria-current={active ? "page" : undefined}
       onClick={() => onSelect(lane.id)}
     >
       <span>{lane.label}</span>
-      {lane.count != null && <strong>{lane.count}</strong>}
+      {lane.count > 0 && <strong>{lane.count}</strong>}
     </button>
   );
 }
@@ -60,15 +67,16 @@ const PlatformOpsBoard = ({
   isLoading,
   error,
   emptyLabel,
+  listTitle,
   hideList,
-  children,
+  listHeader,
 }) => {
   return (
     <div className={hideList ? "platform-ops is-create" : "platform-ops"}>
-      <aside className="platform-ops-rail" aria-label="États des demandes">
+      <aside className="platform-ops-rail" aria-label="Menu back-office">
         {groups.map((group) => (
-          <section key={group.title}>
-            <h2>{group.title}</h2>
+          <section key={group.id || group.title}>
+            {group.title ? <h2>{group.title}</h2> : null}
             {group.lanes.map((entry) => (
               <LaneButton
                 key={entry.id}
@@ -85,7 +93,9 @@ const PlatformOpsBoard = ({
       </aside>
 
       {!hideList && (
-        <section className="platform-ops-list" aria-label="File de demandes">
+        <section className="platform-ops-list" aria-label={listTitle || "File de demandes"}>
+          {listTitle ? <h2 className="platform-ops-list-title">{listTitle}</h2> : null}
+          {listHeader}
           {error && (
             <p className="platform-admin-error" role="alert">
               {error}
@@ -107,10 +117,6 @@ const PlatformOpsBoard = ({
           </div>
         </section>
       )}
-
-      <section className="platform-ops-detail" aria-live="polite">
-        {children}
-      </section>
     </div>
   );
 };

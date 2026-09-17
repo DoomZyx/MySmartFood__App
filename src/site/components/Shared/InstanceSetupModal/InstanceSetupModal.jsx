@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { X } from "lucide-react";
 import { useAuth } from "../../../hooks/useAuth";
 import { submitOnboardingDossierApi, getCurrentUser } from "../../../services/authService";
+import { fileToWebp, PHOTO_ACCEPT, PHOTO_MAX_MB } from "../../../utils/imageWebp";
 import "./InstanceSetupModal.scss";
 
 const PAYS_OPTIONS = [
@@ -28,8 +29,8 @@ const defaultFormData = {
   nombreChaisesBebe: "",
 };
 
-const ACCEPTED_DOC_TYPES = ".pdf,image/jpeg,image/png,image/jpg";
-const MAX_FILE_SIZE_MB = 5;
+const ACCEPTED_DOC_TYPES = PHOTO_ACCEPT;
+const MAX_FILE_SIZE_MB = PHOTO_MAX_MB;
 
 /**
  * Modale affichée après un paiement réussi : collecte les infos restaurant
@@ -72,16 +73,24 @@ const InstanceSetupModal = ({ isOpen, onClose }) => {
     onClose();
   }, [onClose]);
 
-  const handleFileChange = (field, e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-      setError(`Fichier ${file.name} trop volumineux (max ${MAX_FILE_SIZE_MB} Mo).`);
-      return;
-    }
+  const assignPickedFile = (field, file) => {
     if (field === "idDocumentRecto") setIdDocumentRecto(file);
     else if (field === "idDocumentVerso") setIdDocumentVerso(file);
     else setAddressDocument(file);
+  };
+
+  const handleFileChange = async (field, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+      e.target.value = "";
+      assignPickedFile(field, null);
+      setError(`Fichier ${file.name} trop volumineux (max ${MAX_FILE_SIZE_MB} Mo).`);
+      return;
+    }
+    assignPickedFile(field, file);
+    const compressed = await fileToWebp(file);
+    assignPickedFile(field, compressed);
     setError(null);
   };
 

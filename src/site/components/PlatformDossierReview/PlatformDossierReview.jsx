@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { fetchPlatformDocumentBlob } from "../../services/platformAdminService";
+import { fileToWebp, PHOTO_ACCEPT } from "../../utils/imageWebp";
 import "./PlatformDossierReview.scss";
 
 const DOC_LABELS = {
@@ -8,6 +9,11 @@ const DOC_LABELS = {
   id_verso: "Pièce d'identité verso",
   address_proof: "Justificatif d'adresse",
 };
+
+const IDENTITY_SLOTS = [
+  { kind: "id_recto", label: "Carte d'identité — recto" },
+  { kind: "id_verso", label: "Carte d'identité — verso" },
+];
 
 function formatBytes(size) {
   const bytes = Number(size) || 0;
@@ -89,8 +95,10 @@ function DocumentPreview({ tenantId, document }) {
   );
 }
 
-const PlatformDossierReview = ({ tenant }) => {
+const PlatformDossierReview = ({ tenant, onUploadIdentity, uploadBusyId }) => {
   const [showDocuments, setShowDocuments] = useState(Boolean(tenant.needsReview));
+  const [uploadError, setUploadError] = useState(null);
+  const [compressingKind, setCompressingKind] = useState(null);
   const fields = useMemo(
     () => [
       ["Nom établissement", tenant.businessName || tenant.name],
@@ -118,6 +126,27 @@ const PlatformDossierReview = ({ tenant }) => {
   );
 
   const documents = Array.isArray(tenant.documents) ? tenant.documents : [];
+  const documentsByKind = useMemo(
+    () => Object.fromEntries(documents.map((item) => [item.kind, item])),
+    [documents]
+  );
+
+  const handleIdentityPick = async (kind, event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !onUploadIdentity) return;
+    setUploadError(null);
+    setCompressingKind(kind);
+    setShowDocuments(true);
+    try {
+      const webp = await fileToWebp(file);
+      await onUploadIdentity(kind, webp);
+    } catch (err) {
+      setUploadError(err.message);
+    } finally {
+      setCompressingKind(null);
+    }
+  };
 
   return (
     <section className="pdr" aria-label="Vérification du dossier">
@@ -138,6 +167,48 @@ const PlatformDossierReview = ({ tenant }) => {
           <dd>{tenant.phoneNumberUsage || "—"}</dd>
         </div>
       </dl>
+
+      <div className="pdr-id">
+        <h4>Carte d&apos;identité</h4>
+        <p className="pdr-intro">
+          Photo recto et verso. Chaque cliché est compressé en WebP puis
+          enregistré en base.
+        </p>
+        <div className="pdr-id-slots">
+          {IDENTITY_SLOTS.map((slot) => {
+            const current = documentsByKind[slot.kind];
+            const busy =
+              compressingKind === slot.kind ||
+              uploadBusyId === `${tenant.id}:${slot.kind}`;
+            return (
+              <label key={slot.kind} className="pdr-id-slot">
+                <span>{slot.label}</span>
+                {current ? (
+                  <em>
+                    {formatBytes(current.byteSize)} · {current.mimeType || "fichier"}
+                  </em>
+                ) : (
+                  <em>Aucune photo</em>
+                )}
+                <input
+                  type="file"
+                  accept={PHOTO_ACCEPT}
+                  capture="environment"
+                  disabled={busy || !onUploadIdentity}
+                  onChange={(event) => handleIdentityPick(slot.kind, event)}
+                />
+                {busy ? <strong>Compression et enregistrement...</strong> : null}
+              </label>
+            );
+          })}
+        </div>
+        {uploadError ? (
+          <p className="pdr-error" role="alert">
+            {uploadError}
+          </p>
+        ) : null}
+      </div>
+
       {documents.length === 0 ? (
         <p className="pdr-empty">Aucune pièce transmise pour le moment.</p>
       ) : (
@@ -153,7 +224,7 @@ const PlatformDossierReview = ({ tenant }) => {
             <div className="pdr-docs">
               {documents.map((document) => (
                 <DocumentPreview
-                  key={document.kind}
+                  key={`${document.kind}-${document.uploadedAt || document.sha256 || ""}`}
                   tenantId={tenant.id}
                   document={document}
                 />

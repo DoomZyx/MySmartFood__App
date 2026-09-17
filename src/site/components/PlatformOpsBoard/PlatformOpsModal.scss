@@ -1,0 +1,70 @@
+@use "../../styles/variables" as *;
+
+.platform-ops-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 1.15rem 1.35rem;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.platform-ops-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(1200px, 100%);
+  max-height: 100%;
+  background: $bg-primary;
+  border: 1px solid $border-primary;
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.platform-ops-modal-bar {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  padding: 0.85rem 1.15rem 0;
+}
+
+.platform-ops-modal-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0.75rem 1.5rem 2rem;
+}
+
+.platform-ops-modal-body .platform-admin-card {
+  border: 0;
+  background: transparent;
+  padding: 0.35rem 0 0;
+}
+
+.platform-ops-modal-body .platform-admin-login {
+  margin: 0;
+  max-width: 560px;
+}
+
+.platform-ops-modal-body .pdr-docs {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.platform-ops-modal-body .pdr-preview-img {
+  max-height: min(70vh, 760px);
+}
+
+.platform-ops-modal-body .pdr-preview-frame {
+  min-height: min(70vh, 760px);
+}
+
+@media (max-width: 720px) {
+  .platform-ops-modal-overlay {
+    padding: 0;
+  }
+
+  .platform-ops-modal {
+    border-radius: 0;
+  }
+}

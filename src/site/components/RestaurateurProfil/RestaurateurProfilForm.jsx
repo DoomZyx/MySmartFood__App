@@ -3,6 +3,7 @@ import { Save, CheckCircle, AlertCircle } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useRestaurateurProfile } from "../../hooks/useRestaurateurProfile";
 import NotificationToast from "../Shared/NotificationToast/NotificationToast";
+import { fileToWebp, PHOTO_ACCEPT, PHOTO_MAX_MB } from "../../utils/imageWebp";
 import "./RestaurateurProfilForm.scss";
 
 const PAYS_OPTIONS = [
@@ -28,7 +29,7 @@ const defaultFormData = {
   nombreChaisesBebe: "",
 };
 
-const MAX_FILE_SIZE_MB = 5;
+const MAX_FILE_SIZE_MB = PHOTO_MAX_MB;
 
 const RestaurateurProfilForm = () => {
   const { user, refreshUser } = useAuth();
@@ -120,21 +121,30 @@ const RestaurateurProfilForm = () => {
     }
   };
 
-  const handleFilePick = (kind, e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-      setDossierLocalError(`Fichier trop volumineux (max ${MAX_FILE_SIZE_MB} Mo).`);
-      return;
-    }
-    setDossierLocalError(null);
+  const assignPickedFile = (kind, file) => {
     if (kind === "idRecto") setIdRectoFile(file);
     else if (kind === "idVerso") setIdVersoFile(file);
     else setAddrDocFile(file);
   };
 
+  const handleFilePick = async (kind, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+      e.target.value = "";
+      assignPickedFile(kind, null);
+      setDossierLocalError(`Fichier trop volumineux (max ${MAX_FILE_SIZE_MB} Mo).`);
+      return;
+    }
+    setDossierLocalError(null);
+    assignPickedFile(kind, file);
+    const compressed = await fileToWebp(file);
+    assignPickedFile(kind, compressed);
+  };
+
   const handleDossierSubmit = async (e) => {
     e.preventDefault();
+    resetForm();
     setDossierLocalError(null);
     const usage = (formData.twilioNumberUsage || "").trim();
     if (usage.length < 15) {
@@ -152,7 +162,7 @@ const RestaurateurProfilForm = () => {
     }
     if (!idRectoFile || !idVersoFile || !addrDocFile) {
       setDossierLocalError(
-        "Joignez la pièce d'identité recto et verso, et le justificatif d'adresse (PDF ou image, max 5 Mo chacun).",
+        `Joignez la pièce d'identité recto et verso, et le justificatif d'adresse (PDF ou image, max ${MAX_FILE_SIZE_MB} Mo chacun).`,
       );
       return;
     }
@@ -430,7 +440,7 @@ const RestaurateurProfilForm = () => {
               type="file"
               id="idDocumentRecto"
               name="idDocumentRecto"
-              accept=".pdf,image/jpeg,image/png,image/jpg"
+              accept={PHOTO_ACCEPT}
               onChange={(e) => handleFilePick("idRecto", e)}
               className="form-input"
               disabled={isSubmittingOnboarding}
@@ -444,7 +454,7 @@ const RestaurateurProfilForm = () => {
               type="file"
               id="idDocumentVerso"
               name="idDocumentVerso"
-              accept=".pdf,image/jpeg,image/png,image/jpg"
+              accept={PHOTO_ACCEPT}
               onChange={(e) => handleFilePick("idVerso", e)}
               className="form-input"
               disabled={isSubmittingOnboarding}
@@ -458,7 +468,7 @@ const RestaurateurProfilForm = () => {
               type="file"
               id="addressDocument"
               name="addressDocument"
-              accept=".pdf,image/jpeg,image/png,image/jpg"
+              accept={PHOTO_ACCEPT}
               onChange={(e) => handleFilePick("addr", e)}
               className="form-input"
               disabled={isSubmittingOnboarding}

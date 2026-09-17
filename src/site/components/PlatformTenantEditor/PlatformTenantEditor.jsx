@@ -41,6 +41,7 @@ export function tenantToDraft(tenant) {
     cuisineType: tenant?.cuisineType || "",
     phoneNumberUsage: tenant?.phoneNumberUsage || "",
     siret: tenant?.siret || tenant?.siren || "",
+    inboundPhone: tenant?.phoneNumber || tenant?.phoneNumberSid || "",
     openaiModel: tenant?.openaiModel || OPENAI_REALTIME_MODEL,
   };
 }
@@ -88,12 +89,105 @@ function Field({ label, hint, wide, children }) {
   );
 }
 
-function Section({ title, children }) {
+function Section({ title, hint, children }) {
   return (
     <section className="pte-section">
       <h3>{title}</h3>
+      {hint ? <p className="pte-section-hint">{hint}</p> : null}
       <div className="pte-grid">{children}</div>
     </section>
+  );
+}
+
+const ROLE_LABELS = {
+  owner: "Propriétaire",
+  admin: "Admin",
+  member: "Équipe",
+};
+
+function formatLogin(value) {
+  if (!value) return "Jamais connecté";
+  return new Intl.DateTimeFormat("fr-FR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function UserAccessCard({ user, onSave, busy, error }) {
+  const [name, setName] = React.useState(user.name || "");
+  const [email, setEmail] = React.useState(user.email || "");
+  const [password, setPassword] = React.useState("");
+  const [saved, setSaved] = React.useState(false);
+
+  React.useEffect(() => {
+    setName(user.name || "");
+    setEmail(user.email || "");
+    setPassword("");
+  }, [user.id, user.name, user.email]);
+
+  const handleSave = async () => {
+    setSaved(false);
+    try {
+      const payload = { name, email };
+      if (String(password).trim()) payload.password = String(password).trim();
+      await onSave(user.id, payload);
+      setPassword("");
+      setSaved(true);
+    } catch {
+      // erreur affichée par le parent
+    }
+  };
+
+  return (
+    <div className="pte-user">
+      <div className="pte-user-head">
+        <span className="pte-chip">{ROLE_LABELS[user.role] || user.role}</span>
+        <span className="pte-hint">{formatLogin(user.lastLoginAt)}</span>
+      </div>
+      <Field label="Nom">
+        <input
+          type="text"
+          maxLength={120}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          autoComplete="off"
+        />
+      </Field>
+      <Field label="E-mail">
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          autoComplete="off"
+        />
+      </Field>
+      <Field label="Nouveau mot de passe" hint="Laisser vide pour ne pas changer.">
+        <input
+          type="text"
+          minLength={8}
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          autoComplete="off"
+        />
+      </Field>
+      <div className="pte-user-actions">
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={busy}
+          onClick={handleSave}
+        >
+          {busy ? "Enregistrement..." : "Enregistrer l'accès"}
+        </button>
+        {saved && !error ? <span className="pte-hint">Accès enregistré.</span> : null}
+        {error ? (
+          <p className="platform-admin-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -124,6 +218,13 @@ const PlatformTenantEditor = ({
   busy,
   error,
   tenant,
+  users,
+  usersLoading,
+  onSaveUser,
+  userBusyId,
+  userErrors,
+  onUploadIdentity,
+  uploadBusyId,
   children,
 }) => {
   const setField = (field) => (event) => {
@@ -159,41 +260,71 @@ const PlatformTenantEditor = ({
 
       {mode === "edit" && <Checklist checklist={tenant?.checklist} />}
 
-      {mode === "edit" && tenant && <PlatformDossierReview tenant={tenant} />}
-
-      <Section title="Compte">
-        <Field label="Nom du propriétaire">
-          <input
-            type="text"
-            maxLength={120}
-            value={draft.ownerName}
-            onChange={setField("ownerName")}
-            autoComplete="off"
-          />
-        </Field>
-        <Field label="E-mail du propriétaire">
-          <input
-            type="email"
-            required={mode === "create"}
-            value={draft.email}
-            onChange={setField("email")}
-            autoComplete="off"
-          />
-        </Field>
-        <Field
-          label={mode === "create" ? "Mot de passe" : "Nouveau mot de passe"}
-          hint={mode === "edit" ? "Laisser vide pour ne pas changer." : null}
-        >
-          <input
-            type="text"
-            required={mode === "create"}
-            minLength={mode === "create" ? 8 : undefined}
-            value={draft.password}
-            onChange={setField("password")}
-            autoComplete="off"
-          />
-        </Field>
+      <Section
+        title={mode === "edit" ? "Accès dashboard" : "Compte"}
+        hint={
+          mode === "edit"
+            ? "Nom, e-mail et mot de passe du client. Vous pouvez les changer ici sans lui demander."
+            : null
+        }
+      >
+        {mode === "edit" && usersLoading && !users?.length ? (
+          <p className="pte-hint">Chargement des accès...</p>
+        ) : null}
+        {mode === "edit" && users?.length
+          ? users.map((user) => (
+              <UserAccessCard
+                key={user.id}
+                user={user}
+                onSave={onSaveUser}
+                busy={userBusyId === user.id}
+                error={userErrors?.[user.id]}
+              />
+            ))
+          : (
+            <>
+              <Field label="Nom du propriétaire">
+                <input
+                  type="text"
+                  maxLength={120}
+                  value={draft.ownerName}
+                  onChange={setField("ownerName")}
+                  autoComplete="off"
+                />
+              </Field>
+              <Field label="E-mail du propriétaire">
+                <input
+                  type="email"
+                  required={mode === "create"}
+                  value={draft.email}
+                  onChange={setField("email")}
+                  autoComplete="off"
+                />
+              </Field>
+              <Field
+                label={mode === "create" ? "Mot de passe" : "Nouveau mot de passe"}
+                hint={mode === "edit" ? "Laisser vide pour ne pas changer." : null}
+              >
+                <input
+                  type="text"
+                  required={mode === "create"}
+                  minLength={mode === "create" ? 8 : undefined}
+                  value={draft.password}
+                  onChange={setField("password")}
+                  autoComplete="off"
+                />
+              </Field>
+            </>
+          )}
       </Section>
+
+      {mode === "edit" && tenant && (
+        <PlatformDossierReview
+          tenant={tenant}
+          onUploadIdentity={onUploadIdentity}
+          uploadBusyId={uploadBusyId}
+        />
+      )}
 
       <Section title="Établissement">
         <Field label="Nom de l'établissement">
@@ -299,10 +430,17 @@ const PlatformTenantEditor = ({
         </Field>
       </Section>
 
-      <Section title="Ligne vocale">
+      <Section
+        title="Ligne vocale"
+        hint="Le numéro doit déjà exister sur le compte Twilio. Enregistrer le relie à ce tenant et pointe le webhook."
+      >
         <Field
-          label="Numéro Twilio"
-          hint={tenant?.phoneNumber ? `Actuel : ${tenant.phoneNumber}` : "E.164 ou SID. Optionnel."}
+          label="Numéro Twilio déjà acheté"
+          hint={
+            tenant?.phoneNumber
+              ? `Relié : ${tenant.phoneNumber}. Colle un autre +33 ou un SID PN… pour le remplacer.`
+              : "Format +33123456789 ou SID PN…"
+          }
         >
           <input
             type="text"
@@ -373,14 +511,6 @@ const PlatformTenantEditor = ({
             <div>
               <dt>Numéro attribué</dt>
               <dd>{tenant.phoneNumber || "Non attribué"}</dd>
-            </div>
-            <div>
-              <dt>Slug</dt>
-              <dd>{tenant.slug || "—"}</dd>
-            </div>
-            <div className="pte-meta-wide">
-              <dt>Identifiant HTTP Twilio</dt>
-              <dd>{tenant.voiceWebhookSlug || "—"}</dd>
             </div>
             <div className="pte-meta-wide">
               <dt>Webhook vocal</dt>

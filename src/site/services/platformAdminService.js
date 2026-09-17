@@ -135,6 +135,17 @@ export function updatePlatformTenant(tenantId, payload) {
   });
 }
 
+export function fetchPlatformTenantUsers(tenantId) {
+  return platformRequest(`/api/platform/tenants/${tenantId}/users`);
+}
+
+export function updatePlatformTenantUser(tenantId, userId, payload) {
+  return platformMutate(`/api/platform/tenants/${tenantId}/users/${userId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function fetchPlatformTenants(status, queue) {
   const params = new URLSearchParams();
   if (status) params.set("status", status);
@@ -191,6 +202,34 @@ export async function fetchPlatformDocumentBlob(tenantId, kind) {
   };
 }
 
+export async function uploadPlatformTenantDocument(tenantId, kind, file) {
+  if (!API_BASE_URL) throw new Error("API non configurée.");
+  const csrf = await csrfHeaders();
+  const body = new FormData();
+  body.append("kind", kind);
+  body.append("file", file);
+  const response = await fetch(
+    `${API_BASE_URL}/api/platform/tenants/${encodeURIComponent(tenantId)}/documents`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: csrf,
+      body,
+    }
+  );
+  const data = await response.json().catch(() => ({}));
+  if (response.status === 401) {
+    throw new Error(data.error || data.message || "Session expirée, veuillez vous reconnecter.");
+  }
+  if (response.status === 403) {
+    throw new Error(data.error || data.message || "Accès back-office refusé.");
+  }
+  if (!response.ok) {
+    throw new Error(data.error || data.message || "Envoi de la pièce refusé");
+  }
+  return data;
+}
+
 export function updateContactStatus(id, status) {
   return platformMutate(`/api/contact/${id}/status`, {
     method: "PATCH",
@@ -213,6 +252,13 @@ export function createPlatformStaff({ email, password, name }) {
   return platformMutate("/api/platform/staff", {
     method: "POST",
     body: JSON.stringify({ email, password, name }),
+  });
+}
+
+export function updatePlatformStaff(userId, payload) {
+  return platformMutate(`/api/platform/staff/${userId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
   });
 }
 

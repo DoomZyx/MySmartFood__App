@@ -10,13 +10,16 @@ import PlatformTenantEditor, {
   tenantToDraft,
 } from "../components/PlatformTenantEditor/PlatformTenantEditor";
 import PlatformOpsBoard from "../components/PlatformOpsBoard/PlatformOpsBoard";
+import PlatformOpsModal from "../components/PlatformOpsBoard/PlatformOpsModal";
 import PlatformOnboardingTracker from "../components/PlatformOpsBoard/PlatformOnboardingTracker";
 import {
   EMPTY_LABELS,
   STATUS_LABELS,
   buildOpsGroups,
+  firstUsefulLane,
   formatOpsDate,
   itemsForLane,
+  laneIdsFromGroups,
   mergeRestaurants,
 } from "../utils/platformOpsLanes";
 import "./PlatformAdmin.scss";
@@ -52,9 +55,16 @@ const PlatformAdmin = () => {
     staff,
     loadStaff,
     createStaff,
+    updateStaff,
     revokeStaff,
+    tenantUsers,
+    tenantUsersLoading,
+    loadTenantUsers,
+    updateTenantUser,
+    uploadTenantDocument,
   } = usePlatformAdmin();
-  const [lane, setLane] = useState("inbox");
+  const [lane, setLane] = useState("active");
+  const [laneChosen, setLaneChosen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [rejectDrafts, setRejectDrafts] = useState({});
   const [rowError, setRowError] = useState({});
@@ -74,6 +84,8 @@ const PlatformAdmin = () => {
   const [editDrafts, setEditDrafts] = useState({});
   const [clientFormError, setClientFormError] = useState(null);
   const [createdAccount, setCreatedAccount] = useState(null);
+  const [userErrors, setUserErrors] = useState({});
+  const [staffDrafts, setStaffDrafts] = useState({});
   const isDevBypass = import.meta.env.DEV;
   const canManageStaff = Boolean(authUser?.isPlatformOwner);
 
@@ -95,6 +107,13 @@ const PlatformAdmin = () => {
   const items = useMemo(
     () => itemsForLane(lane, { restaurants, contacts, demos, staff }),
     [lane, restaurants, contacts, demos, staff]
+  );
+  const visibleLaneIds = useMemo(() => laneIdsFromGroups(groups), [groups]);
+  const listTitle = useMemo(
+    () =>
+      groups.flatMap((group) => group.lanes).find((entry) => entry.id === lane)
+        ?.label || "",
+    [groups, lane]
   );
 
   useEffect(() => {
@@ -133,12 +152,32 @@ const PlatformAdmin = () => {
   }, [restaurants]);
 
   useEffect(() => {
-    if (!selected || isLoading) return;
-    const stillThere = items.some(
-      (item) => item.id === selected.id && item.kind === selected.kind
-    );
-    if (!stillThere && lane !== "create") setSelected(null);
+    if (!visibleLaneIds.length) return;
+    if (!laneChosen) {
+      setLane(firstUsefulLane(groups));
+      return;
+    }
+    if (!visibleLaneIds.includes(lane)) {
+      setLane(firstUsefulLane(groups));
+      setSelected(null);
+    }
+  }, [visibleLaneIds, laneChosen, lane, groups]);
+
+  useEffect(() => {
+    if (lane === "create" || isLoading) return;
+    const stillThere =
+      selected &&
+      items.some((item) => item.id === selected.id && item.kind === selected.kind);
+    if (stillThere) return;
+    setSelected(null);
   }, [items, selected, isLoading, lane]);
+
+  useEffect(() => {
+    if (!elevated || selected?.kind !== "tenant" || !selected.id) return;
+    loadTenantUsers(selected.id).catch((err) => {
+      setRowError((current) => ({ ...current, [selected.id]: err.message }));
+    });
+  }, [elevated, selected?.kind, selected?.id, loadTenantUsers]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -191,11 +230,11 @@ const PlatformAdmin = () => {
   };
 
   const selectLane = (next) => {
+    setLaneChosen(true);
     setLane(next);
     setSelected(null);
-    if (next === "active" || next === "suspended" || next === "inbox") loadFleet();
+    if (next === "active" || next === "suspended") loadFleet();
     if (
-      next === "inbox" ||
       next === "pending_payment" ||
       next === "pending_compliance" ||
       next === "ready" ||
@@ -207,6 +246,14 @@ const PlatformAdmin = () => {
     if (next === "staff" && canManageStaff) loadStaff();
   };
 
+  const closeModal = () => {
+    if (lane === "create") {
+      setLaneChosen(true);
+      setLane("active");
+    }
+    setSelected(null);
+  };
+
   const setEditDraft = (tenantId, draft) => {
     setEditDrafts((current) => ({ ...current, [tenantId]: draft }));
   };
@@ -215,6 +262,7 @@ const PlatformAdmin = () => {
     setRowError((current) => ({ ...current, [tenantId]: null }));
     try {
       await activateTenant(tenantId);
+      setLaneChosen(true);
       setLane("active");
       setSelected({ kind: "tenant", id: tenantId });
     } catch (err) {
@@ -237,6 +285,7 @@ const PlatformAdmin = () => {
     setRowError((current) => ({ ...current, [tenantId]: null }));
     try {
       await suspendTenant(tenantId);
+      setLaneChosen(true);
       setLane("suspended");
       setSelected({ kind: "tenant", id: tenantId });
     } catch (err) {
@@ -273,6 +322,7 @@ const PlatformAdmin = () => {
       });
       setCreateDraft(EMPTY_TENANT_DRAFT);
       if (data.tenant?.id) {
+        setLaneChosen(true);
         setLane("active");
         setSelected({ kind: "tenant", id: data.tenant.id });
       }
@@ -290,10 +340,57 @@ const PlatformAdmin = () => {
       setEditDraft(tenant.id, {
         ...tenantToDraft(data.tenant),
         password: "",
-        inboundPhone: "",
       });
     } catch (err) {
       setRowError((current) => ({ ...current, [tenant.id]: err.message }));
+    }
+  };
+
+  const handleSaveUser = async (tenant, userId, payload) => {
+    setUserErrors((current) => ({ ...current, [userId]: null }));
+    try {
+      const data = await updateTenantUser(tenant.id, userId, payload);
+      if (data.tenant) {
+        const current = editDrafts[tenant.id] || tenantToDraft(data.tenant);
+        setEditDraft(tenant.id, {
+          ...current,
+          ownerName: data.tenant.ownerName || current.ownerName,
+          email: data.tenant.ownerEmail || current.email,
+        });
+      }
+    } catch (err) {
+      setUserErrors((current) => ({ ...current, [userId]: err.message }));
+      throw err;
+    }
+  };
+
+  const handleSaveStaff = async (event, member) => {
+    event.preventDefault();
+    setStaffFormError(null);
+    const draft = staffDrafts[member.id] || {
+      name: member.name || "",
+      email: member.email || "",
+      password: "",
+    };
+    try {
+      const payload = {
+        name: draft.name,
+        email: draft.email,
+      };
+      if (String(draft.password || "").trim()) {
+        payload.password = String(draft.password).trim();
+      }
+      await updateStaff(member.id, payload);
+      setStaffDrafts((current) => ({
+        ...current,
+        [member.id]: {
+          name: draft.name,
+          email: draft.email,
+          password: "",
+        },
+      }));
+    } catch (err) {
+      setStaffFormError(err.message);
     }
   };
 
@@ -561,12 +658,7 @@ const PlatformAdmin = () => {
     </div>
   );
 
-  let detail = (
-    <p className="platform-ops-placeholder">
-      Choisissez une demande dans la file pour suivre l'état du dossier, ou
-      ouvrez Nouveau client pour onboarder un restaurant.
-    </p>
-  );
+  let detail = null;
 
   if (lane === "create") {
     detail = (
@@ -605,6 +697,17 @@ const PlatformAdmin = () => {
             onSubmit={(event) => handleSaveTenant(event, selectedTenant)}
             busy={busyId === selectedTenant.id}
             error={rowError[selectedTenant.id]}
+            users={tenantUsers[selectedTenant.id] || []}
+            usersLoading={Boolean(tenantUsersLoading[selectedTenant.id])}
+            onSaveUser={(userId, payload) =>
+              handleSaveUser(selectedTenant, userId, payload)
+            }
+            userBusyId={busyId}
+            userErrors={userErrors}
+            onUploadIdentity={(kind, file) =>
+              uploadTenantDocument(selectedTenant.id, kind, file)
+            }
+            uploadBusyId={busyId}
           >
             {renderTenantActions(selectedTenant)}
           </PlatformTenantEditor>
@@ -683,91 +786,154 @@ const PlatformAdmin = () => {
         {renderLeadActions("demo", selectedDemo)}
       </div>
     );
-  } else if (lane === "staff" && canManageStaff) {
+  } else if (selectedStaff && canManageStaff) {
+    const staffDraft = staffDrafts[selectedStaff.id] || {
+      name: selectedStaff.name || "",
+      email: selectedStaff.email || "",
+      password: "",
+    };
     detail = (
-      <>
-        <form className="platform-admin-login platform-ops-staff-form" onSubmit={handleCreateStaff}>
-          <h2>Créer un admin back-office</h2>
-          <p>
-            Même accès que vous sur les restaurants et les instances. Seul votre
-            compte gère les comptes.
+      <form
+        className="platform-admin-login"
+        onSubmit={(event) => handleSaveStaff(event, selectedStaff)}
+      >
+        <h2>{selectedStaff.name || selectedStaff.email}</h2>
+        <p>
+          {selectedStaff.isPlatformOwner ? "Propriétaire" : "Admin"}
+          {" · "}
+          Dernière connexion : {formatOpsDate(selectedStaff.lastLoginAt)}
+        </p>
+        <label>
+          Nom
+          <input
+            type="text"
+            value={staffDraft.name}
+            onChange={(event) =>
+              setStaffDrafts((current) => ({
+                ...current,
+                [selectedStaff.id]: { ...staffDraft, name: event.target.value },
+              }))
+            }
+            autoComplete="off"
+          />
+        </label>
+        <label>
+          E-mail
+          <input
+            type="email"
+            required
+            value={staffDraft.email}
+            onChange={(event) =>
+              setStaffDrafts((current) => ({
+                ...current,
+                [selectedStaff.id]: { ...staffDraft, email: event.target.value },
+              }))
+            }
+            autoComplete="off"
+          />
+        </label>
+        <label>
+          Nouveau mot de passe
+          <input
+            type="text"
+            minLength={8}
+            value={staffDraft.password}
+            onChange={(event) =>
+              setStaffDrafts((current) => ({
+                ...current,
+                [selectedStaff.id]: {
+                  ...staffDraft,
+                  password: event.target.value,
+                },
+              }))
+            }
+            autoComplete="off"
+          />
+        </label>
+        {staffFormError && (
+          <p className="platform-admin-error" role="alert">
+            {staffFormError}
           </p>
-          <label>
-            Nom
-            <input
-              type="text"
-              value={staffName}
-              onChange={(event) => setStaffName(event.target.value)}
-              autoComplete="off"
-            />
-          </label>
-          <label>
-            E-mail
-            <input
-              type="email"
-              required
-              value={staffEmail}
-              onChange={(event) => setStaffEmail(event.target.value)}
-              autoComplete="off"
-            />
-          </label>
-          <label>
-            Mot de passe
-            <input
-              type="password"
-              required
-              minLength={8}
-              value={staffPassword}
-              onChange={(event) => setStaffPassword(event.target.value)}
-              autoComplete="new-password"
-            />
-          </label>
-          {staffFormError && (
-            <p className="platform-admin-error" role="alert">
-              {staffFormError}
-            </p>
-          )}
+        )}
+        <div className="platform-admin-assign">
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={busyId === "create-staff"}
+            disabled={busyId === selectedStaff.id}
           >
-            {busyId === "create-staff" ? "Création..." : "Créer le compte"}
+            {busyId === selectedStaff.id ? "Enregistrement..." : "Enregistrer"}
           </button>
-        </form>
-        {selectedStaff && (
-          <div className="platform-admin-card">
-            <div className="platform-admin-card-head">
-              <h2>{selectedStaff.name || selectedStaff.email}</h2>
-              <span className="platform-admin-status">
-                {selectedStaff.isPlatformOwner ? "Propriétaire" : "Admin"}
-              </span>
-            </div>
-            <dl className="platform-admin-meta">
-              <div>
-                <dt>E-mail</dt>
-                <dd>{selectedStaff.email}</dd>
-              </div>
-              <div>
-                <dt>Dernière connexion</dt>
-                <dd>{formatOpsDate(selectedStaff.lastLoginAt)}</dd>
-              </div>
-            </dl>
-            {!selectedStaff.isPlatformOwner && (
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={busyId === selectedStaff.id}
-                onClick={() => handleRevokeStaff(selectedStaff)}
-              >
-                Retirer l'accès
-              </button>
-            )}
-          </div>
-        )}
-      </>
+          {!selectedStaff.isPlatformOwner && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={busyId === selectedStaff.id}
+              onClick={() => handleRevokeStaff(selectedStaff)}
+            >
+              Retirer l'accès
+            </button>
+          )}
+        </div>
+      </form>
     );
   }
+
+  const staffCreateForm =
+    lane === "staff" && canManageStaff ? (
+      <form className="platform-admin-login platform-ops-staff-form" onSubmit={handleCreateStaff}>
+        <h2>Créer un admin back-office</h2>
+        <p>
+          Même accès que vous sur les restaurants et les instances. Seul votre
+          compte gère les comptes.
+        </p>
+        <label>
+          Nom
+          <input
+            type="text"
+            value={staffName}
+            onChange={(event) => setStaffName(event.target.value)}
+            autoComplete="off"
+          />
+        </label>
+        <label>
+          E-mail
+          <input
+            type="email"
+            required
+            value={staffEmail}
+            onChange={(event) => setStaffEmail(event.target.value)}
+            autoComplete="off"
+          />
+        </label>
+        <label>
+          Mot de passe
+          <input
+            type="password"
+            required
+            minLength={8}
+            value={staffPassword}
+            onChange={(event) => setStaffPassword(event.target.value)}
+            autoComplete="new-password"
+          />
+        </label>
+        {staffFormError && !selectedStaff && (
+          <p className="platform-admin-error" role="alert">
+            {staffFormError}
+          </p>
+        )}
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={busyId === "create-staff"}
+        >
+          {busyId === "create-staff" ? "Création..." : "Créer le compte"}
+        </button>
+      </form>
+    ) : null;
+
+  const modalOpen =
+    lane === "create" ||
+    Boolean(selectedTenant || selectedContact || selectedDemo || selectedStaff);
 
   return (
     <PageContainer className="platform-ops-page">
@@ -788,10 +954,13 @@ const PlatformAdmin = () => {
         isLoading={isLoading}
         error={error}
         emptyLabel={EMPTY_LABELS[lane] || "Aucun élément."}
+        listTitle={listTitle}
         hideList={lane === "create"}
-      >
+        listHeader={staffCreateForm}
+      />
+      <PlatformOpsModal isOpen={modalOpen} onClose={closeModal}>
         {detail}
-      </PlatformOpsBoard>
+      </PlatformOpsModal>
     </PageContainer>
   );
 };
