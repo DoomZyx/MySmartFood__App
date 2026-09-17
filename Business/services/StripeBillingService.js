@@ -109,6 +109,7 @@ export async function createCheckoutSession({ user, planSlug, planId, countryCod
     client_reference_id: user.id,
     customer_email: user.email,
     metadata,
+    subscription_data: { metadata },
   });
 
   if (!session.url) {
@@ -183,13 +184,29 @@ async function onCheckoutCompleted(stripe, session) {
   const plan = await Plan.findById(planId);
   if (!plan) return;
 
-  let tenantId = null;
+  let tenantId = session.metadata?.tenantId || null;
   await withTransaction(async (client) => {
-    const existing = await client.query(
-      `SELECT id FROM tenants WHERE owner_user_id = $1 AND status <> 'closed' LIMIT 1`,
-      [userId]
-    );
-    tenantId = existing.rows[0]?.id;
+    if (tenantId) {
+      const owned = await client.query(
+        `SELECT id FROM tenants WHERE id = $1 AND owner_user_id = $2 AND status <> 'closed'`,
+        [tenantId, userId]
+      );
+      tenantId = owned.rows[0]?.id || null;
+    }
+    if (!tenantId) {
+      const unpaid = await client.query(
+        `SELECT t.id
+           FROM tenants t
+           LEFT JOIN subscriptions s ON s.tenant_id = t.id
+          WHERE t.owner_user_id = $1
+            AND t.status <> 'closed'
+            AND s.stripe_subscription_id IS NULL
+          ORDER BY t.created_at ASC
+          LIMIT 1`,
+        [userId]
+      );
+      tenantId = unpaid.rows[0]?.id || null;
+    }
     if (!tenantId) {
       const tenant = await Tenant.createTenant(client, {
         slug: Tenant.slugFromName(session.customer_details?.name || "etablissement", userId.slice(0, 8)),
@@ -260,6 +277,21 @@ async function onCheckoutCompleted(stripe, session) {
       [tenantId]
     )
   );
+
+  if (tenantId) {
+    try {
+      await stripe.subscriptions.update(subscriptionId, {
+        metadata: {
+          userId,
+          planId,
+          planSlug: plan.slug,
+          tenantId,
+        },
+      });
+    } catch (err) {
+      logger.error({ err: err.message, tenantId }, "Metadata Stripe tenant absente");
+    }
+  }
 
   if (tenantId && Subscription.isAccessGranted(stripeSub.status)) {
     try {

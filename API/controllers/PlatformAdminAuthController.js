@@ -1,5 +1,6 @@
 import {
   confirmPlatformTotp,
+  isDevPlatformBypass,
   loginPlatformAdmin,
   setupPlatformTotp,
   verifyPlatformTotp,
@@ -41,7 +42,10 @@ async function completePlatform(reply, user) {
 export const PlatformAdminAuthController = {
   async login(request, reply) {
     try {
-      const { user, totpStep } = await loginPlatformAdmin(request.body || {});
+      const { user, totpStep, bypassTotp } = await loginPlatformAdmin(request.body || {});
+      if (bypassTotp) {
+        return reply.send(await completePlatform(reply, user));
+      }
       setSessionCookie(reply, user);
       setPlatformPendingCookie(reply, user, totpStep);
       return reply.send({
@@ -54,6 +58,16 @@ export const PlatformAdminAuthController = {
     } catch (error) {
       return handleError(error, reply);
     }
+  },
+
+  async devElevate(request, reply) {
+    if (!isDevPlatformBypass()) {
+      return reply.code(404).send({ error: "Not found" });
+    }
+    if (!request.user?.isPlatformAdmin) {
+      return reply.code(403).send({ error: "Accès refusé" });
+    }
+    return reply.send(await completePlatform(reply, request.user));
   },
 
   async challenge(request, reply) {

@@ -1,5 +1,6 @@
 import { PlatformAdminAuthController } from "../../API/controllers/PlatformAdminAuthController.js";
 import {
+  requireAuth,
   requirePlatformAdmin,
   requirePlatformPending,
 } from "../../middleware/sessionAuth.js";
@@ -20,15 +21,20 @@ export default async function platformSessionRoutes(fastify) {
     schema: {
       body: {
         type: "object",
-        required: ["email", "password", "accessCode"],
+        required: ["email", "password"],
         properties: {
           email: { type: "string", format: "email" },
           password: { type: "string", minLength: 1 },
-          accessCode: { type: "string", minLength: 8, maxLength: 128 },
+          accessCode: { type: "string", maxLength: 128 },
         },
       },
     },
     handler: PlatformAdminAuthController.login,
+  });
+
+  fastify.post("/dev-elevate", {
+    preHandler: [requireAuth],
+    handler: PlatformAdminAuthController.devElevate,
   });
 
   fastify.get("/challenge", {

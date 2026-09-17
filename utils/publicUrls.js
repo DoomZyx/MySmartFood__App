@@ -12,7 +12,7 @@ export function dashboardUrl() {
 }
 
 export function platformAdminPath() {
-  const raw = String(process.env.PLATFORM_ADMIN_PATH || "/x/bXlzbWFydGZvb2QtcGxhdGZvcm0tYWRtaW4").trim();
+  const raw = String(process.env.PLATFORM_ADMIN_PATH || "/bf-admin").trim();
   return raw.startsWith("/") ? raw : `/${raw}`;
 }
 

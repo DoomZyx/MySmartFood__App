@@ -161,7 +161,7 @@ export async function sessionPayload(user) {
       accessUnlocked,
       smartcrmInstanceId: first?.id || null,
       twilioDocsSubmittedAt,
-      role: user.isPlatformAdmin || first ? "admin" : "user",
+      role: first ? "admin" : "user",
       appRole: first ? "admin" : "user",
       dashboardUrl: dashboardUrl(),
     },

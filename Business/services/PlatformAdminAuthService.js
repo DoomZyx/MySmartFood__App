@@ -1,8 +1,13 @@
 import crypto from "node:crypto";
 import QRCode from "qrcode";
+import { appEnv } from "../../Config/env.js";
 import * as User from "../../models/pg/User.js";
 import { decryptSecret, encryptSecret } from "../../utils/secretCrypto.js";
 import { generateTotpSecret, totpOtpauthUri, verifyTotp } from "../../utils/totp.js";
+
+export function isDevPlatformBypass() {
+  return appEnv === "dev";
+}
 
 const GENERIC_DENIED = "Identifiants ou code d'accès incorrects";
 const TOTP_PURPOSE = "platform-totp";
@@ -31,16 +36,25 @@ export async function totpStepFor(userId) {
 }
 
 export async function loginPlatformAdmin({ email, password, accessCode }) {
+  const emailNorm = String(email || "").trim().toLowerCase();
+  const user = await User.findByEmail(emailNorm);
+  const passwordOk = user ? await User.verifyPassword(user.id, password) : false;
+  const adminOk = Boolean(user?.isPlatformAdmin);
+
+  if (isDevPlatformBypass()) {
+    if (!user || !passwordOk || !adminOk) {
+      denied();
+    }
+    await User.touchLastLogin(user.id);
+    return { user, totpStep: null, bypassTotp: true };
+  }
+
   const expectedCode = configuredAccessCode();
   if (expectedCode.length < 8) {
     denied("Back-office non configuré", 503);
   }
 
-  const emailNorm = String(email || "").trim().toLowerCase();
-  const user = await User.findByEmail(emailNorm);
-  const passwordOk = user ? await User.verifyPassword(user.id, password) : false;
   const codeOk = safeEqual(accessCode, expectedCode);
-  const adminOk = Boolean(user?.isPlatformAdmin);
 
   if (!user || !passwordOk || !codeOk || !adminOk) {
     denied();
@@ -48,7 +62,7 @@ export async function loginPlatformAdmin({ email, password, accessCode }) {
 
   await User.touchLastLogin(user.id);
   const totpStep = await totpStepFor(user.id);
-  return { user, totpStep };
+  return { user, totpStep, bypassTotp: false };
 }
 
 export async function startPlatformOAuthChallenge(user) {

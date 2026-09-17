@@ -3,10 +3,14 @@ import { URL } from "node:url";
 import oauthPlugin from "@fastify/oauth2";
 import logger from "../Services/logging/logger.js";
 import { loginWithGoogleProfile } from "../Business/services/AccountAuthService.js";
-import { startPlatformOAuthChallenge } from "../Business/services/PlatformAdminAuthService.js";
+import {
+  isDevPlatformBypass,
+  startPlatformOAuthChallenge,
+} from "../Business/services/PlatformAdminAuthService.js";
 import {
   cookieOptions,
   setPlatformPendingCookie,
+  setPlatformSessionCookie,
   setSessionCookie,
 } from "../middleware/sessionAuth.js";
 import { frontendUrlFromRequest, platformAdminPath, siteUrl } from "../utils/publicUrls.js";
@@ -203,6 +207,11 @@ export async function registerGoogleOAuth(fastify) {
       if (intent === "platform") {
         const dest = new URL(platformAdminPath(), returnTo);
         try {
+          if (isDevPlatformBypass() && result.user?.isPlatformAdmin) {
+            setPlatformSessionCookie(reply, result.user);
+            dest.searchParams.set("oauth", "ok");
+            return reply.redirect(dest.toString());
+          }
           const totpStep = await startPlatformOAuthChallenge(result.user);
           setPlatformPendingCookie(reply, result.user, totpStep);
           dest.searchParams.set("oauth", "ok");
@@ -212,7 +221,7 @@ export async function registerGoogleOAuth(fastify) {
         return reply.redirect(dest.toString());
       }
 
-      return reply.redirect(`${returnTo}/api/auth/callback`);
+      return reply.redirect(`${returnTo}/auth/callback`);
     } catch (err) {
       return fail(err.message);
     }
