@@ -1,0 +1,166 @@
+@use "../../styles/variables" as *;
+
+.pte {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.pte-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+
+  h2 {
+    margin: 0 0 0.35rem;
+    font-size: 1.25rem;
+    color: $text-primary;
+  }
+
+  p {
+    margin: 0;
+    color: $text-muted;
+    font-size: 0.9rem;
+    line-height: 1.45;
+  }
+}
+
+.pte-check {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.pte-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  border: 1px solid $border-primary;
+  color: $text-secondary;
+}
+
+.pte-chip-ok {
+  border-color: rgba(16, 185, 129, 0.45);
+  color: $accent-success;
+}
+
+.pte-chip-ko {
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #f87171;
+}
+
+.pte-chip-ready {
+  border-color: rgba(0, 212, 255, 0.4);
+  color: $accent-primary;
+}
+
+.pte-chip-wait {
+  color: $text-muted;
+}
+
+.pte-section {
+  padding-top: 0.25rem;
+  border-top: 1px solid $border-primary;
+
+  h3 {
+    margin: 0 0 0.85rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: $text-muted;
+  }
+}
+
+.pte-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem 1rem;
+}
+
+.pte-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.pte-field-wide {
+  grid-column: 1 / -1;
+}
+
+.pte-label {
+  font-size: 0.82rem;
+  color: $text-secondary;
+}
+
+.pte-hint {
+  font-size: 0.75rem;
+  color: $text-muted;
+  line-height: 1.4;
+}
+
+.pte-field input,
+.pte-field select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border: 1px solid $border-primary;
+  border-radius: 12px;
+  background: $bg-secondary;
+  color: $text-primary;
+}
+
+.pte-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+  margin: 0;
+
+  dt {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: $text-muted;
+    margin-bottom: 0.2rem;
+  }
+
+  dd {
+    margin: 0;
+    color: $text-secondary;
+    word-break: break-word;
+    font-size: 0.88rem;
+  }
+}
+
+.pte-meta-wide {
+  grid-column: 1 / -1;
+
+  dd {
+    color: $accent-primary;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.82rem;
+  }
+}
+
+.pte-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  padding-top: 0.35rem;
+}
+
+@media (max-width: 720px) {
+  .pte-grid,
+  .pte-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .pte-field-wide,
+  .pte-meta-wide {
+    grid-column: auto;
+  }
+}

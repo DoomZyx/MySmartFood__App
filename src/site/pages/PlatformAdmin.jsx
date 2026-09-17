@@ -4,6 +4,11 @@ import { useAuth } from "../hooks/useAuth";
 import { usePlatformAdmin } from "../hooks/usePlatformAdmin";
 import { startPlatformGoogleLogin } from "../services/platformAdminService";
 import AuthSuccessModal from "../components/Shared/AuthSuccessModal/AuthSuccessModal";
+import PlatformTenantEditor, {
+  EMPTY_TENANT_DRAFT,
+  draftToPayload,
+  tenantToDraft,
+} from "../components/PlatformTenantEditor/PlatformTenantEditor";
 import "./PlatformAdmin.scss";
 
 const STATUS_LABELS = {
@@ -15,14 +20,6 @@ const STATUS_LABELS = {
   en_cours: "En cours",
   traite: "Traité",
 };
-
-function parsePhoneInput(value) {
-  const trimmed = String(value || "").trim();
-  if (/^PN[a-f0-9]{32}$/i.test(trimmed)) {
-    return { phoneNumberSid: trimmed };
-  }
-  return { phoneNumber: trimmed };
-}
 
 function formatDate(value) {
   if (!value) return "—";
@@ -52,7 +49,8 @@ const PlatformAdmin = () => {
     finishTotp,
     loadInbox,
     loadFleet,
-    assignPhone,
+    createTenant,
+    updateTenant,
     activateTenant,
     suspendTenant,
     closeTenant,
@@ -65,7 +63,6 @@ const PlatformAdmin = () => {
     revokeStaff,
   } = usePlatformAdmin();
   const [tab, setTab] = useState("restaurants");
-  const [phoneDrafts, setPhoneDrafts] = useState({});
   const [rejectDrafts, setRejectDrafts] = useState({});
   const [rowError, setRowError] = useState({});
   const [email, setEmail] = useState("");
@@ -80,6 +77,10 @@ const PlatformAdmin = () => {
   const [staffName, setStaffName] = useState("");
   const [staffPassword, setStaffPassword] = useState("");
   const [staffFormError, setStaffFormError] = useState(null);
+  const [createDraft, setCreateDraft] = useState(EMPTY_TENANT_DRAFT);
+  const [editDrafts, setEditDrafts] = useState({});
+  const [clientFormError, setClientFormError] = useState(null);
+  const [createdAccount, setCreatedAccount] = useState(null);
   const isDevBypass = import.meta.env.DEV;
   const canManageStaff = Boolean(authUser?.isPlatformOwner);
 
@@ -107,6 +108,16 @@ const PlatformAdmin = () => {
       cancelled = true;
     };
   }, [checkSession, loadInbox, loadFleet, loadStaff, loadTotpSetup, setAuth]);
+
+  useEffect(() => {
+    setEditDrafts((current) => {
+      const next = { ...current };
+      [...tenants, ...fleet].forEach((tenant) => {
+        if (!next[tenant.id]) next[tenant.id] = tenantToDraft(tenant);
+      });
+      return next;
+    });
+  }, [tenants, fleet]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -279,16 +290,6 @@ const PlatformAdmin = () => {
     );
   }
 
-  const handleAssign = async (tenantId) => {
-    setRowError((current) => ({ ...current, [tenantId]: null }));
-    try {
-      await assignPhone(tenantId, parsePhoneInput(phoneDrafts[tenantId]));
-      setPhoneDrafts((current) => ({ ...current, [tenantId]: "" }));
-    } catch (err) {
-      setRowError((current) => ({ ...current, [tenantId]: err.message }));
-    }
-  };
-
   const handleActivate = async (tenantId) => {
     setRowError((current) => ({ ...current, [tenantId]: null }));
     try {
@@ -338,6 +339,44 @@ const PlatformAdmin = () => {
     if (next === "comptes" && canManageStaff) loadStaff();
   };
 
+  const setEditDraft = (tenantId, draft) => {
+    setEditDrafts((current) => ({ ...current, [tenantId]: draft }));
+  };
+
+  const handleCreateTenant = async (event) => {
+    event.preventDefault();
+    setClientFormError(null);
+    setCreatedAccount(null);
+    try {
+      const payload = draftToPayload(createDraft, { requirePassword: true });
+      const data = await createTenant(payload);
+      setCreatedAccount({
+        email: payload.email,
+        password: data.temporaryPassword || payload.password,
+        name: data.tenant?.businessName || payload.name,
+      });
+      setCreateDraft(EMPTY_TENANT_DRAFT);
+    } catch (err) {
+      setClientFormError(err.message);
+    }
+  };
+
+  const handleSaveTenant = async (event, tenant) => {
+    event.preventDefault();
+    setRowError((current) => ({ ...current, [tenant.id]: null }));
+    try {
+      const draft = editDrafts[tenant.id] || tenantToDraft(tenant);
+      const data = await updateTenant(tenant.id, draftToPayload(draft));
+      setEditDraft(tenant.id, {
+        ...tenantToDraft(data.tenant),
+        password: "",
+        inboundPhone: "",
+      });
+    } catch (err) {
+      setRowError((current) => ({ ...current, [tenant.id]: err.message }));
+    }
+  };
+
   const handleCreateStaff = async (event) => {
     event.preventDefault();
     setStaffFormError(null);
@@ -380,7 +419,7 @@ const PlatformAdmin = () => {
       <Hero
         title="Back-office"
         gradientText="demandes"
-        description="Demandes en attente et instances actives. Session plateforme obligatoire."
+        description="Onboarding clients, validation des dossiers et instances actives."
       />
       <Section variant="alt">
         <div className="platform-admin">
@@ -431,6 +470,28 @@ const PlatformAdmin = () => {
           )}
           {isLoading && <p className="platform-admin-empty">Chargement...</p>}
 
+          {tab === "restaurants" && (
+            <div className="platform-admin-card">
+              <PlatformTenantEditor
+                mode="create"
+                draft={createDraft}
+                onChange={setCreateDraft}
+                onSubmit={handleCreateTenant}
+                busy={busyId === "create-tenant"}
+                error={clientFormError}
+              >
+                {createdAccount && (
+                  <p role="status">
+                    Compte créé pour {createdAccount.name}. E-mail :{" "}
+                    {createdAccount.email}. Mot de passe : {createdAccount.password}.
+                    Le restaurant est dans l'onglet Actifs. Notez le mot de passe,
+                    il ne sera plus réaffiché.
+                  </p>
+                )}
+              </PlatformTenantEditor>
+            </div>
+          )}
+
           {tab === "restaurants" && !isLoading && tenants.length === 0 && (
             <p className="platform-admin-empty">Aucune demande restaurant en attente.</p>
           )}
@@ -439,90 +500,19 @@ const PlatformAdmin = () => {
             <ul className="platform-admin-list">
               {tenants.map((tenant) => (
                 <li key={tenant.id} className="platform-admin-card">
-                  <div className="platform-admin-card-head">
-                    <h2>{tenant.businessName || tenant.name}</h2>
-                    <span className="platform-admin-status">
-                      {STATUS_LABELS[tenant.status] || tenant.status}
-                    </span>
-                  </div>
-                  <dl className="platform-admin-meta">
-                    <div>
-                      <dt>Propriétaire</dt>
-                      <dd>{tenant.ownerEmail}</dd>
-                    </div>
-                    <div>
-                      <dt>Offre</dt>
-                      <dd>{tenant.planName || tenant.planSlug || "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>Dossier envoyé</dt>
-                      <dd>{formatDate(tenant.documentsSubmittedAt)}</dd>
-                    </div>
-                    <div>
-                      <dt>Provisioning</dt>
-                      <dd>{tenant.provisioningState || "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>Bundle Twilio</dt>
-                      <dd>{tenant.bundleStatus || "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>Téléphone établissement</dt>
-                      <dd>{tenant.restaurantPhone || "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>Numéro attribué</dt>
-                      <dd>{tenant.phoneNumber || "Non attribué"}</dd>
-                    </div>
-                    <div>
-                      <dt>Slug</dt>
-                      <dd>{tenant.slug || "—"}</dd>
-                    </div>
-                    <div className="platform-admin-webhook">
-                      <dt>Identifiant HTTP Twilio (chiffré)</dt>
-                      <dd>{tenant.voiceWebhookSlug || "—"}</dd>
-                    </div>
-                    <div className="platform-admin-webhook">
-                      <dt>Webhook vocal</dt>
-                      <dd>
-                        {tenant.voiceWebhookUrl ||
-                          "Tunnel public introuvable. Lance ngrok vers le port 8080."}
-                      </dd>
-                    </div>
-                    {tenant.provisioningError && (
-                      <div className="platform-admin-webhook">
-                        <dt>Motif</dt>
-                        <dd>{tenant.provisioningError}</dd>
-                      </div>
-                    )}
-                  </dl>
-
-                  <div className="platform-admin-actions">
-                    <label htmlFor={`phone-${tenant.id}`}>
-                      Numéro E.164 ou SID Twilio
-                    </label>
+                  <PlatformTenantEditor
+                    mode="edit"
+                    tenant={{
+                      ...tenant,
+                      status: STATUS_LABELS[tenant.status] || tenant.status,
+                    }}
+                    draft={editDrafts[tenant.id] || tenantToDraft(tenant)}
+                    onChange={(draft) => setEditDraft(tenant.id, draft)}
+                    onSubmit={(event) => handleSaveTenant(event, tenant)}
+                    busy={busyId === tenant.id}
+                    error={rowError[tenant.id]}
+                  >
                     <div className="platform-admin-assign">
-                      <input
-                        id={`phone-${tenant.id}`}
-                        type="text"
-                        value={phoneDrafts[tenant.id] || ""}
-                        onChange={(event) =>
-                          setPhoneDrafts((current) => ({
-                            ...current,
-                            [tenant.id]: event.target.value,
-                          }))
-                        }
-                        placeholder="+33123456789"
-                        disabled={busyId === tenant.id}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        disabled={busyId === tenant.id || !phoneDrafts[tenant.id]}
-                        onClick={() => handleAssign(tenant.id)}
-                      >
-                        {busyId === tenant.id ? "Attribution..." : "Attribuer"}
-                      </button>
                       {tenant.status !== "active" && (
                         <button
                           type="button"
@@ -533,9 +523,7 @@ const PlatformAdmin = () => {
                           Accepter
                         </button>
                       )}
-                    </div>
-                    {tenant.status !== "active" && (
-                      <div className="platform-admin-assign">
+                      {tenant.status !== "active" && (
                         <input
                           type="text"
                           value={rejectDrafts[tenant.id] || ""}
@@ -548,6 +536,8 @@ const PlatformAdmin = () => {
                           placeholder="Motif du refus"
                           disabled={busyId === tenant.id}
                         />
+                      )}
+                      {tenant.status !== "active" && (
                         <button
                           type="button"
                           className="btn btn-secondary"
@@ -556,34 +546,17 @@ const PlatformAdmin = () => {
                         >
                           Refuser
                         </button>
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          disabled={busyId === tenant.id}
-                          onClick={() => handleClose(tenant)}
-                        >
-                          Supprimer
-                        </button>
-                      </div>
-                    )}
-                    {tenant.status === "active" && (
-                      <div className="platform-admin-assign">
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          disabled={busyId === tenant.id}
-                          onClick={() => handleClose(tenant)}
-                        >
-                          Supprimer
-                        </button>
-                      </div>
-                    )}
-                    {rowError[tenant.id] && (
-                      <p className="platform-admin-error" role="alert">
-                        {rowError[tenant.id]}
-                      </p>
-                    )}
-                  </div>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={busyId === tenant.id}
+                        onClick={() => handleClose(tenant)}
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+                  </PlatformTenantEditor>
                 </li>
               ))}
             </ul>
@@ -597,80 +570,19 @@ const PlatformAdmin = () => {
             <ul className="platform-admin-list">
               {fleet.map((tenant) => (
                 <li key={tenant.id} className="platform-admin-card">
-                  <div className="platform-admin-card-head">
-                    <h2>{tenant.businessName || tenant.name}</h2>
-                    <span className="platform-admin-status">
-                      {STATUS_LABELS[tenant.status] || tenant.status}
-                    </span>
-                  </div>
-                  <dl className="platform-admin-meta">
-                    <div>
-                      <dt>Propriétaire</dt>
-                      <dd>{tenant.ownerEmail}</dd>
-                    </div>
-                    <div>
-                      <dt>Offre</dt>
-                      <dd>{tenant.planName || tenant.planSlug || "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>Activé le</dt>
-                      <dd>{formatDate(tenant.activatedAt)}</dd>
-                    </div>
-                    <div>
-                      <dt>Téléphone établissement</dt>
-                      <dd>{tenant.restaurantPhone || "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>Numéro attribué</dt>
-                      <dd>{tenant.phoneNumber || "Non attribué"}</dd>
-                    </div>
-                    <div>
-                      <dt>SID Twilio</dt>
-                      <dd>{tenant.phoneNumberSid || "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>Slug</dt>
-                      <dd>{tenant.slug || "—"}</dd>
-                    </div>
-                    <div className="platform-admin-webhook">
-                      <dt>Identifiant HTTP Twilio (chiffré)</dt>
-                      <dd>{tenant.voiceWebhookSlug || "—"}</dd>
-                    </div>
-                    <div className="platform-admin-webhook">
-                      <dt>Webhook vocal</dt>
-                      <dd>
-                        {tenant.voiceWebhookUrl ||
-                          "Tunnel public introuvable. Lance ngrok vers le port 8080."}
-                      </dd>
-                    </div>
-                  </dl>
-
-                  <div className="platform-admin-actions">
-                    <label htmlFor={`fleet-phone-${tenant.id}`}>
-                      Nouveau numéro E.164 ou SID Twilio
-                    </label>
+                  <PlatformTenantEditor
+                    mode="edit"
+                    tenant={{
+                      ...tenant,
+                      status: STATUS_LABELS[tenant.status] || tenant.status,
+                    }}
+                    draft={editDrafts[tenant.id] || tenantToDraft(tenant)}
+                    onChange={(draft) => setEditDraft(tenant.id, draft)}
+                    onSubmit={(event) => handleSaveTenant(event, tenant)}
+                    busy={busyId === tenant.id}
+                    error={rowError[tenant.id]}
+                  >
                     <div className="platform-admin-assign">
-                      <input
-                        id={`fleet-phone-${tenant.id}`}
-                        type="text"
-                        value={phoneDrafts[tenant.id] || ""}
-                        onChange={(event) =>
-                          setPhoneDrafts((current) => ({
-                            ...current,
-                            [tenant.id]: event.target.value,
-                          }))
-                        }
-                        placeholder={tenant.phoneNumberSid || tenant.phoneNumber || "+33123456789"}
-                        disabled={busyId === tenant.id}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        disabled={busyId === tenant.id || !phoneDrafts[tenant.id]}
-                        onClick={() => handleAssign(tenant.id)}
-                      >
-                        {busyId === tenant.id ? "Mise à jour..." : "Changer le numéro"}
-                      </button>
                       {tenant.status === "active" ? (
                         <button
                           type="button"
@@ -699,12 +611,7 @@ const PlatformAdmin = () => {
                         Supprimer
                       </button>
                     </div>
-                    {rowError[tenant.id] && (
-                      <p className="platform-admin-error" role="alert">
-                        {rowError[tenant.id]}
-                      </p>
-                    )}
-                  </div>
+                  </PlatformTenantEditor>
                 </li>
               ))}
             </ul>

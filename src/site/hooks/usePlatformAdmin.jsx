@@ -5,6 +5,8 @@ import {
   closePlatformTenant,
   confirmPlatformTotp,
   createPlatformStaff,
+  createPlatformTenant,
+  updatePlatformTenant,
   elevateDevPlatformAdmin,
   fetchPlatformChallenge,
   fetchPlatformInbox,
@@ -257,6 +259,33 @@ export function usePlatformAdmin() {
     }
   }, []);
 
+  const createTenant = async (payload) => {
+    setBusyId("create-tenant");
+    try {
+      const data = await createPlatformTenant(payload);
+      if (data.tenant) {
+        setFleet((current) => [
+          data.tenant,
+          ...current.filter((item) => item.id !== data.tenant.id),
+        ]);
+      }
+      return data;
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const updateTenant = async (tenantId, payload) => {
+    setBusyId(tenantId);
+    try {
+      const data = await updatePlatformTenant(tenantId, payload);
+      if (data.tenant) replaceTenant(data.tenant);
+      return data;
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const createStaff = async ({ email, password, name }) => {
     setBusyId("create-staff");
     try {
@@ -324,6 +353,8 @@ export function usePlatformAdmin() {
     loadInbox,
     loadTenants,
     loadFleet,
+    createTenant,
+    updateTenant,
     assignPhone,
     activateTenant,
     suspendTenant,

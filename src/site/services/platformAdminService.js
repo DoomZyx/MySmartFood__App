@@ -121,6 +121,20 @@ export function fetchPlatformInbox() {
   return platformRequest("/api/platform/inbox");
 }
 
+export function createPlatformTenant(payload) {
+  return platformMutate("/api/platform/tenants", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updatePlatformTenant(tenantId, payload) {
+  return platformMutate(`/api/platform/tenants/${tenantId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function fetchPlatformTenants(status, queue) {
   const params = new URLSearchParams();
   if (status) params.set("status", status);
