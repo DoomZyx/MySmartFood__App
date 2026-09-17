@@ -4,7 +4,8 @@ import * as User from "../../models/pg/User.js";
 import * as Membership from "../../models/pg/Membership.js";
 import * as Subscription from "../../models/pg/Subscription.js";
 import * as EstablishmentProfile from "../../models/pg/EstablishmentProfile.js";
-import { isPaidSubscription } from "./RestaurantDashboardAccess.js";
+import * as Tenant from "../../models/pg/Tenant.js";
+import { isPaidSubscription, isRestaurantDashboardReady } from "./RestaurantDashboardAccess.js";
 import { sendDashboardAccessEmail } from "../../utils/emailService.js";
 import { siteUrl } from "../../utils/publicUrls.js";
 import { AccountAuthError } from "./AccountAuthService.js";
@@ -54,13 +55,19 @@ export async function redeemDashboardAccessToken(rawToken) {
   }
 
   if (row.tenantId) {
-    const subscription = await Subscription.findCurrentByTenant(row.tenantId);
-    if (!isPaidSubscription(subscription)) {
-      throw new AccountAuthError("Aucun abonnement réglé", 403);
-    }
-    const profile = await EstablishmentProfile.findByTenantId(row.tenantId);
-    if (!profile?.documentsSubmittedAt) {
-      throw new AccountAuthError("Dossier établissement incomplet", 403);
+    const [subscription, profile, tenant] = await Promise.all([
+      Subscription.findCurrentByTenant(row.tenantId),
+      EstablishmentProfile.findByTenantId(row.tenantId),
+      Tenant.findById(row.tenantId),
+    ]);
+    if (!isRestaurantDashboardReady(subscription, profile?.documentsSubmittedAt, tenant)) {
+      if (!isPaidSubscription(subscription)) {
+        throw new AccountAuthError("Aucun abonnement réglé", 403);
+      }
+      if (!profile?.documentsSubmittedAt) {
+        throw new AccountAuthError("Dossier établissement incomplet", 403);
+      }
+      throw new AccountAuthError("Dossier en cours de vérification", 403);
     }
   }
 

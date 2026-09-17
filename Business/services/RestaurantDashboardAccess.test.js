@@ -16,12 +16,18 @@ describe("RestaurantDashboardAccess", () => {
     expect(hasActiveRestaurantAccess({ status: "active" }, self)).toBe(false);
   });
 
-  test("self-service prêt seulement avec Stripe + dossier", () => {
+  test("self-service prêt seulement avec Stripe + dossier + validation", () => {
     expect(isPaidSubscription(paid)).toBe(true);
     expect(isRestaurantDashboardReady(paid, "2026-01-01", { onboardedBy: "self", status: "active" }))
       .toBe(true);
     expect(isRestaurantDashboardReady(paid, null, { onboardedBy: "self", status: "active" }))
       .toBe(false);
+    expect(
+      isRestaurantDashboardReady(paid, "2026-01-01", {
+        onboardedBy: "self",
+        status: "pending_compliance",
+      })
+    ).toBe(false);
   });
 
   test("client onboardé plateforme actif : dashboard sans Stripe ni KBIS", () => {

@@ -103,8 +103,14 @@ export async function requireRestaurantDashboard(request, reply) {
   if (!isPaidSubscription(request.subscription)) {
     return reply.code(402).send({ error: "Abonnement non réglé" });
   }
+  if (!profile?.documentsSubmittedAt) {
+    return reply.code(403).send({
+      error: "Dossier établissement incomplet",
+      message: "Transmettez les informations et pièces demandées dans Mon espace.",
+    });
+  }
   return reply.code(403).send({
-    error: "Dossier établissement incomplet",
-    message: "Transmettez les informations et pièces demandées dans Mon espace.",
+    error: "Dossier en cours de vérification",
+    message: "L'accès au tableau de bord s'ouvre après validation de votre dossier.",
   });
 }

@@ -7,6 +7,7 @@ import * as Membership from "../../models/pg/Membership.js";
 import * as Plan from "../../models/pg/Plan.js";
 import * as Subscription from "../../models/pg/Subscription.js";
 import * as EstablishmentProfile from "../../models/pg/EstablishmentProfile.js";
+import * as OnboardingDocument from "../../models/pg/OnboardingDocument.js";
 import {
   createProvisioningJob,
   markCompleted,
@@ -22,6 +23,8 @@ import {
   voiceWebhookUrl,
 } from "../../utils/voiceWebhookUrl.js";
 import { encrypt } from "../../utils/encryption.js";
+import { readEncryptedDocument } from "../../utils/documentCrypto.js";
+import { hasCompanyRegistration, parseCompanyRegistration } from "../../utils/companyRegistration.js";
 import {
   OPENAI_CHAT_MODEL,
   OPENAI_REALTIME_MODEL,
@@ -35,7 +38,8 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const COUNTRY_CODES = new Set(["FR", "BE", "LU"]);
 const COUNTRY_LABELS = { FR: "France", BE: "Belgique", LU: "Luxembourg" };
 const COUNTRY_FROM_LABEL = { France: "FR", Belgique: "BE", Luxembourg: "LU" };
-const REQUIRED_DOC_KINDS = ["kbis", "id_recto", "id_verso", "address_proof"];
+const REQUIRED_DOC_KINDS = ["id_recto", "id_verso", "address_proof"];
+const VIEWABLE_DOC_KINDS = ["kbis", "id_recto", "id_verso", "address_proof"];
 const TENANT_STATUSES = new Set([
   "pending_payment",
   "pending_compliance",
@@ -54,12 +58,53 @@ function twilioClient() {
   return twilio(sid, token);
 }
 
+function documentList(row) {
+  if (Array.isArray(row?.documents)) return row.documents;
+  if (typeof row?.documents === "string") {
+    try {
+      const parsed = JSON.parse(row.documents);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function documentKindsFrom(row) {
+  const fromDocs = documentList(row)
+    .map((item) => item?.kind)
+    .filter(Boolean);
+  if (fromDocs.length) return fromDocs;
+  return Array.isArray(row?.documentKinds) ? row.documentKinds : [];
+}
+
+export function isCompanyDossierComplete(row) {
+  if (!row) return false;
+  if (row.onboardedBy === "platform") return true;
+  const kinds = documentKindsFrom(row);
+  const docsOk =
+    Boolean(row.documentsSubmittedAt) &&
+    REQUIRED_DOC_KINDS.every((kind) => kinds.includes(kind));
+  return Boolean(
+    (row.businessName || row.name) &&
+      row.ownerEmail &&
+      row.addressLine &&
+      row.postalCode &&
+      row.city &&
+      row.restaurantPhone &&
+      String(row.phoneNumberUsage || "").trim().length >= 15 &&
+      hasCompanyRegistration(row) &&
+      docsOk
+  );
+}
+
 export function buildValidationChecklist(row) {
-  const kinds = Array.isArray(row?.documentKinds) ? row.documentKinds : [];
+  const kinds = documentKindsFrom(row);
   const docsOk =
     row?.onboardedBy === "platform" ||
-    Boolean(row?.documentsSubmittedAt) ||
-    REQUIRED_DOC_KINDS.every((kind) => kinds.includes(kind));
+    (Boolean(row?.documentsSubmittedAt) &&
+      REQUIRED_DOC_KINDS.every((kind) => kinds.includes(kind)));
   const items = [
     { key: "businessName", label: "Nom établissement", ok: Boolean(row?.businessName || row?.name) },
     { key: "ownerEmail", label: "E-mail propriétaire", ok: Boolean(row?.ownerEmail) },
@@ -69,6 +114,11 @@ export function buildValidationChecklist(row) {
       ok: Boolean(row?.addressLine && row?.postalCode && row?.city),
     },
     { key: "restaurantPhone", label: "Téléphone établissement", ok: Boolean(row?.restaurantPhone) },
+    {
+      key: "registration",
+      label: "SIRET / SIREN",
+      ok: row?.onboardedBy === "platform" || hasCompanyRegistration(row),
+    },
     {
       key: "phoneNumberUsage",
       label: "Usage du numéro",
@@ -85,7 +135,8 @@ export function buildValidationChecklist(row) {
 
 function serializeTenant(row, publicHost) {
   if (!row) return null;
-  const documentKinds = Array.isArray(row.documentKinds) ? row.documentKinds : [];
+  const documents = documentList(row);
+  const documentKinds = documentKindsFrom({ ...row, documents });
   return {
     id: row.id,
     slug: row.slug,
@@ -111,9 +162,13 @@ function serializeTenant(row, publicHost) {
     profileCountry: row.profileCountry || COUNTRY_LABELS[row.countryCode] || null,
     seatCount: row.seatCount ?? null,
     cuisineType: row.cuisineType || null,
+    siret: row.siret || null,
+    siren: row.siren || null,
     phoneNumberUsage: row.phoneNumberUsage || null,
     documentsSubmittedAt: row.documentsSubmittedAt || null,
     documentKinds,
+    documents,
+    dossierComplete: isCompanyDossierComplete({ ...row, documentKinds, documents }),
     onboardedBy: row.onboardedBy || "self",
     openaiKeyConfigured: Boolean(row.openaiKeyConfigured || row.openaiApiKey),
     openaiModel: row.openaiModel || OPENAI_REALTIME_MODEL,
@@ -179,6 +234,48 @@ export async function getTenant(tenantId) {
     throw err;
   }
   return presentTenant(row);
+}
+
+function filenameForDocument(kind, mimeType) {
+  const mime = String(mimeType || "").toLowerCase();
+  const ext = mime.includes("pdf")
+    ? "pdf"
+    : mime.includes("png")
+      ? "png"
+      : mime.includes("webp")
+        ? "webp"
+        : "jpg";
+  return `${kind}.${ext}`;
+}
+
+export async function loadTenantDocumentFile(tenantId, kind) {
+  if (!VIEWABLE_DOC_KINDS.includes(kind)) {
+    const err = new Error("Type de pièce invalide");
+    err.statusCode = 400;
+    throw err;
+  }
+  const tenant = await Tenant.findById(tenantId);
+  if (!tenant || tenant.status === "closed") {
+    const err = new Error("Établissement introuvable");
+    err.statusCode = 404;
+    throw err;
+  }
+  const record = await OnboardingDocument.findActiveByTenantAndKind(tenantId, kind);
+  if (!record) {
+    const err = new Error("Pièce introuvable");
+    err.statusCode = 404;
+    throw err;
+  }
+  const buffer = await readEncryptedDocument({
+    storagePath: record.storagePath,
+    iv: record.encryptionIv,
+    authTag: record.encryptionAuthTag,
+  });
+  return {
+    buffer,
+    mimeType: record.mimeType || "application/octet-stream",
+    filename: filenameForDocument(kind, record.mimeType),
+  };
 }
 
 function httpError(message, statusCode) {
@@ -252,6 +349,11 @@ function optionalSeatCount(value) {
 
 function profileFromInput(body, fallback = {}) {
   const country = normalizeCountry(body.countryCode, body.country || body.profileCountry);
+  const registration = parseCompanyRegistration({
+    siret: body.siret,
+    siren: body.siren,
+    companyNumber: body.companyNumber,
+  });
   return {
     businessName:
       optionalText(body.name || body.businessName, 200) || fallback.businessName || null,
@@ -277,6 +379,8 @@ function profileFromInput(body, fallback = {}) {
       optionalText(body.phoneNumberUsage || body.twilioNumberUsage, 2000) ||
       fallback.phoneNumberUsage ||
       null,
+    siret: registration.siret || fallback.siret || null,
+    siren: registration.siren || fallback.siren || null,
   };
 }
 
@@ -315,6 +419,8 @@ export async function createPlatformTenant({
   seatCount,
   cuisineType,
   phoneNumberUsage,
+  siret,
+  siren,
   openaiApiKey,
   openaiModel,
 } = {}) {
@@ -343,6 +449,8 @@ export async function createPlatformTenant({
     seatCount,
     cuisineType,
     phoneNumberUsage,
+    siret,
+    siren,
     email: emailNorm,
   });
 
@@ -583,6 +691,15 @@ export async function activateTenant(tenantId) {
   if (!tenant || tenant.status === "closed") {
     const err = new Error("Établissement introuvable");
     err.statusCode = 404;
+    throw err;
+  }
+
+  const presented = await Tenant.findForPlatform(tenantId);
+  if (!isCompanyDossierComplete(presented)) {
+    const err = new Error(
+      "Dossier incomplet. Vérifiez les informations et les pièces avant d'accepter."
+    );
+    err.statusCode = 409;
     throw err;
   }
 

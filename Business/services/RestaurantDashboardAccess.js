@@ -20,7 +20,11 @@ export function hasActiveRestaurantAccess(subscription, tenant) {
 
 export function isRestaurantDashboardReady(subscription, documentsSubmittedAt, tenant) {
   if (isPlatformProvisionedAccess(tenant)) return true;
-  return isPaidSubscription(subscription) && Boolean(documentsSubmittedAt);
+  return (
+    tenant?.status === "active" &&
+    isPaidSubscription(subscription) &&
+    Boolean(documentsSubmittedAt)
+  );
 }
 
 export async function refreshDashboardUnlock(userId, tenantId) {

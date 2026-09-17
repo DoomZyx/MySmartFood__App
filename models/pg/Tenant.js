@@ -106,8 +106,9 @@ const PLATFORM_TENANT_SELECT = `
   ep.city, ep.country AS "profileCountry", ep.email AS "restaurantEmail",
   ep.seat_count AS "seatCount", ep.cuisine_type AS "cuisineType",
   ep.phone_number_usage AS "phoneNumberUsage",
+  ep.siret, ep.siren,
   ep.documents_submitted_at AS "documentsSubmittedAt",
-  docs.document_kinds AS "documentKinds"
+  docs.documents
 `;
 
 const PLATFORM_TENANT_JOINS = `
@@ -131,7 +132,19 @@ const PLATFORM_TENANT_JOINS = `
   ) b ON TRUE
   LEFT JOIN establishment_profiles ep ON ep.tenant_id = t.id
   LEFT JOIN LATERAL (
-    SELECT COALESCE(array_agg(kind ORDER BY kind), ARRAY[]::text[]) AS document_kinds
+    SELECT COALESCE(
+      json_agg(
+        json_build_object(
+          'kind', d.kind,
+          'mimeType', d.mime_type,
+          'byteSize', d.byte_size,
+          'sha256', d.content_sha256,
+          'uploadedAt', d.created_at
+        )
+        ORDER BY d.kind
+      ),
+      '[]'::json
+    ) AS documents
       FROM onboarding_documents d
      WHERE d.tenant_id = t.id AND d.purged_at IS NULL
   ) docs ON TRUE

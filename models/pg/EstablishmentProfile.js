@@ -5,6 +5,7 @@ const PROFILE_COLUMNS = `tenant_id AS "tenantId", business_name AS "businessName
             postal_code AS "postalCode", city, country, phone, email,
             seat_count AS "seatCount", cuisine_type AS "cuisineType",
             phone_number_usage AS "phoneNumberUsage",
+            siret, siren,
             documents_submitted_at AS "documentsSubmittedAt",
             raw_address AS "rawAddress", latitude, longitude, legacy_payload AS "legacyPayload"`;
 
@@ -23,9 +24,9 @@ export async function upsert(tenantId, data, client) {
   const result = await db.query(
     `INSERT INTO establishment_profiles (
         tenant_id, business_name, address_line, postal_code, city, country,
-        phone, email, seat_count, cuisine_type, phone_number_usage,
+        phone, email, seat_count, cuisine_type, phone_number_usage, siret, siren,
         raw_address, latitude, longitude, legacy_payload
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb)
      ON CONFLICT (tenant_id) DO UPDATE SET
         business_name = EXCLUDED.business_name,
         address_line = EXCLUDED.address_line,
@@ -37,6 +38,8 @@ export async function upsert(tenantId, data, client) {
         seat_count = EXCLUDED.seat_count,
         cuisine_type = EXCLUDED.cuisine_type,
         phone_number_usage = EXCLUDED.phone_number_usage,
+        siret = COALESCE(EXCLUDED.siret, establishment_profiles.siret),
+        siren = COALESCE(EXCLUDED.siren, establishment_profiles.siren),
         raw_address = COALESCE(EXCLUDED.raw_address, establishment_profiles.raw_address),
         latitude = COALESCE(EXCLUDED.latitude, establishment_profiles.latitude),
         longitude = COALESCE(EXCLUDED.longitude, establishment_profiles.longitude),
@@ -54,6 +57,8 @@ export async function upsert(tenantId, data, client) {
       data.seatCount ?? null,
       data.cuisineType ?? null,
       data.phoneNumberUsage ?? null,
+      data.siret ?? null,
+      data.siren ?? null,
       data.rawAddress || data.addressLine || null,
       data.latitude ?? null,
       data.longitude ?? null,

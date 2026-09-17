@@ -110,7 +110,7 @@ jest.unstable_mockModule("../../utils/voiceWebhookUrl.js", () => ({
   voiceWebhookUrl,
 }));
 
-const { createPlatformTenant, updatePlatformTenant, parseOptionalInboundPhone, buildValidationChecklist } = await import(
+const { createPlatformTenant, updatePlatformTenant, parseOptionalInboundPhone, buildValidationChecklist, isCompanyDossierComplete } = await import(
   "./PlatformOnboardingService.js"
 );
 
@@ -319,6 +319,26 @@ describe("buildValidationChecklist", () => {
     });
     expect(checklist.items.find((item) => item.key === "documents").ok).toBe(true);
     expect(checklist.ready).toBe(true);
+  });
+
+  test("self-service complet avec profil, SIRET et pièces d'identité", () => {
+    const row = {
+      onboardedBy: "self",
+      businessName: "Chez Test",
+      ownerEmail: "a@b.c",
+      addressLine: "1 rue",
+      postalCode: "75001",
+      city: "Paris",
+      restaurantPhone: "0102030405",
+      phoneNumberUsage: "Standard téléphonique du restaurant pour les clients.",
+      documentsSubmittedAt: "2026-01-01",
+      documentKinds: ["id_recto", "id_verso", "address_proof"],
+      siret: "73282932000074",
+      siren: "732829320",
+    };
+    expect(isCompanyDossierComplete(row)).toBe(true);
+    expect(isCompanyDossierComplete({ ...row, documentKinds: ["id_recto"] })).toBe(false);
+    expect(isCompanyDossierComplete({ ...row, siret: null, siren: null })).toBe(false);
   });
 });
 

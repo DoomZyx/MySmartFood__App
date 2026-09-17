@@ -22,6 +22,9 @@ const TENANT_BODY_PROPERTIES = {
   seatCount: { type: "integer", minimum: 1, maximum: 999 },
   cuisineType: { type: "string", maxLength: 100 },
   phoneNumberUsage: { type: "string", maxLength: 2000 },
+  siret: { type: "string", maxLength: 20 },
+  siren: { type: "string", maxLength: 20 },
+  companyNumber: { type: "string", maxLength: 20 },
   phoneNumber: { type: "string", maxLength: 20 },
   phoneNumberSid: { type: "string", maxLength: 40 },
   openaiApiKey: { type: "string", maxLength: 256 },
@@ -59,6 +62,21 @@ export default async function platformAdminRoutes(fastify) {
       },
     },
     handler: PlatformOnboardingController.get,
+  });
+
+  fastify.get("/tenants/:tenantId/documents/:kind", {
+    config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+    schema: {
+      params: {
+        type: "object",
+        required: ["tenantId", "kind"],
+        properties: {
+          tenantId: TENANT_ID,
+          kind: { type: "string", enum: ["kbis", "id_recto", "id_verso", "address_proof"] },
+        },
+      },
+    },
+    handler: PlatformOnboardingController.documentFile,
   });
 
   fastify.post("/tenants", {

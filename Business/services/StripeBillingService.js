@@ -42,26 +42,33 @@ function stripeClient() {
   return new Stripe(key);
 }
 
+function asStripePriceId(value) {
+  const text = String(value || "").trim();
+  return /^price_[A-Za-z0-9]+$/.test(text) ? text : null;
+}
+
 async function resolvePriceId(stripe, plan) {
-  let priceId = plan.stripePriceId;
+  let priceId = asStripePriceId(plan.stripePriceId);
   if (!priceId && plan.stripeProductId) {
     const prices = await stripe.prices.list({
       product: plan.stripeProductId,
       active: true,
       type: "recurring",
     });
-    priceId = prices.data.find((item) => item.recurring?.interval === "month")?.id;
+    priceId = asStripePriceId(
+      prices.data.find((item) => item.recurring?.interval === "month")?.id
+    );
   }
   if (!priceId) {
     const envPrice = process.env[`STRIPE_PRICE_${plan.slug.toUpperCase()}`];
     const websiteId = websitePlanIdFromSlug(plan.slug);
     const websitePrice = websiteId ? process.env[`STRIPE_PRICE_PLAN_${websiteId}`] : null;
-    priceId = envPrice || websitePrice || null;
+    priceId = asStripePriceId(envPrice) || asStripePriceId(websitePrice);
   }
   if (!priceId) {
-    priceId = process.env.STRIPE_PRICE_BETA || null;
+    priceId = asStripePriceId(process.env.STRIPE_PRICE_BETA);
   }
-  return priceId || null;
+  return priceId;
 }
 
 export async function createCheckoutSession({ user, planSlug, planId, countryCode }) {
@@ -296,8 +303,10 @@ async function onCheckoutCompleted(stripe, session) {
 
   if (tenantId && Subscription.isAccessGranted(stripeSub.status)) {
     try {
-      await refreshDashboardUnlock(userId, tenantId);
-      await issueDashboardAccessToken({ userId, tenantId });
+      const unlocked = await refreshDashboardUnlock(userId, tenantId);
+      if (unlocked) {
+        await issueDashboardAccessToken({ userId, tenantId });
+      }
     } catch (err) {
       logger.error({ err: err.message, userId }, "Émission jeton d'accès échouée");
     }

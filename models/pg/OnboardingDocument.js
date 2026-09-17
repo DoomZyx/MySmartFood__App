@@ -34,16 +34,30 @@ export async function upsertEncrypted(doc) {
   return toCamelCase(result.rows[0]);
 }
 
+const DOCUMENT_COLUMNS = `id, kind, storage_path AS "storagePath", mime_type AS "mimeType",
+            byte_size AS "byteSize", content_sha256 AS "contentSha256",
+            encryption_iv AS "encryptionIv", encryption_auth_tag AS "encryptionAuthTag",
+            purged_at AS "purgedAt", created_at AS "createdAt"`;
+
 export async function listActiveByTenant(tenantId) {
   const result = await getPool().query(
-    `SELECT id, kind, storage_path AS "storagePath", mime_type AS "mimeType",
-            encryption_iv AS "encryptionIv", encryption_auth_tag AS "encryptionAuthTag",
-            purged_at AS "purgedAt"
+    `SELECT ${DOCUMENT_COLUMNS}
        FROM onboarding_documents
-      WHERE tenant_id = $1 AND purged_at IS NULL`,
+      WHERE tenant_id = $1 AND purged_at IS NULL
+      ORDER BY kind`,
     [tenantId]
   );
   return mapRows(result.rows);
+}
+
+export async function findActiveByTenantAndKind(tenantId, kind) {
+  const result = await getPool().query(
+    `SELECT ${DOCUMENT_COLUMNS}
+       FROM onboarding_documents
+      WHERE tenant_id = $1 AND kind = $2 AND purged_at IS NULL`,
+    [tenantId, kind]
+  );
+  return result.rows[0] ? toCamelCase(result.rows[0]) : null;
 }
 
 export async function listExpired() {

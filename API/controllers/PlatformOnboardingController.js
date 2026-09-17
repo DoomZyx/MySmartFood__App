@@ -7,6 +7,7 @@ import {
   updatePlatformTenant,
   getTenant,
   listTenants,
+  loadTenantDocumentFile,
   rejectTenant,
   suspendTenant,
 } from "../../Business/services/PlatformOnboardingService.js";
@@ -38,6 +39,22 @@ export const PlatformOnboardingController = {
     try {
       const tenant = await getTenant(request.params.tenantId);
       return reply.send({ tenant });
+    } catch (error) {
+      return handleError(error, reply);
+    }
+  },
+
+  async documentFile(request, reply) {
+    try {
+      const file = await loadTenantDocumentFile(
+        request.params.tenantId,
+        request.params.kind
+      );
+      return reply
+        .header("Cache-Control", "private, no-store")
+        .header("Content-Disposition", `inline; filename="${file.filename}"`)
+        .type(file.mimeType)
+        .send(file.buffer);
     } catch (error) {
       return handleError(error, reply);
     }

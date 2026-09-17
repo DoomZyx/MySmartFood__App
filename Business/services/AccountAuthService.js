@@ -20,6 +20,19 @@ export class AccountAuthError extends Error {
   }
 }
 
+function resolveOnboardingStatus({
+  accessUnlocked,
+  hasActiveSubscription,
+  documentsSubmittedAt,
+  tenant,
+}) {
+  if (accessUnlocked) return "ready";
+  if (!tenant) return "none";
+  if (!hasActiveSubscription) return "needs_payment";
+  if (!documentsSubmittedAt) return "needs_dossier";
+  return "pending_review";
+}
+
 export async function register({ email, password, name }) {
   const emailNorm = String(email || "").trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm)) {
@@ -165,6 +178,13 @@ export async function sessionPayload(user) {
       planName,
       hasActiveSubscription,
       accessUnlocked,
+      tenantStatus: first?.status || null,
+      onboardingStatus: resolveOnboardingStatus({
+        accessUnlocked,
+        hasActiveSubscription,
+        documentsSubmittedAt: twilioDocsSubmittedAt,
+        tenant: first,
+      }),
       smartcrmInstanceId: first?.id || null,
       twilioDocsSubmittedAt,
       role: first ? "admin" : "user",

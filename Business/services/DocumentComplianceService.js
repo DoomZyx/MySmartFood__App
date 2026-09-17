@@ -11,9 +11,9 @@ import {
 } from "../../utils/documentCrypto.js";
 import { submitRegulatoryBundle } from "./TwilioProvisioningService.js";
 import { refreshDashboardUnlock } from "./RestaurantDashboardAccess.js";
+import { parseCompanyRegistration } from "../../utils/companyRegistration.js";
 
 const KINDS = {
-  kbisDocument: "kbis",
   idDocumentRecto: "id_recto",
   idDocumentVerso: "id_verso",
   addressDocument: "address_proof",
@@ -62,6 +62,13 @@ export function validateEstablishmentBody(body) {
     err.statusCode = 400;
     throw err;
   }
+  const registration = parseCompanyRegistration({
+    siret: body.siret,
+    siren: body.siren,
+    companyNumber: body.companyNumber,
+  });
+  profile.siret = registration.siret;
+  profile.siren = registration.siren;
   return profile;
 }
 
@@ -127,6 +134,14 @@ export async function submitOnboardingDossier({ tenantId, userId, body, files })
     err.statusCode = 400;
     throw err;
   }
+  parseCompanyRegistration(
+    {
+      siret: profile.siret || body.siret,
+      siren: profile.siren || body.siren,
+      companyNumber: body.companyNumber,
+    },
+    { required: true }
+  );
 
   const existing = await EstablishmentProfile.findByTenantId(tenantId);
   if (existing?.documentsSubmittedAt) {
@@ -135,10 +150,10 @@ export async function submitOnboardingDossier({ tenantId, userId, body, files })
     throw err;
   }
 
-  const required = ["kbisDocument", "idDocumentRecto", "idDocumentVerso", "addressDocument"];
+  const required = ["idDocumentRecto", "idDocumentVerso", "addressDocument"];
   for (const field of required) {
     if (!files?.[field]?.buffer) {
-      const err = new Error("Documents requis : KBIS, pièce d'identité recto/verso, justificatif d'adresse");
+      const err = new Error("Documents requis : pièce d'identité recto/verso et justificatif d'adresse");
       err.statusCode = 400;
       throw err;
     }
@@ -152,6 +167,7 @@ export async function submitOnboardingDossier({ tenantId, userId, body, files })
 
   for (const [field, kind] of Object.entries(KINDS)) {
     const file = files[field];
+    if (!file?.buffer) continue;
     const stored = await writeEncryptedDocument(tenantId, kind, file.buffer);
     await OnboardingDocument.upsertEncrypted({
       tenantId,

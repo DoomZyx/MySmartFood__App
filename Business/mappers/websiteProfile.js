@@ -13,6 +13,8 @@ export function profileToWebsite(profile, amenities = []) {
     nombreCouverts: profile.seatCount,
     typeCuisine: profile.cuisineType,
     twilioNumberUsage: profile.phoneNumberUsage,
+    siret: profile.siret || "",
+    siren: profile.siren || "",
     accessibilitePmr:
       pmr?.status === "available" ? true : pmr?.status === "unavailable" ? false : null,
     nombreChaisesBebe:
