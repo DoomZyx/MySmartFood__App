@@ -55,6 +55,45 @@ export async function createPlatformStaff({ email, password, name }) {
   return serializeStaff(created);
 }
 
+export async function updatePlatformStaff(targetUserId, { name, email, password } = {}) {
+  const target = await User.findById(targetUserId);
+  if (!target?.isPlatformAdmin) {
+    httpError("Compte back-office introuvable", 404);
+  }
+
+  const nextName = name !== undefined ? String(name).trim().slice(0, 120) : undefined;
+  const nextEmail = email !== undefined ? String(email).trim().toLowerCase() : undefined;
+  const nextPassword = String(password || "").trim();
+  if (nextName === undefined && nextEmail === undefined && !nextPassword) {
+    httpError("Aucun champ à modifier", 400);
+  }
+  if (nextEmail !== undefined && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+    httpError("Adresse e-mail invalide", 400);
+  }
+
+  if (nextName !== undefined || nextEmail !== undefined) {
+    try {
+      await User.updateAccount(targetUserId, {
+        name: nextName,
+        email: nextEmail,
+      });
+    } catch (error) {
+      if (/déjà utilisé/i.test(error.message)) httpError(error.message, 409);
+      if (/invalide/i.test(error.message)) httpError(error.message, 400);
+      throw error;
+    }
+  }
+  if (nextPassword) {
+    if (nextPassword.length < 8) {
+      httpError("Le mot de passe doit contenir au moins 8 caractères", 400);
+    }
+    await User.setPassword(targetUserId, nextPassword);
+  }
+
+  const updated = await User.findById(targetUserId);
+  return serializeStaff(updated);
+}
+
 export async function revokePlatformStaff(actorId, targetUserId) {
   if (actorId === targetUserId) {
     httpError("Vous ne pouvez pas retirer votre propre accès", 400);

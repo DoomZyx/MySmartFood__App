@@ -54,12 +54,17 @@ export async function writeEncryptedDocument(tenantId, kind, buffer) {
     authTag: encrypted.authTag,
     sha256: encrypted.sha256,
     byteSize: buffer.length,
+    ciphertext: encrypted.ciphertext,
   };
 }
 
-export async function readEncryptedDocument({ storagePath, iv, authTag }) {
-  const ciphertext = await fs.readFile(storagePath);
-  return decryptBuffer({ ciphertext, iv, authTag });
+export async function readEncryptedDocument({ ciphertext, storagePath, iv, authTag }) {
+  const blob = ciphertext
+    ? Buffer.isBuffer(ciphertext)
+      ? ciphertext
+      : Buffer.from(ciphertext)
+    : await fs.readFile(storagePath);
+  return decryptBuffer({ ciphertext: blob, iv, authTag });
 }
 
 export async function purgeDocumentFile(storagePath) {

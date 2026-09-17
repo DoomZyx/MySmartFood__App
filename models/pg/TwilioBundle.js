@@ -1,6 +1,5 @@
 import { getPool } from "../../database/pool.js";
 import { toCamelCase } from "../../utils/rowMapper.js";
-import { resolveVoiceSlugParam } from "../../utils/voiceWebhookUrl.js";
 
 export async function upsertBundle(data) {
   const result = await getPool().query(
@@ -32,49 +31,19 @@ function normalizeInboundPhone(value) {
   return String(value || "").replace(/[^\d+]/g, "");
 }
 
-export async function findTenantForInboundCall({ phoneNumber, slug } = {}) {
+export async function findTenantForInboundCall({ phoneNumber } = {}) {
   const to = normalizeInboundPhone(phoneNumber);
-  const safeSlug = resolveVoiceSlugParam(slug);
-
-  if (to && safeSlug) {
-    const matched = await getPool().query(
-      `SELECT t.id, t.slug, t.status, b.phone_number AS "phoneNumber"
-         FROM twilio_bundles b
-         JOIN tenants t ON t.id = b.tenant_id
-        WHERE regexp_replace(COALESCE(b.phone_number, ''), '[^0-9+]', '', 'g') = $1
-          AND t.slug = $2
-          AND t.status <> 'closed'
-        LIMIT 1`,
-      [to, safeSlug]
-    );
-    return matched.rows[0] ? toCamelCase(matched.rows[0]) : null;
-  }
-
-  if (to) {
-    const byPhone = await getPool().query(
-      `SELECT t.id, t.slug, t.status, b.phone_number AS "phoneNumber"
-         FROM twilio_bundles b
-         JOIN tenants t ON t.id = b.tenant_id
-        WHERE regexp_replace(COALESCE(b.phone_number, ''), '[^0-9+]', '', 'g') = $1
-          AND t.status <> 'closed'
-        LIMIT 1`,
-      [to]
-    );
-    if (byPhone.rows[0]) return toCamelCase(byPhone.rows[0]);
-  }
-
-  if (safeSlug) {
-    const bySlug = await getPool().query(
-      `SELECT t.id, t.slug, t.status
-         FROM tenants t
-        WHERE t.slug = $1
-          AND t.status <> 'closed'
-        LIMIT 1`,
-      [safeSlug]
-    );
-    if (bySlug.rows[0]) return toCamelCase(bySlug.rows[0]);
-  }
-  return null;
+  if (!to) return null;
+  const byPhone = await getPool().query(
+    `SELECT t.id, t.slug, t.status, b.phone_number AS "phoneNumber"
+       FROM twilio_bundles b
+       JOIN tenants t ON t.id = b.tenant_id
+      WHERE regexp_replace(COALESCE(b.phone_number, ''), '[^0-9+]', '', 'g') = $1
+        AND t.status <> 'closed'
+      LIMIT 1`,
+    [to]
+  );
+  return byPhone.rows[0] ? toCamelCase(byPhone.rows[0]) : null;
 }
 
 export async function findByPhoneNumber(phoneNumber) {

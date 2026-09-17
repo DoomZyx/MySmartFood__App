@@ -19,9 +19,9 @@ import { withTenant, withTransaction } from "../../database/transaction.js";
 import {
   incomingNumberVoiceUpdate,
   resolveVoicePublicHost,
-  voiceWebhookSlug,
   voiceWebhookUrl,
 } from "../../utils/voiceWebhookUrl.js";
+import { persistOnboardingDocument } from "./OnboardingDocumentStorage.js";
 import { encrypt } from "../../utils/encryption.js";
 import { readEncryptedDocument } from "../../utils/documentCrypto.js";
 import { hasCompanyRegistration, parseCompanyRegistration } from "../../utils/companyRegistration.js";
@@ -179,7 +179,6 @@ function serializeTenant(row, publicHost) {
     needsReview: Boolean(
       row.documentsSubmittedAt && row.status !== "active" && row.status !== "closed"
     ),
-    voiceWebhookSlug: voiceWebhookSlug(row.slug),
     voiceWebhookUrl: voiceWebhookUrl(row.slug, publicHost),
     createdAt: row.createdAt,
     activatedAt: row.activatedAt,
@@ -267,6 +266,7 @@ export async function loadTenantDocumentFile(tenantId, kind) {
     throw err;
   }
   const buffer = await readEncryptedDocument({
+    ciphertext: record.ciphertext,
     storagePath: record.storagePath,
     iv: record.encryptionIv,
     authTag: record.encryptionAuthTag,
@@ -336,6 +336,48 @@ function optionalText(value, maxLen) {
   const text = String(value || "").trim();
   if (!text) return null;
   return text.slice(0, maxLen);
+}
+
+function serializePlatformUser(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name || "",
+    role: row.membershipRole || "member",
+    lastLoginAt: row.lastLoginAt || null,
+    createdAt: row.createdAt || null,
+  };
+}
+
+async function applyAccountUpdate(userId, { name, email, password }) {
+  const nextName = name !== undefined ? optionalText(name, 120) : undefined;
+  const nextEmail = email !== undefined ? optionalText(email, 255) : undefined;
+  const nextPassword = String(password || "").trim();
+  if (nextName === undefined && nextEmail === undefined && !nextPassword) {
+    httpError("Aucun champ à modifier", 400);
+  }
+  if (nextEmail && !EMAIL.test(nextEmail)) {
+    httpError("Adresse e-mail invalide", 400);
+  }
+  if (nextName !== undefined || nextEmail !== undefined) {
+    try {
+      await User.updateAccount(userId, {
+        name: nextName,
+        email: nextEmail,
+      });
+    } catch (error) {
+      if (/déjà utilisé/i.test(error.message)) httpError(error.message, 409);
+      if (/invalide/i.test(error.message)) httpError(error.message, 400);
+      throw error;
+    }
+  }
+  if (nextPassword) {
+    if (nextPassword.length < 8) {
+      httpError("Le mot de passe doit contenir au moins 8 caractères", 400);
+    }
+    await User.setPassword(userId, nextPassword);
+  }
 }
 
 function optionalSeatCount(value) {
@@ -556,23 +598,12 @@ export async function updatePlatformTenant(tenantId, body = {}) {
   const ownerName = optionalText(body.ownerName, 120);
   const ownerEmail = optionalText(body.email, 255);
   const nextPassword = String(body.password || "").trim();
-  if (ownerName || ownerEmail) {
-    try {
-      await User.updateAccount(tenant.ownerUserId, {
-        name: ownerName,
-        email: ownerEmail,
-      });
-    } catch (error) {
-      if (/déjà utilisé/i.test(error.message)) httpError(error.message, 409);
-      if (/invalide/i.test(error.message)) httpError(error.message, 400);
-      throw error;
-    }
-  }
-  if (nextPassword) {
-    if (nextPassword.length < 8) {
-      httpError("Le mot de passe doit contenir au moins 8 caractères", 400);
-    }
-    await User.setPassword(tenant.ownerUserId, nextPassword);
+  if (ownerName || ownerEmail || nextPassword) {
+    await applyAccountUpdate(tenant.ownerUserId, {
+      name: body.ownerName !== undefined ? body.ownerName : undefined,
+      email: body.email !== undefined ? body.email : undefined,
+      password: nextPassword,
+    });
   }
 
   const inbound = parseOptionalInboundPhone({
@@ -588,6 +619,57 @@ export async function updatePlatformTenant(tenantId, body = {}) {
     tenant: await getTenant(tenantId),
     temporaryPassword: nextPassword || undefined,
   };
+}
+
+export async function listPlatformTenantUsers(tenantId) {
+  const tenant = await Tenant.findById(tenantId);
+  if (!tenant || tenant.status === "closed") {
+    httpError("Établissement introuvable", 404);
+  }
+  const rows = await User.listByTenantId(tenantId);
+  return rows.map(serializePlatformUser);
+}
+
+export async function updatePlatformTenantUser(tenantId, userId, body = {}) {
+  const tenant = await Tenant.findById(tenantId);
+  if (!tenant || tenant.status === "closed") {
+    httpError("Établissement introuvable", 404);
+  }
+  const membership = await Membership.findMembership(userId, tenantId);
+  if (!membership) {
+    httpError("Utilisateur introuvable", 404);
+  }
+  await applyAccountUpdate(userId, body);
+  const rows = await User.listByTenantId(tenantId);
+  return {
+    user: serializePlatformUser(rows.find((row) => row.id === userId)),
+    users: rows.map(serializePlatformUser),
+    tenant: await getTenant(tenantId),
+  };
+}
+
+const IDENTITY_DOC_KINDS = new Set(["id_recto", "id_verso"]);
+
+export async function uploadPlatformTenantDocument(tenantId, { kind, buffer, mimeType, filename, userId }) {
+  const tenant = await Tenant.findById(tenantId);
+  if (!tenant || tenant.status === "closed") {
+    httpError("Établissement introuvable", 404);
+  }
+  if (!IDENTITY_DOC_KINDS.has(kind)) {
+    httpError("Seules les photos de pièce d'identité (recto / verso) sont acceptées", 400);
+  }
+  if (!buffer?.length) {
+    httpError("Fichier manquant", 400);
+  }
+  await persistOnboardingDocument({
+    tenantId,
+    userId,
+    kind,
+    buffer,
+    mimeType,
+    filename,
+  });
+  return { tenant: await getTenant(tenantId) };
 }
 
 async function fetchIncomingNumber(client, { phoneNumber, phoneNumberSid }) {

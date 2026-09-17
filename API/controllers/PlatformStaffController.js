@@ -2,6 +2,7 @@ import {
   createPlatformStaff,
   listPlatformStaff,
   revokePlatformStaff,
+  updatePlatformStaff,
 } from "../../Business/services/PlatformStaffService.js";
 import logger from "../../Services/logging/logger.js";
 
@@ -27,6 +28,15 @@ export const PlatformStaffController = {
     try {
       const staff = await createPlatformStaff(request.body || {});
       return reply.code(201).send({ staff });
+    } catch (error) {
+      return handleError(error, reply);
+    }
+  },
+
+  async update(request, reply) {
+    try {
+      const staff = await updatePlatformStaff(request.params.userId, request.body || {});
+      return reply.send({ staff });
     } catch (error) {
       return handleError(error, reply);
     }

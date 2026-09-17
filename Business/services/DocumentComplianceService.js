@@ -4,13 +4,16 @@ import * as Amenity from "../../models/pg/Amenity.js";
 import { withTenant } from "../../database/transaction.js";
 import { profileToWebsite } from "../mappers/websiteProfile.js";
 import { transition } from "../../models/pg/ProvisioningJob.js";
+import { persistOnboardingDocument } from "./OnboardingDocumentStorage.js";
 import {
   purgeDocumentFile,
   readEncryptedDocument,
-  writeEncryptedDocument,
 } from "../../utils/documentCrypto.js";
-import { submitRegulatoryBundle } from "./TwilioProvisioningService.js";
+import {
+  isTwilioBundleLocked,
+} from "./TwilioProvisioningService.js";
 import { refreshDashboardUnlock } from "./RestaurantDashboardAccess.js";
+import * as TwilioBundle from "../../models/pg/TwilioBundle.js";
 import { parseCompanyRegistration } from "../../utils/companyRegistration.js";
 
 const KINDS = {
@@ -144,7 +147,8 @@ export async function submitOnboardingDossier({ tenantId, userId, body, files })
   );
 
   const existing = await EstablishmentProfile.findByTenantId(tenantId);
-  if (existing?.documentsSubmittedAt) {
+  const existingBundle = await TwilioBundle.findByTenantId(tenantId);
+  if (existing?.documentsSubmittedAt && isTwilioBundleLocked(existingBundle)) {
     const err = new Error("Le dossier a déjà été transmis");
     err.statusCode = 409;
     throw err;
@@ -162,37 +166,29 @@ export async function submitOnboardingDossier({ tenantId, userId, body, files })
   await EstablishmentProfile.upsert(tenantId, profile);
   await persistWebsiteAmenities(tenantId, body);
 
-  const retentionDays = Number(process.env.DOCUMENT_RETENTION_DAYS) || 90;
-  const retentionUntil = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000);
-
   for (const [field, kind] of Object.entries(KINDS)) {
     const file = files[field];
     if (!file?.buffer) continue;
-    const stored = await writeEncryptedDocument(tenantId, kind, file.buffer);
-    await OnboardingDocument.upsertEncrypted({
+    await persistOnboardingDocument({
       tenantId,
-      uploadedByUserId: userId,
+      userId,
       kind,
-      storagePath: stored.storagePath,
+      buffer: file.buffer,
       mimeType: file.mimetype,
-      byteSize: stored.byteSize,
-      contentSha256: stored.sha256,
-      encryptionIv: stored.iv,
-      encryptionAuthTag: stored.authTag,
-      retentionUntil,
+      filename: file.originalname,
     });
   }
 
   await EstablishmentProfile.markDocumentsSubmitted(tenantId);
-  await transition(tenantId, ["pending", "awaiting_documents"], "bundle_submitted");
-  await submitRegulatoryBundle(tenantId);
+  await transition(tenantId, ["pending", "awaiting_documents", "bundle_submitted"], "bundle_submitted");
   await refreshDashboardUnlock(userId, tenantId);
 
-  return { message: "Dossier chiffré et transmis pour conformité Twilio" };
+  return { message: "Dossier enregistré. Le numéro Twilio se relie depuis le back-office." };
 }
 
 export async function loadDocumentPlain(record) {
   return readEncryptedDocument({
+    ciphertext: record.ciphertext,
     storagePath: record.storagePath,
     iv: record.encryptionIv,
     authTag: record.encryptionAuthTag,

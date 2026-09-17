@@ -4,6 +4,7 @@ import {
   saveProfile,
   submitOnboardingDossier,
 } from "../../Business/services/DocumentComplianceService.js";
+import { MAX_SOURCE_UPLOAD_BYTES } from "../../utils/imageWebp.js";
 import * as EstablishmentProfile from "../../models/pg/EstablishmentProfile.js";
 import { findByTenantId as findJob } from "../../models/pg/ProvisioningJob.js";
 
@@ -40,6 +41,7 @@ export default async function onboardingRoutes(fastify) {
 
   fastify.post("/submit-dossier", {
     preHandler: guards,
+    bodyLimit: MAX_SOURCE_UPLOAD_BYTES * 3 + 1024 * 1024,
     handler: async (request, reply) => {
       try {
         const files = {};

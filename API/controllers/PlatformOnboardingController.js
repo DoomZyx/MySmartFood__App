@@ -6,10 +6,13 @@ import {
   getInbox,
   updatePlatformTenant,
   getTenant,
+  listPlatformTenantUsers,
   listTenants,
+  updatePlatformTenantUser,
   loadTenantDocumentFile,
   rejectTenant,
   suspendTenant,
+  uploadPlatformTenantDocument,
 } from "../../Business/services/PlatformOnboardingService.js";
 import logger from "../../Services/logging/logger.js";
 
@@ -60,6 +63,40 @@ export const PlatformOnboardingController = {
     }
   },
 
+  async uploadDocument(request, reply) {
+    try {
+      const parts = request.parts();
+      let kind = request.body?.kind;
+      let buffer = null;
+      let mimeType = "";
+      let filename = "";
+      for await (const part of parts) {
+        if (part.file) {
+          const chunks = [];
+          for await (const chunk of part.file) chunks.push(chunk);
+          buffer = Buffer.concat(chunks);
+          mimeType = part.mimetype;
+          filename = part.filename || "";
+          if (!kind && part.fields?.kind?.value) {
+            kind = part.fields.kind.value;
+          }
+        } else if (part.fieldname === "kind") {
+          kind = part.value;
+        }
+      }
+      const result = await uploadPlatformTenantDocument(request.params.tenantId, {
+        kind,
+        buffer,
+        mimeType,
+        filename,
+        userId: request.user.id,
+      });
+      return reply.send(result);
+    } catch (error) {
+      return handleError(error, reply);
+    }
+  },
+
   async create(request, reply) {
     try {
       const result = await createPlatformTenant(request.body);
@@ -72,6 +109,28 @@ export const PlatformOnboardingController = {
   async update(request, reply) {
     try {
       const result = await updatePlatformTenant(request.params.tenantId, request.body);
+      return reply.send(result);
+    } catch (error) {
+      return handleError(error, reply);
+    }
+  },
+
+  async listUsers(request, reply) {
+    try {
+      const users = await listPlatformTenantUsers(request.params.tenantId);
+      return reply.send({ users });
+    } catch (error) {
+      return handleError(error, reply);
+    }
+  },
+
+  async updateUser(request, reply) {
+    try {
+      const result = await updatePlatformTenantUser(
+        request.params.tenantId,
+        request.params.userId,
+        request.body
+      );
       return reply.send(result);
     } catch (error) {
       return handleError(error, reply);

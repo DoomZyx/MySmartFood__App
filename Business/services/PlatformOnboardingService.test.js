@@ -10,6 +10,8 @@ const updateDetails = jest.fn();
 const updateOpenAi = jest.fn();
 const findProfileByTenantId = jest.fn();
 const listByUserId = jest.fn();
+const findMembership = jest.fn();
+const listByTenantId = jest.fn();
 const createMembership = jest.fn();
 const createTenantModel = jest.fn();
 const findForPlatform = jest.fn();
@@ -21,7 +23,6 @@ const createProvisioningJob = jest.fn();
 const markCompleted = jest.fn();
 const incomingNumberVoiceUpdate = jest.fn();
 const resolveVoicePublicHost = jest.fn();
-const voiceWebhookSlug = jest.fn();
 const voiceWebhookUrl = jest.fn();
 const assignNumber = jest.fn();
 const findByPhoneNumber = jest.fn();
@@ -46,11 +47,13 @@ jest.unstable_mockModule("../../models/pg/User.js", () => ({
   setPassword,
   updateAccount,
   markDashboardUnlocked,
+  listByTenantId,
 }));
 
 jest.unstable_mockModule("../../models/pg/Membership.js", () => ({
   listByUserId,
   createMembership,
+  findMembership,
 }));
 
 jest.unstable_mockModule("../../models/pg/Tenant.js", () => ({
@@ -106,11 +109,10 @@ jest.unstable_mockModule("../../database/transaction.js", () => ({
 jest.unstable_mockModule("../../utils/voiceWebhookUrl.js", () => ({
   incomingNumberVoiceUpdate,
   resolveVoicePublicHost,
-  voiceWebhookSlug,
   voiceWebhookUrl,
 }));
 
-const { createPlatformTenant, updatePlatformTenant, parseOptionalInboundPhone, buildValidationChecklist, isCompanyDossierComplete } = await import(
+const { createPlatformTenant, updatePlatformTenant, updatePlatformTenantUser, parseOptionalInboundPhone, buildValidationChecklist, isCompanyDossierComplete } = await import(
   "./PlatformOnboardingService.js"
 );
 
@@ -138,6 +140,8 @@ function resetMocks() {
   updateOpenAi.mockReset();
   findProfileByTenantId.mockReset();
   listByUserId.mockReset();
+  findMembership.mockReset();
+  listByTenantId.mockReset();
   createMembership.mockReset();
   createTenantModel.mockReset();
   findForPlatform.mockReset();
@@ -149,7 +153,6 @@ function resetMocks() {
   markCompleted.mockReset();
   incomingNumberVoiceUpdate.mockReset();
   resolveVoicePublicHost.mockReset();
-  voiceWebhookSlug.mockReset();
   voiceWebhookUrl.mockReset();
   assignNumber.mockReset();
   findByPhoneNumber.mockReset();
@@ -167,7 +170,6 @@ function resetMocks() {
   });
   findForPlatform.mockResolvedValue(platformRow);
   resolveVoicePublicHost.mockResolvedValue("https://example.com");
-  voiceWebhookSlug.mockReturnValue("token");
   voiceWebhookUrl.mockReturnValue("https://example.com/twilio/incoming-call");
 }
 
@@ -430,5 +432,63 @@ describe("updatePlatformTenant", () => {
     await expect(updatePlatformTenant(TENANT_ID, { name: "X" })).rejects.toMatchObject({
       statusCode: 404,
     });
+  });
+});
+
+describe("updatePlatformTenantUser", () => {
+  beforeEach(() => {
+    resetMocks();
+  });
+
+  test("met à jour nom, e-mail et mot de passe d'un membre", async () => {
+    findById.mockResolvedValue({
+      id: TENANT_ID,
+      status: "active",
+      ownerUserId: USER_ID,
+    });
+    findMembership.mockResolvedValue({ userId: USER_ID, tenantId: TENANT_ID, role: "owner" });
+    updateAccount.mockResolvedValue({ id: USER_ID });
+    setPassword.mockResolvedValue(true);
+    listByTenantId.mockResolvedValue([
+      {
+        id: USER_ID,
+        email: "ada@example.com",
+        name: "Ada",
+        membershipRole: "owner",
+        lastLoginAt: null,
+      },
+    ]);
+    findForPlatform.mockResolvedValue({
+      ...platformRow,
+      ownerEmail: "ada@example.com",
+      ownerName: "Ada",
+    });
+
+    const result = await updatePlatformTenantUser(TENANT_ID, USER_ID, {
+      name: "Ada",
+      email: "ada@example.com",
+      password: "nouveaupass",
+    });
+
+    expect(updateAccount).toHaveBeenCalledWith(
+      USER_ID,
+      expect.objectContaining({ name: "Ada", email: "ada@example.com" })
+    );
+    expect(setPassword).toHaveBeenCalledWith(USER_ID, "nouveaupass");
+    expect(result.user).toMatchObject({
+      id: USER_ID,
+      email: "ada@example.com",
+      name: "Ada",
+      role: "owner",
+    });
+    expect(result.users).toHaveLength(1);
+  });
+
+  test("404 si le user n'appartient pas au restaurant", async () => {
+    findById.mockResolvedValue({ id: TENANT_ID, status: "active" });
+    findMembership.mockResolvedValue(null);
+    await expect(
+      updatePlatformTenantUser(TENANT_ID, USER_ID, { name: "Ada" })
+    ).rejects.toMatchObject({ statusCode: 404 });
   });
 });

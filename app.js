@@ -18,6 +18,7 @@ import pingRoutes from "./Routes/Ping/ping.js";
 import monitoringRoutes from "./Routes/Monitoring/monitoring.js";
 import { connectDatabase } from "./database/pool.js";
 import { assertRequiredSchema } from "./database/assertRequiredSchema.js";
+import { MAX_SOURCE_UPLOAD_BYTES } from "./utils/imageWebp.js";
 import { registerSecurityPlugins, buildCorsOrigin } from "./plugins/security.js";
 import { registerGoogleOAuth } from "./plugins/googleOAuth.js";
 import accountAuthRoutes from "./Routes/Auth/accountAuth.js";
@@ -214,7 +215,7 @@ await fastify.register(fastifySwaggerUi, {
 // Configuration multipart pour les uploads de fichiers
 fastify.register(fastifyMultipart, {
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5 MB max
+    fileSize: MAX_SOURCE_UPLOAD_BYTES,
   },
 });
 

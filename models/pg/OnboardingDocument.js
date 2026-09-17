@@ -5,8 +5,8 @@ export async function upsertEncrypted(doc) {
   const result = await getPool().query(
     `INSERT INTO onboarding_documents (
         tenant_id, uploaded_by_user_id, kind, storage_path, mime_type, byte_size,
-        content_sha256, encryption_iv, encryption_auth_tag, retention_until
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        content_sha256, encryption_iv, encryption_auth_tag, retention_until, ciphertext
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      ON CONFLICT (tenant_id, kind) DO UPDATE SET
         storage_path = EXCLUDED.storage_path,
         mime_type = EXCLUDED.mime_type,
@@ -15,6 +15,7 @@ export async function upsertEncrypted(doc) {
         encryption_iv = EXCLUDED.encryption_iv,
         encryption_auth_tag = EXCLUDED.encryption_auth_tag,
         retention_until = EXCLUDED.retention_until,
+        ciphertext = EXCLUDED.ciphertext,
         purged_at = NULL,
         uploaded_by_user_id = EXCLUDED.uploaded_by_user_id
      RETURNING id, kind, storage_path AS "storagePath"`,
@@ -29,6 +30,7 @@ export async function upsertEncrypted(doc) {
       doc.encryptionIv,
       doc.encryptionAuthTag,
       doc.retentionUntil,
+      doc.ciphertext || null,
     ]
   );
   return toCamelCase(result.rows[0]);
@@ -37,7 +39,7 @@ export async function upsertEncrypted(doc) {
 const DOCUMENT_COLUMNS = `id, kind, storage_path AS "storagePath", mime_type AS "mimeType",
             byte_size AS "byteSize", content_sha256 AS "contentSha256",
             encryption_iv AS "encryptionIv", encryption_auth_tag AS "encryptionAuthTag",
-            purged_at AS "purgedAt", created_at AS "createdAt"`;
+            ciphertext, purged_at AS "purgedAt", created_at AS "createdAt"`;
 
 export async function listActiveByTenant(tenantId) {
   const result = await getPool().query(
@@ -71,7 +73,9 @@ export async function listExpired() {
 
 export async function markPurged(id) {
   await getPool().query(
-    `UPDATE onboarding_documents SET purged_at = NOW() WHERE id = $1`,
+    `UPDATE onboarding_documents
+        SET purged_at = NOW(), ciphertext = NULL
+      WHERE id = $1`,
     [id]
   );
 }

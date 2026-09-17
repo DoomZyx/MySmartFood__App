@@ -1,6 +1,7 @@
 import { PlatformOnboardingController } from "../../API/controllers/PlatformOnboardingController.js";
 import { PlatformStaffController } from "../../API/controllers/PlatformStaffController.js";
 import { requirePlatformAdmin, requirePlatformOwner } from "../../middleware/sessionAuth.js";
+import { MAX_SOURCE_UPLOAD_BYTES } from "../../utils/imageWebp.js";
 
 const TENANT_ID = {
   type: "string",
@@ -79,6 +80,20 @@ export default async function platformAdminRoutes(fastify) {
     handler: PlatformOnboardingController.documentFile,
   });
 
+  fastify.post("/tenants/:tenantId/documents", {
+    onRequest: csrf,
+    bodyLimit: MAX_SOURCE_UPLOAD_BYTES + 1024 * 1024,
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    schema: {
+      params: {
+        type: "object",
+        required: ["tenantId"],
+        properties: { tenantId: TENANT_ID },
+      },
+    },
+    handler: PlatformOnboardingController.uploadDocument,
+  });
+
   fastify.post("/tenants", {
     onRequest: csrf,
     config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
@@ -107,6 +122,41 @@ export default async function platformAdminRoutes(fastify) {
       },
     },
     handler: PlatformOnboardingController.update,
+  });
+
+  fastify.get("/tenants/:tenantId/users", {
+    schema: {
+      params: {
+        type: "object",
+        required: ["tenantId"],
+        properties: { tenantId: TENANT_ID },
+      },
+    },
+    handler: PlatformOnboardingController.listUsers,
+  });
+
+  fastify.patch("/tenants/:tenantId/users/:userId", {
+    onRequest: csrf,
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    schema: {
+      params: {
+        type: "object",
+        required: ["tenantId", "userId"],
+        properties: {
+          tenantId: TENANT_ID,
+          userId: { type: "string", format: "uuid" },
+        },
+      },
+      body: {
+        type: "object",
+        properties: {
+          name: { type: "string", maxLength: 120 },
+          email: { type: "string", format: "email", maxLength: 255 },
+          password: { type: "string", maxLength: 128 },
+        },
+      },
+    },
+    handler: PlatformOnboardingController.updateUser,
   });
 
   fastify.post("/tenants/:tenantId/assign-phone", {
@@ -210,6 +260,28 @@ export default async function platformAdminRoutes(fastify) {
       },
     },
     handler: PlatformStaffController.create,
+  });
+
+  fastify.patch("/staff/:userId", {
+    onRequest: csrf,
+    preHandler: ownerOnly,
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    schema: {
+      params: {
+        type: "object",
+        required: ["userId"],
+        properties: { userId: { type: "string", format: "uuid" } },
+      },
+      body: {
+        type: "object",
+        properties: {
+          name: { type: "string", maxLength: 120 },
+          email: { type: "string", format: "email", maxLength: 255 },
+          password: { type: "string", maxLength: 128 },
+        },
+      },
+    },
+    handler: PlatformStaffController.update,
   });
 
   fastify.post("/staff/:userId/revoke", {
