@@ -1,5 +1,9 @@
 import { requireAuth } from "./sessionAuth.js";
-import { requireActiveSubscription, resolveTenant } from "./tenantContext.js";
+import {
+  requireActiveSubscription,
+  requireRestaurantDashboard,
+  resolveTenant,
+} from "./tenantContext.js";
 import { timingSafeEqualString } from "../utils/timingSafe.js";
 import { resolveRuntimeTenantId } from "../utils/runtimeTenant.js";
 import * as Tenant from "../models/pg/Tenant.js";
@@ -32,6 +36,8 @@ export async function requireTenantAccess(request, reply) {
       await resolveTenant(request, reply);
       if (reply.sent) return;
       await requireActiveSubscription(request, reply);
+      if (reply.sent) return;
+      await requireRestaurantDashboard(request, reply);
       return;
     }
     const tenant = await Tenant.findById(selector);
@@ -55,6 +61,8 @@ export async function requireTenantAccess(request, reply) {
   await resolveTenant(request, reply);
   if (reply.sent) return;
   await requireActiveSubscription(request, reply);
+  if (reply.sent) return;
+  await requireRestaurantDashboard(request, reply);
 }
 
 export async function requireTenantStaffAdmin(request, reply) {

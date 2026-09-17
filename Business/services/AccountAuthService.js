@@ -8,6 +8,10 @@ import { getPool } from "../../database/pool.js";
 import { websitePlanIdFromSlug } from "../mappers/websitePlan.js";
 import { dashboardUrl } from "../../utils/publicUrls.js";
 import { decryptGoogleId } from "../../utils/accountIdentifierCrypto.js";
+import {
+  isPaidSubscription,
+  isRestaurantDashboardReady,
+} from "./RestaurantDashboardAccess.js";
 
 export class AccountAuthError extends Error {
   constructor(message, statusCode = 400) {
@@ -132,10 +136,9 @@ export async function sessionPayload(user) {
   let planId = null;
   let planName = null;
   let twilioDocsSubmittedAt = null;
-  let subscriptionStatus = null;
+  let subscription = null;
   if (first) {
-    const subscription = await Subscription.findCurrentByTenant(first.id);
-    subscriptionStatus = subscription?.status || null;
+    subscription = await Subscription.findCurrentByTenant(first.id);
     if (subscription?.planId) {
       const plan = await Plan.findById(subscription.planId);
       planSlug = plan?.slug || null;
@@ -145,10 +148,11 @@ export async function sessionPayload(user) {
     const profile = await EstablishmentProfile.findByTenantId(first.id);
     twilioDocsSubmittedAt = profile?.documentsSubmittedAt || null;
   }
-  const hasActiveSubscription = Boolean(
-    subscriptionStatus && Subscription.isAccessGranted(subscriptionStatus)
+  const hasActiveSubscription = isPaidSubscription(subscription);
+  const accessUnlocked = isRestaurantDashboardReady(
+    subscription,
+    twilioDocsSubmittedAt
   );
-  const accessUnlocked = Boolean(user.dashboardUnlockedAt);
   const publicUser = User.publicUser(user);
   return {
     user: {

@@ -9,6 +9,7 @@ import { createProvisioningJob } from "../../models/pg/ProvisioningJob.js";
 import { resolvePlanSlug, websitePlanIdFromSlug } from "../mappers/websitePlan.js";
 import { siteUrl } from "../../utils/publicUrls.js";
 import { issueDashboardAccessToken } from "./DashboardAccessService.js";
+import { refreshDashboardUnlock } from "./RestaurantDashboardAccess.js";
 import logger from "../../Services/logging/logger.js";
 
 function stripeSecretKey() {
@@ -295,6 +296,7 @@ async function onCheckoutCompleted(stripe, session) {
 
   if (tenantId && Subscription.isAccessGranted(stripeSub.status)) {
     try {
+      await refreshDashboardUnlock(userId, tenantId);
       await issueDashboardAccessToken({ userId, tenantId });
     } catch (err) {
       logger.error({ err: err.message, userId }, "Émission jeton d'accès échouée");

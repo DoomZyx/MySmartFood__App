@@ -1,13 +1,14 @@
 import { requireAuth } from "../../middleware/sessionAuth.js";
 import {
   requireActiveSubscription,
+  requireRestaurantDashboard,
   requireRole,
   resolveTenant,
 } from "../../middleware/tenantContext.js";
 import * as TenantData from "../../Business/services/TenantDataService.js";
 
 export default async function tenantDataRoutes(fastify) {
-  const guards = [requireAuth, resolveTenant, requireActiveSubscription];
+  const guards = [requireAuth, resolveTenant, requireActiveSubscription, requireRestaurantDashboard];
 
   fastify.get("/clients", {
     preHandler: guards,

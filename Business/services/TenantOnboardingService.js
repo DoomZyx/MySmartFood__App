@@ -2,7 +2,6 @@ import * as Plan from "../../models/pg/Plan.js";
 import * as Tenant from "../../models/pg/Tenant.js";
 import * as Membership from "../../models/pg/Membership.js";
 import * as Subscription from "../../models/pg/Subscription.js";
-import * as User from "../../models/pg/User.js";
 import { createProvisioningJob } from "../../models/pg/ProvisioningJob.js";
 import { withTenant, withTransaction } from "../../database/transaction.js";
 
@@ -57,7 +56,7 @@ export async function ensureBetaTenant(user, { name, countryCode } = {}) {
     await Subscription.createManual(client, {
       tenantId,
       planId: plan.id,
-      status: "active",
+      status: "incomplete",
       currentPeriodStart: new Date(),
       currentPeriodEnd: periodEnd,
     });
@@ -69,6 +68,5 @@ export async function ensureBetaTenant(user, { name, countryCode } = {}) {
       [tenantId]
     )
   );
-  await User.markDashboardUnlocked(user.id);
   return tenantId;
 }

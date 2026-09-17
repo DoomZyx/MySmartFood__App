@@ -10,6 +10,7 @@ import {
   writeEncryptedDocument,
 } from "../../utils/documentCrypto.js";
 import { submitRegulatoryBundle } from "./TwilioProvisioningService.js";
+import { refreshDashboardUnlock } from "./RestaurantDashboardAccess.js";
 
 const KINDS = {
   kbisDocument: "kbis",
@@ -169,6 +170,7 @@ export async function submitOnboardingDossier({ tenantId, userId, body, files })
   await EstablishmentProfile.markDocumentsSubmitted(tenantId);
   await transition(tenantId, ["pending", "awaiting_documents"], "bundle_submitted");
   await submitRegulatoryBundle(tenantId);
+  await refreshDashboardUnlock(userId, tenantId);
 
   return { message: "Dossier chiffré et transmis pour conformité Twilio" };
 }

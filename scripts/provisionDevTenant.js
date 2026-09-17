@@ -49,8 +49,9 @@ async function main() {
       emailVerified: true,
       isPlatformAdmin: true,
     });
+    await User.setPlatformOwner(user.id, true);
   } else {
-    await User.setPlatformAdmin(user.id, true);
+    await User.setPlatformOwner(user.id, true);
     if (requestedPassword) {
       if (requestedPassword.length < 8) {
         throw new Error("DEV_ADMIN_PASSWORD doit contenir au moins 8 caractères");

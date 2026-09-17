@@ -8,6 +8,7 @@ const SALT_ROUNDS = 12;
 const USER_COLUMNS = `
   id, email, email_verified AS "emailVerified", name, avatar_url AS "avatarUrl",
   google_id_hash AS "googleIdHash", is_platform_admin AS "isPlatformAdmin",
+  is_platform_owner AS "isPlatformOwner",
   last_login_at AS "lastLoginAt", dashboard_unlocked_at AS "dashboardUnlockedAt",
   created_at AS "createdAt", updated_at AS "updatedAt"
 `;
@@ -110,6 +111,24 @@ export async function setPlatformAdmin(userId, enabled) {
     [userId, Boolean(enabled)]
   );
   return mapUser(result.rows[0]);
+}
+
+export async function setPlatformOwner(userId, enabled) {
+  const result = await getPool().query(
+    `UPDATE users SET is_platform_admin = TRUE, is_platform_owner = $2 WHERE id = $1 RETURNING ${USER_COLUMNS}`,
+    [userId, Boolean(enabled)]
+  );
+  return mapUser(result.rows[0]);
+}
+
+export async function listPlatformAdmins() {
+  const result = await getPool().query(
+    `SELECT ${USER_COLUMNS}
+       FROM users
+      WHERE is_platform_admin = TRUE
+      ORDER BY is_platform_owner DESC, created_at ASC`
+  );
+  return result.rows.map((row) => mapUser(row));
 }
 
 export async function setPassword(userId, plainPassword) {
@@ -244,6 +263,7 @@ export function publicUser(user) {
     avatarUrl: user.avatarUrl,
     emailVerified: user.emailVerified,
     isPlatformAdmin: user.isPlatformAdmin,
+    isPlatformOwner: Boolean(user.isPlatformOwner),
     dashboardUnlockedAt: user.dashboardUnlockedAt || null,
     createdAt: user.createdAt,
   };

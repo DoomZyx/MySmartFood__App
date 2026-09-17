@@ -197,3 +197,11 @@ export async function requirePlatformAdmin(request, reply) {
     return reply.code(403).send({ error: "Vérification back-office requise" });
   }
 }
+
+export async function requirePlatformOwner(request, reply) {
+  await requirePlatformAdmin(request, reply);
+  if (reply.sent) return;
+  if (!request.user.isPlatformOwner) {
+    return reply.code(403).send({ error: "Gestion des comptes réservée au propriétaire" });
+  }
+}

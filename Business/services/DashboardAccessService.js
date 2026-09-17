@@ -3,6 +3,8 @@ import * as AccessToken from "../../models/pg/AccessToken.js";
 import * as User from "../../models/pg/User.js";
 import * as Membership from "../../models/pg/Membership.js";
 import * as Subscription from "../../models/pg/Subscription.js";
+import * as EstablishmentProfile from "../../models/pg/EstablishmentProfile.js";
+import { isPaidSubscription } from "./RestaurantDashboardAccess.js";
 import { sendDashboardAccessEmail } from "../../utils/emailService.js";
 import { siteUrl } from "../../utils/publicUrls.js";
 import { AccountAuthError } from "./AccountAuthService.js";
@@ -53,8 +55,12 @@ export async function redeemDashboardAccessToken(rawToken) {
 
   if (row.tenantId) {
     const subscription = await Subscription.findCurrentByTenant(row.tenantId);
-    if (!subscription || !Subscription.isAccessGranted(subscription.status)) {
-      throw new AccountAuthError("Aucun abonnement actif", 403);
+    if (!isPaidSubscription(subscription)) {
+      throw new AccountAuthError("Aucun abonnement réglé", 403);
+    }
+    const profile = await EstablishmentProfile.findByTenantId(row.tenantId);
+    if (!profile?.documentsSubmittedAt) {
+      throw new AccountAuthError("Dossier établissement incomplet", 403);
     }
   }
 
@@ -68,7 +74,7 @@ export async function resendDashboardAccessToken(userId) {
   const memberships = await Membership.listByUserId(userId);
   for (const membership of memberships) {
     const subscription = await Subscription.findCurrentByTenant(membership.tenantId);
-    if (subscription && Subscription.isAccessGranted(subscription.status)) {
+    if (isPaidSubscription(subscription)) {
       return issueDashboardAccessToken({ userId, tenantId: membership.tenantId });
     }
   }

@@ -1,5 +1,9 @@
 import { requireAuth } from "../../middleware/sessionAuth.js";
-import { requireActiveSubscription, resolveTenant } from "../../middleware/tenantContext.js";
+import {
+  requireActiveSubscription,
+  requireRestaurantDashboard,
+  resolveTenant,
+} from "../../middleware/tenantContext.js";
 import { MonitoringController } from "../../API/controllers/MonitoringController.js";
 
 async function requireMonitoringAccess(request, reply) {
@@ -9,6 +13,8 @@ async function requireMonitoringAccess(request, reply) {
   await resolveTenant(request, reply);
   if (reply.sent) return;
   await requireActiveSubscription(request, reply);
+  if (reply.sent) return;
+  await requireRestaurantDashboard(request, reply);
 }
 
 export default async function monitoringRoutes(fastify) {

@@ -1,5 +1,6 @@
 import { PlatformOnboardingController } from "../../API/controllers/PlatformOnboardingController.js";
-import { requirePlatformAdmin } from "../../middleware/sessionAuth.js";
+import { PlatformStaffController } from "../../API/controllers/PlatformStaffController.js";
+import { requirePlatformAdmin, requirePlatformOwner } from "../../middleware/sessionAuth.js";
 
 const TENANT_ID = {
   type: "string",
@@ -115,5 +116,44 @@ export default async function platformAdminRoutes(fastify) {
       },
     },
     handler: PlatformOnboardingController.reject,
+  });
+
+  const ownerOnly = [requirePlatformOwner];
+
+  fastify.get("/staff", {
+    preHandler: ownerOnly,
+    handler: PlatformStaffController.list,
+  });
+
+  fastify.post("/staff", {
+    onRequest: csrf,
+    preHandler: ownerOnly,
+    config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    schema: {
+      body: {
+        type: "object",
+        required: ["email", "password"],
+        properties: {
+          email: { type: "string", format: "email", maxLength: 255 },
+          password: { type: "string", minLength: 8, maxLength: 128 },
+          name: { type: "string", maxLength: 120 },
+        },
+      },
+    },
+    handler: PlatformStaffController.create,
+  });
+
+  fastify.post("/staff/:userId/revoke", {
+    onRequest: csrf,
+    preHandler: ownerOnly,
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    schema: {
+      params: {
+        type: "object",
+        required: ["userId"],
+        properties: { userId: { type: "string", format: "uuid" } },
+      },
+    },
+    handler: PlatformStaffController.revoke,
   });
 }
