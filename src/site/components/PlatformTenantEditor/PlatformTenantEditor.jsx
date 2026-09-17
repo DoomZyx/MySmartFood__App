@@ -1,4 +1,5 @@
 import React from "react";
+import PlatformDossierReview from "../PlatformDossierReview/PlatformDossierReview";
 import "./PlatformTenantEditor.scss";
 
 export const OPENAI_REALTIME_MODEL = "gpt-realtime-1.5";
@@ -18,6 +19,7 @@ export const EMPTY_TENANT_DRAFT = {
   seatCount: "",
   cuisineType: "",
   phoneNumberUsage: "",
+  siret: "",
   inboundPhone: "",
   openaiApiKey: "",
   openaiModel: OPENAI_REALTIME_MODEL,
@@ -38,6 +40,7 @@ export function tenantToDraft(tenant) {
     seatCount: tenant?.seatCount != null ? String(tenant.seatCount) : "",
     cuisineType: tenant?.cuisineType || "",
     phoneNumberUsage: tenant?.phoneNumberUsage || "",
+    siret: tenant?.siret || tenant?.siren || "",
     openaiModel: tenant?.openaiModel || OPENAI_REALTIME_MODEL,
   };
 }
@@ -57,6 +60,7 @@ export function draftToPayload(draft, { requirePassword } = {}) {
     restaurantEmail: String(draft.restaurantEmail || "").trim() || undefined,
     cuisineType: String(draft.cuisineType || "").trim() || undefined,
     phoneNumberUsage: String(draft.phoneNumberUsage || "").trim() || undefined,
+    siret: String(draft.siret || "").trim() || undefined,
     openaiModel: String(draft.openaiModel || "").trim() || OPENAI_REALTIME_MODEL,
   };
   if (requirePassword || String(draft.password || "").trim()) {
@@ -154,6 +158,8 @@ const PlatformTenantEditor = ({
       </header>
 
       {mode === "edit" && <Checklist checklist={tenant?.checklist} />}
+
+      {mode === "edit" && tenant && <PlatformDossierReview tenant={tenant} />}
 
       <Section title="Compte">
         <Field label="Nom du propriétaire">
@@ -266,6 +272,19 @@ const PlatformTenantEditor = ({
             maxLength={100}
             value={draft.cuisineType}
             onChange={setField("cuisineType")}
+            autoComplete="off"
+          />
+        </Field>
+        <Field
+          label="SIRET / SIREN"
+          hint="14 chiffres (SIRET) ou 9 chiffres (SIREN) si le SIRET n'est pas connu."
+        >
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={17}
+            value={draft.siret}
+            onChange={setField("siret")}
             autoComplete="off"
           />
         </Field>

@@ -135,22 +135,21 @@ export const getCurrentUser = async () => {
 
 /**
  * Transmet le dossier Twilio (coordonnées + pièces) depuis Mon espace. Pas de création d'instance automatique.
- * @param {Object} formData - champs profil dont twilioNumberUsage
- * @param {{ kbisDocument: File, idDocumentRecto: File, idDocumentVerso: File, addressDocument: File }} files
+ * @param {Object} formData - champs profil dont twilioNumberUsage et siret/siren
+ * @param {{ idDocumentRecto: File, idDocumentVerso: File, addressDocument: File }} files
  */
 export const submitOnboardingDossierApi = async (formData, files) => {
   if (!API_BASE_URL) throw new Error("API non configurée.");
-  const { kbisDocument, idDocumentRecto, idDocumentVerso, addressDocument } = files || {};
-  if (!kbisDocument || !idDocumentRecto || !idDocumentVerso || !addressDocument) {
+  const { idDocumentRecto, idDocumentVerso, addressDocument } = files || {};
+  if (!idDocumentRecto || !idDocumentVerso || !addressDocument) {
     throw new Error(
-      "Documents requis : KBIS, pièce d'identité recto et verso, justificatif d'adresse.",
+      "Documents requis : pièce d'identité recto et verso, justificatif d'adresse.",
     );
   }
   const body = new FormData();
   Object.keys(formData).forEach((key) => {
     if (formData[key] != null && formData[key] !== "") body.append(key, formData[key]);
   });
-  body.append("kbisDocument", kbisDocument);
   body.append("idDocumentRecto", idDocumentRecto);
   body.append("idDocumentVerso", idDocumentVerso);
   body.append("addressDocument", addressDocument);

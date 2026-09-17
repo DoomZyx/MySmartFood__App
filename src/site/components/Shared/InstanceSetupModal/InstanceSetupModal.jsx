@@ -23,6 +23,7 @@ const defaultFormData = {
   nombreCouverts: "",
   typeCuisine: "",
   twilioNumberUsage: "",
+  siret: "",
   accessibilitePmr: "",
   nombreChaisesBebe: "",
 };
@@ -37,7 +38,6 @@ const MAX_FILE_SIZE_MB = 5;
 const InstanceSetupModal = ({ isOpen, onClose }) => {
   const { setAuth, user } = useAuth();
   const [formData, setFormData] = useState(defaultFormData);
-  const [kbisDocument, setKbisDocument] = useState(null);
   const [idDocumentRecto, setIdDocumentRecto] = useState(null);
   const [idDocumentVerso, setIdDocumentVerso] = useState(null);
   const [addressDocument, setAddressDocument] = useState(null);
@@ -66,7 +66,6 @@ const InstanceSetupModal = ({ isOpen, onClose }) => {
   const handleClose = useCallback(() => {
     setError(null);
     setProvisionResult(null);
-    setKbisDocument(null);
     setIdDocumentRecto(null);
     setIdDocumentVerso(null);
     setAddressDocument(null);
@@ -80,8 +79,7 @@ const InstanceSetupModal = ({ isOpen, onClose }) => {
       setError(`Fichier ${file.name} trop volumineux (max ${MAX_FILE_SIZE_MB} Mo).`);
       return;
     }
-    if (field === "kbisDocument") setKbisDocument(file);
-    else if (field === "idDocumentRecto") setIdDocumentRecto(file);
+    if (field === "idDocumentRecto") setIdDocumentRecto(file);
     else if (field === "idDocumentVerso") setIdDocumentVerso(file);
     else setAddressDocument(file);
     setError(null);
@@ -110,15 +108,19 @@ const InstanceSetupModal = ({ isOpen, onClose }) => {
       setError("Décrivez l'usage prévu du numéro (quelques phrases).");
       return;
     }
-    if (!kbisDocument || !idDocumentRecto || !idDocumentVerso || !addressDocument) {
-      setError("KBIS, pièce d'identité recto et verso, et justificatif d'adresse sont requis.");
+    const registration = (formData.siret || "").replace(/\D/g, "");
+    if (registration.length !== 14 && registration.length !== 9) {
+      setError("Indiquez un SIRET (14 chiffres) ou, à défaut, un SIREN (9 chiffres).");
+      return;
+    }
+    if (!idDocumentRecto || !idDocumentVerso || !addressDocument) {
+      setError("Pièce d'identité recto et verso, et justificatif d'adresse sont requis.");
       return;
     }
     setIsLoading(true);
     try {
       const { username: _u, ...profilePayload } = formData;
       const data = await submitOnboardingDossierApi(profilePayload, {
-        kbisDocument,
         idDocumentRecto,
         idDocumentVerso,
         addressDocument,
@@ -162,7 +164,7 @@ const InstanceSetupModal = ({ isOpen, onClose }) => {
           {!provisionResult && (
             <div className="instance-setup-modal-info" role="status">
               <p>
-                KBIS ou équivalent, pièce d&apos;identité du dirigeant recto et verso, preuve d&apos;adresse (&lt; 3 mois), description de l&apos;usage du numéro. PDF ou image, max {MAX_FILE_SIZE_MB} Mo par fichier.
+                SIRET (ou SIREN), pièce d&apos;identité du dirigeant recto et verso, preuve d&apos;adresse (&lt; 3 mois), description de l&apos;usage du numéro. PDF ou image, max {MAX_FILE_SIZE_MB} Mo par fichier.
               </p>
             </div>
           )}
@@ -414,21 +416,22 @@ const InstanceSetupModal = ({ isOpen, onClose }) => {
             </div>
 
             <div className="instance-setup-form-group">
-              <label htmlFor="instance-kbis" className="instance-setup-form-label">
-                KBIS ou équivalent *
+              <label htmlFor="instance-siret" className="instance-setup-form-label">
+                SIRET (ou SIREN) *
               </label>
               <input
-                type="file"
-                id="instance-kbis"
-                name="kbisDocument"
-                accept={ACCEPTED_DOC_TYPES}
-                onChange={(e) => handleFileChange("kbisDocument", e)}
+                type="text"
+                id="instance-siret"
+                name="siret"
+                value={formData.siret}
+                onChange={handleChange}
+                required
+                inputMode="numeric"
+                maxLength={17}
                 className="instance-setup-form-input"
+                placeholder="14 chiffres, ou 9 pour le SIREN"
                 disabled={isLoading}
               />
-              {kbisDocument && (
-                <span className="instance-setup-form-file-name">{kbisDocument.name}</span>
-              )}
             </div>
             <div className="instance-setup-form-group">
               <label htmlFor="instance-idRecto" className="instance-setup-form-label">

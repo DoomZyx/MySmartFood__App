@@ -23,6 +23,7 @@ const defaultFormData = {
   nombreCouverts: "",
   typeCuisine: "",
   twilioNumberUsage: "",
+  siret: "",
   accessibilitePmr: "",
   nombreChaisesBebe: "",
 };
@@ -33,7 +34,6 @@ const RestaurateurProfilForm = () => {
   const { user, refreshUser } = useAuth();
   const [formData, setFormData] = useState(defaultFormData);
   const [toast, setToast] = useState({ visible: false, message: "" });
-  const [kbisFile, setKbisFile] = useState(null);
   const [idRectoFile, setIdRectoFile] = useState(null);
   const [idVersoFile, setIdVersoFile] = useState(null);
   const [addrDocFile, setAddrDocFile] = useState(null);
@@ -87,6 +87,7 @@ const RestaurateurProfilForm = () => {
         nombreCouverts: profile.nombreCouverts != null ? String(profile.nombreCouverts) : "",
         typeCuisine: profile.typeCuisine ?? "",
         twilioNumberUsage: profile.twilioNumberUsage ?? "",
+        siret: profile.siret || profile.siren || "",
         accessibilitePmr:
           profile.accessibilitePmr === true
             ? "yes"
@@ -127,8 +128,7 @@ const RestaurateurProfilForm = () => {
       return;
     }
     setDossierLocalError(null);
-    if (kind === "kbis") setKbisFile(file);
-    else if (kind === "idRecto") setIdRectoFile(file);
+    if (kind === "idRecto") setIdRectoFile(file);
     else if (kind === "idVerso") setIdVersoFile(file);
     else setAddrDocFile(file);
   };
@@ -143,21 +143,26 @@ const RestaurateurProfilForm = () => {
       );
       return;
     }
-    if (!kbisFile || !idRectoFile || !idVersoFile || !addrDocFile) {
+    const registration = String(formData.siret || "").replace(/\D/g, "");
+    if (registration.length !== 14 && registration.length !== 9) {
       setDossierLocalError(
-        "Joignez le KBIS, la pièce d'identité recto et verso, et le justificatif d'adresse (PDF ou image, max 5 Mo chacun).",
+        "Indiquez un SIRET (14 chiffres) ou, à défaut, un SIREN (9 chiffres).",
+      );
+      return;
+    }
+    if (!idRectoFile || !idVersoFile || !addrDocFile) {
+      setDossierLocalError(
+        "Joignez la pièce d'identité recto et verso, et le justificatif d'adresse (PDF ou image, max 5 Mo chacun).",
       );
       return;
     }
     try {
       await submitOnboardingDossier(formData, {
-        kbisDocument: kbisFile,
         idDocumentRecto: idRectoFile,
         idDocumentVerso: idVersoFile,
         addressDocument: addrDocFile,
       });
       await refreshUser();
-      setKbisFile(null);
       setIdRectoFile(null);
       setIdVersoFile(null);
       setAddrDocFile(null);
@@ -399,16 +404,21 @@ const RestaurateurProfilForm = () => {
       {needsDocSubmission && (
         <>
           <div className="form-group">
-            <label htmlFor="kbisDocument" className="form-label">
-              KBIS ou équivalent (immatriculation) *
+            <label htmlFor="siret" className="form-label">
+              SIRET (ou SIREN) *
             </label>
             <input
-              type="file"
-              id="kbisDocument"
-              name="kbisDocument"
-              accept=".pdf,image/jpeg,image/png,image/jpg"
-              onChange={(e) => handleFilePick("kbis", e)}
+              type="text"
+              id="siret"
+              name="siret"
+              value={formData.siret}
+              onChange={handleChange}
               className="form-input"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={17}
+              required={needsDocSubmission}
+              placeholder="14 chiffres, ou 9 chiffres pour le SIREN"
               disabled={isSubmittingOnboarding}
             />
           </div>

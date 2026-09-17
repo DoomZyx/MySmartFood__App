@@ -175,6 +175,22 @@ export function closePlatformTenant(tenantId) {
   });
 }
 
+export async function fetchPlatformDocumentBlob(tenantId, kind) {
+  if (!API_BASE_URL) throw new Error("API non configurée.");
+  const response = await fetch(
+    `${API_BASE_URL}/api/platform/tenants/${encodeURIComponent(tenantId)}/documents/${encodeURIComponent(kind)}`,
+    { credentials: "include" }
+  );
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || data.message || "Pièce indisponible");
+  }
+  return {
+    blob: await response.blob(),
+    mimeType: response.headers.get("content-type") || "application/octet-stream",
+  };
+}
+
 export function updateContactStatus(id, status) {
   return platformMutate(`/api/contact/${id}/status`, {
     method: "PATCH",

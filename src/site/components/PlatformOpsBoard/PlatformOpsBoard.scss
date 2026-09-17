@@ -1,0 +1,320 @@
+@use "../../styles/variables" as *;
+
+.page-container.platform-ops-page {
+  padding-top: 0;
+}
+
+.platform-ops {
+  display: grid;
+  grid-template-columns: 240px minmax(280px, 340px) minmax(0, 1fr);
+  min-height: calc(100vh - 57px);
+  background: $bg-primary;
+
+  &.is-create {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+}
+
+.platform-ops-rail {
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem 0.9rem 2rem;
+  border-right: 1px solid $border-primary;
+  background: $bg-secondary;
+
+  section + section {
+    margin-top: 1.35rem;
+  }
+
+  h2 {
+    margin: 0 0 0.55rem 0.35rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: $text-muted;
+  }
+}
+
+.platform-ops-home {
+  display: flex;
+  align-items: center;
+  margin-top: auto;
+  padding: 0.62rem 0.75rem;
+  border: 1px solid $border-primary;
+  border-radius: 12px;
+  background: transparent;
+  color: $text-secondary;
+  text-decoration: none;
+  font-size: 0.92rem;
+
+  &:hover {
+    background: $bg-tertiary;
+    color: $text-primary;
+  }
+}
+
+.platform-ops-lane {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin: 0 0 0.28rem;
+  padding: 0.62rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: $text-secondary;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.92rem;
+
+  strong {
+    min-width: 1.5rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    border: 1px solid $border-primary;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-align: center;
+    color: $text-muted;
+  }
+
+  &:hover {
+    background: $bg-tertiary;
+    color: $text-primary;
+  }
+
+  &.is-active {
+    background: rgba(0, 212, 255, 0.08);
+    border-color: rgba(0, 212, 255, 0.28);
+    color: $text-primary;
+    box-shadow: inset 3px 0 0 $accent-primary;
+
+    strong {
+      border-color: rgba(0, 212, 255, 0.35);
+      color: $accent-primary;
+    }
+  }
+}
+
+.platform-ops-list {
+  padding: 1.1rem 0.9rem 2rem;
+  border-right: 1px solid $border-primary;
+  overflow: auto;
+}
+
+.platform-ops-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.platform-ops-card {
+  display: block;
+  width: 100%;
+  padding: 0.95rem 1rem;
+  border: 1px solid $border-primary;
+  border-radius: 14px;
+  background: $bg-card;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  h3 {
+    margin: 0.45rem 0 0.2rem;
+    font-size: 1rem;
+    color: $text-primary;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.82rem;
+    color: $text-muted;
+    word-break: break-word;
+  }
+
+  &:hover {
+    border-color: $border-secondary;
+  }
+
+  &.is-selected {
+    border-color: rgba(0, 212, 255, 0.45);
+    box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.2);
+  }
+}
+
+.platform-ops-card-top,
+.platform-ops-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.platform-ops-card-meta {
+  margin-top: 0.7rem;
+  font-size: 0.72rem;
+  color: $text-muted;
+}
+
+.platform-ops-kind {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: $text-muted;
+}
+
+.platform-ops-kind-tenant {
+  color: $accent-primary;
+}
+
+.platform-ops-kind-contact,
+.platform-ops-kind-demo {
+  color: $accent-secondary;
+}
+
+.platform-ops-status {
+  font-size: 0.72rem;
+  color: $accent-primary;
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+}
+
+.platform-ops-progress {
+  height: 4px;
+  margin-top: 0.7rem;
+  border-radius: 999px;
+  background: $bg-tertiary;
+  overflow: hidden;
+
+  span {
+    display: block;
+    height: 100%;
+    background: $gradient-primary;
+  }
+}
+
+.platform-ops-detail {
+  padding: 1.25rem 1.35rem 2.5rem;
+  overflow: auto;
+}
+
+.platform-ops-empty,
+.platform-ops-placeholder {
+  margin: 0.75rem 0;
+  color: $text-muted;
+}
+
+.platform-ops-placeholder {
+  max-width: 420px;
+  padding: 2rem 0;
+  line-height: 1.5;
+}
+
+.platform-ops-tracker {
+  margin-bottom: 1.15rem;
+
+  ol {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin: 0;
+    padding: 0;
+  }
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.4rem 0.7rem 0.4rem 0.4rem;
+    border-radius: 999px;
+    border: 1px solid $border-primary;
+    color: $text-muted;
+
+    span {
+      width: 1.35rem;
+      height: 1.35rem;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      border: 1px solid $border-primary;
+    }
+
+    em {
+      font-style: normal;
+      font-size: 0.78rem;
+    }
+
+    &.is-done {
+      border-color: rgba(16, 185, 129, 0.35);
+      color: $accent-success;
+
+      span {
+        border-color: rgba(16, 185, 129, 0.45);
+        background: rgba(16, 185, 129, 0.15);
+      }
+    }
+
+    &.is-current:not(.is-done) {
+      border-color: rgba(0, 212, 255, 0.4);
+      color: $text-primary;
+
+      span {
+        border-color: rgba(0, 212, 255, 0.5);
+        background: rgba(0, 212, 255, 0.12);
+        color: $accent-primary;
+      }
+    }
+  }
+
+  p {
+    margin: 0.65rem 0 0;
+    font-size: 0.8rem;
+    color: $text-muted;
+  }
+}
+
+.platform-ops-staff-form {
+  margin: 0 0 1.5rem;
+}
+
+@media (max-width: 1100px) {
+  .platform-ops {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-ops-rail {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 0.75rem;
+    overflow: auto;
+    border-right: 0;
+    border-bottom: 1px solid $border-primary;
+    padding-bottom: 0.85rem;
+
+    section {
+      min-width: max-content;
+    }
+
+    section + section {
+      margin-top: 0;
+    }
+  }
+
+  .platform-ops-home {
+    margin-top: 0;
+    flex-shrink: 0;
+    align-self: center;
+  }
+
+  .platform-ops-list {
+    border-right: 0;
+    max-height: 40vh;
+  }
+}

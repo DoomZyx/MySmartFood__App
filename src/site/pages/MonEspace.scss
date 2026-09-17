@@ -146,3 +146,38 @@
   line-height: 1.5;
   margin: 0 0 1.5rem 0;
 }
+
+.mon-espace-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+}
+
+.mon-espace-steps li {
+  padding: 0.65rem 0.7rem;
+  border: 1px solid $border-primary;
+  border-radius: 10px;
+  color: $text-muted;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.mon-espace-steps li.is-current {
+  border-color: $accent-primary;
+  color: $text-primary;
+}
+
+.mon-espace-steps li.is-done {
+  border-color: rgba(16, 185, 129, 0.45);
+  color: $accent-success;
+}
+
+@media (max-width: 700px) {
+  .mon-espace-steps {
+    grid-template-columns: 1fr 1fr;
+  }
+}

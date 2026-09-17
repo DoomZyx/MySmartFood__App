@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { PageContainer, Hero, Section } from "../components";
+import React, { useEffect, useMemo, useState } from "react";
+import { PageContainer, Section } from "../components";
 import { useAuth } from "../hooks/useAuth";
 import { usePlatformAdmin } from "../hooks/usePlatformAdmin";
 import { startPlatformGoogleLogin } from "../services/platformAdminService";
@@ -9,25 +9,17 @@ import PlatformTenantEditor, {
   draftToPayload,
   tenantToDraft,
 } from "../components/PlatformTenantEditor/PlatformTenantEditor";
+import PlatformOpsBoard from "../components/PlatformOpsBoard/PlatformOpsBoard";
+import PlatformOnboardingTracker from "../components/PlatformOpsBoard/PlatformOnboardingTracker";
+import {
+  EMPTY_LABELS,
+  STATUS_LABELS,
+  buildOpsGroups,
+  formatOpsDate,
+  itemsForLane,
+  mergeRestaurants,
+} from "../utils/platformOpsLanes";
 import "./PlatformAdmin.scss";
-
-const STATUS_LABELS = {
-  pending_payment: "Paiement",
-  pending_compliance: "Conformité",
-  active: "Actif",
-  suspended: "Suspendu",
-  nouveau: "Nouveau",
-  en_cours: "En cours",
-  traite: "Traité",
-};
-
-function formatDate(value) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat("fr-FR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
 
 const PlatformAdmin = () => {
   const { setAuth, user: authUser } = useAuth();
@@ -62,7 +54,8 @@ const PlatformAdmin = () => {
     createStaff,
     revokeStaff,
   } = usePlatformAdmin();
-  const [tab, setTab] = useState("restaurants");
+  const [lane, setLane] = useState("inbox");
+  const [selected, setSelected] = useState(null);
   const [rejectDrafts, setRejectDrafts] = useState({});
   const [rowError, setRowError] = useState({});
   const [email, setEmail] = useState("");
@@ -83,6 +76,26 @@ const PlatformAdmin = () => {
   const [createdAccount, setCreatedAccount] = useState(null);
   const isDevBypass = import.meta.env.DEV;
   const canManageStaff = Boolean(authUser?.isPlatformOwner);
+
+  const restaurants = useMemo(
+    () => mergeRestaurants(tenants, fleet),
+    [tenants, fleet]
+  );
+  const groups = useMemo(
+    () =>
+      buildOpsGroups({
+        restaurants,
+        contacts,
+        demos,
+        staff,
+        canManageStaff,
+      }),
+    [restaurants, contacts, demos, staff, canManageStaff]
+  );
+  const items = useMemo(
+    () => itemsForLane(lane, { restaurants, contacts, demos, staff }),
+    [lane, restaurants, contacts, demos, staff]
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -112,12 +125,20 @@ const PlatformAdmin = () => {
   useEffect(() => {
     setEditDrafts((current) => {
       const next = { ...current };
-      [...tenants, ...fleet].forEach((tenant) => {
+      restaurants.forEach((tenant) => {
         if (!next[tenant.id]) next[tenant.id] = tenantToDraft(tenant);
       });
       return next;
     });
-  }, [tenants, fleet]);
+  }, [restaurants]);
+
+  useEffect(() => {
+    if (!selected || isLoading) return;
+    const stillThere = items.some(
+      (item) => item.id === selected.id && item.kind === selected.kind
+    );
+    if (!stillThere && lane !== "create") setSelected(null);
+  }, [items, selected, isLoading, lane]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -166,6 +187,144 @@ const PlatformAdmin = () => {
       setLoginError(err.message);
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  const selectLane = (next) => {
+    setLane(next);
+    setSelected(null);
+    if (next === "active" || next === "suspended" || next === "inbox") loadFleet();
+    if (
+      next === "inbox" ||
+      next === "pending_payment" ||
+      next === "pending_compliance" ||
+      next === "ready" ||
+      next === "contacts" ||
+      next === "demos"
+    ) {
+      loadInbox();
+    }
+    if (next === "staff" && canManageStaff) loadStaff();
+  };
+
+  const setEditDraft = (tenantId, draft) => {
+    setEditDrafts((current) => ({ ...current, [tenantId]: draft }));
+  };
+
+  const handleActivate = async (tenantId) => {
+    setRowError((current) => ({ ...current, [tenantId]: null }));
+    try {
+      await activateTenant(tenantId);
+      setLane("active");
+      setSelected({ kind: "tenant", id: tenantId });
+    } catch (err) {
+      setRowError((current) => ({ ...current, [tenantId]: err.message }));
+    }
+  };
+
+  const handleReject = async (tenantId) => {
+    setRowError((current) => ({ ...current, [tenantId]: null }));
+    try {
+      await rejectTenant(tenantId, rejectDrafts[tenantId]);
+      setRejectDrafts((current) => ({ ...current, [tenantId]: "" }));
+      setSelected(null);
+    } catch (err) {
+      setRowError((current) => ({ ...current, [tenantId]: err.message }));
+    }
+  };
+
+  const handleSuspend = async (tenantId) => {
+    setRowError((current) => ({ ...current, [tenantId]: null }));
+    try {
+      await suspendTenant(tenantId);
+      setLane("suspended");
+      setSelected({ kind: "tenant", id: tenantId });
+    } catch (err) {
+      setRowError((current) => ({ ...current, [tenantId]: err.message }));
+    }
+  };
+
+  const handleClose = async (tenant) => {
+    const label = tenant.businessName || tenant.name || "cet établissement";
+    const confirmed = window.confirm(
+      `Supprimer ${label} ? Il disparaîtra du back-office et la ligne vocale sera coupée.`
+    );
+    if (!confirmed) return;
+    setRowError((current) => ({ ...current, [tenant.id]: null }));
+    try {
+      await closeTenant(tenant.id);
+      setSelected(null);
+    } catch (err) {
+      setRowError((current) => ({ ...current, [tenant.id]: err.message }));
+    }
+  };
+
+  const handleCreateTenant = async (event) => {
+    event.preventDefault();
+    setClientFormError(null);
+    setCreatedAccount(null);
+    try {
+      const payload = draftToPayload(createDraft, { requirePassword: true });
+      const data = await createTenant(payload);
+      setCreatedAccount({
+        email: payload.email,
+        password: data.temporaryPassword || payload.password,
+        name: data.tenant?.businessName || payload.name,
+      });
+      setCreateDraft(EMPTY_TENANT_DRAFT);
+      if (data.tenant?.id) {
+        setLane("active");
+        setSelected({ kind: "tenant", id: data.tenant.id });
+      }
+    } catch (err) {
+      setClientFormError(err.message);
+    }
+  };
+
+  const handleSaveTenant = async (event, tenant) => {
+    event.preventDefault();
+    setRowError((current) => ({ ...current, [tenant.id]: null }));
+    try {
+      const draft = editDrafts[tenant.id] || tenantToDraft(tenant);
+      const data = await updateTenant(tenant.id, draftToPayload(draft));
+      setEditDraft(tenant.id, {
+        ...tenantToDraft(data.tenant),
+        password: "",
+        inboundPhone: "",
+      });
+    } catch (err) {
+      setRowError((current) => ({ ...current, [tenant.id]: err.message }));
+    }
+  };
+
+  const handleCreateStaff = async (event) => {
+    event.preventDefault();
+    setStaffFormError(null);
+    try {
+      await createStaff({
+        email: staffEmail.trim(),
+        name: staffName.trim(),
+        password: staffPassword,
+      });
+      setStaffEmail("");
+      setStaffName("");
+      setStaffPassword("");
+    } catch (err) {
+      setStaffFormError(err.message);
+    }
+  };
+
+  const handleRevokeStaff = async (member) => {
+    const confirmed = window.confirm(
+      `Retirer l'accès back-office de ${member.email} ?`
+    );
+    if (!confirmed) return;
+    setStaffFormError(null);
+    try {
+      await revokeStaff(member.id);
+      setSelected(null);
+    } catch (err) {
+      setStaffFormError(err.message);
     }
   };
 
@@ -290,125 +449,328 @@ const PlatformAdmin = () => {
     );
   }
 
-  const handleActivate = async (tenantId) => {
-    setRowError((current) => ({ ...current, [tenantId]: null }));
-    try {
-      await activateTenant(tenantId);
-    } catch (err) {
-      setRowError((current) => ({ ...current, [tenantId]: err.message }));
-    }
-  };
+  const selectedTenant =
+    selected?.kind === "tenant"
+      ? restaurants.find((tenant) => tenant.id === selected.id)
+      : null;
+  const selectedContact =
+    selected?.kind === "contact"
+      ? contacts.find((contact) => contact.id === selected.id)
+      : null;
+  const selectedDemo =
+    selected?.kind === "demo" ? demos.find((demo) => demo.id === selected.id) : null;
+  const selectedStaff =
+    selected?.kind === "staff" ? staff.find((member) => member.id === selected.id) : null;
 
-  const handleReject = async (tenantId) => {
-    setRowError((current) => ({ ...current, [tenantId]: null }));
-    try {
-      await rejectTenant(tenantId, rejectDrafts[tenantId]);
-      setRejectDrafts((current) => ({ ...current, [tenantId]: "" }));
-    } catch (err) {
-      setRowError((current) => ({ ...current, [tenantId]: err.message }));
-    }
-  };
+  const canAcceptSelfService = (tenant) =>
+    tenant.onboardedBy === "platform" || Boolean(tenant.dossierComplete);
 
-  const handleSuspend = async (tenantId) => {
-    setRowError((current) => ({ ...current, [tenantId]: null }));
-    try {
-      await suspendTenant(tenantId);
-    } catch (err) {
-      setRowError((current) => ({ ...current, [tenantId]: err.message }));
-    }
-  };
+  const renderTenantActions = (tenant) => (
+    <div className="platform-admin-assign">
+      {tenant.status !== "active" && tenant.status !== "suspended" && (
+        <>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={busyId === tenant.id || !canAcceptSelfService(tenant)}
+            onClick={() => handleActivate(tenant.id)}
+          >
+            Accepter
+          </button>
+          <input
+            type="text"
+            value={rejectDrafts[tenant.id] || ""}
+            onChange={(event) =>
+              setRejectDrafts((current) => ({
+                ...current,
+                [tenant.id]: event.target.value,
+              }))
+            }
+            placeholder="Motif du refus"
+            disabled={busyId === tenant.id}
+          />
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={busyId === tenant.id}
+            onClick={() => handleReject(tenant.id)}
+          >
+            Refuser
+          </button>
+        </>
+      )}
+      {tenant.status === "active" && (
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={busyId === tenant.id}
+          onClick={() => handleSuspend(tenant.id)}
+        >
+          Suspendre
+        </button>
+      )}
+      {tenant.status === "suspended" && (
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={busyId === tenant.id}
+          onClick={() => handleActivate(tenant.id)}
+        >
+          Réactiver
+        </button>
+      )}
+      <button
+        type="button"
+        className="btn btn-secondary"
+        disabled={busyId === tenant.id}
+        onClick={() => handleClose(tenant)}
+      >
+        Supprimer
+      </button>
+    </div>
+  );
 
-  const handleClose = async (tenant) => {
-    const label = tenant.businessName || tenant.name || "cet établissement";
-    const confirmed = window.confirm(
-      `Supprimer ${label} ? Il disparaîtra du back-office et la ligne vocale sera coupée.`
+  const renderLeadActions = (kind, item) => (
+    <div className="platform-admin-assign">
+      {item.status === "nouveau" && (
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={busyId === item.id}
+          onClick={() =>
+            kind === "contact"
+              ? markContact(item.id, "en_cours")
+              : markDemo(item.id, "en_cours")
+          }
+        >
+          Prendre en cours
+        </button>
+      )}
+      <button
+        type="button"
+        className="btn btn-primary"
+        disabled={busyId === item.id}
+        onClick={() =>
+          kind === "contact"
+            ? markContact(item.id, "traite")
+            : markDemo(item.id, "traite")
+        }
+      >
+        Marquer traité
+      </button>
+    </div>
+  );
+
+  let detail = (
+    <p className="platform-ops-placeholder">
+      Choisissez une demande dans la file pour suivre l'état du dossier, ou
+      ouvrez Nouveau client pour onboarder un restaurant.
+    </p>
+  );
+
+  if (lane === "create") {
+    detail = (
+      <div className="platform-admin-card">
+        <PlatformTenantEditor
+          mode="create"
+          draft={createDraft}
+          onChange={setCreateDraft}
+          onSubmit={handleCreateTenant}
+          busy={busyId === "create-tenant"}
+          error={clientFormError}
+        >
+          {createdAccount && (
+            <p role="status">
+              Compte créé pour {createdAccount.name}. E-mail : {createdAccount.email}.
+              Mot de passe : {createdAccount.password}. Notez-le, il ne sera plus
+              réaffiché.
+            </p>
+          )}
+        </PlatformTenantEditor>
+      </div>
     );
-    if (!confirmed) return;
-    setRowError((current) => ({ ...current, [tenant.id]: null }));
-    try {
-      await closeTenant(tenant.id);
-    } catch (err) {
-      setRowError((current) => ({ ...current, [tenant.id]: err.message }));
-    }
-  };
-
-  const openTab = (next) => {
-    setTab(next);
-    if (next === "actifs") loadFleet();
-    if (next === "restaurants") loadInbox();
-    if (next === "comptes" && canManageStaff) loadStaff();
-  };
-
-  const setEditDraft = (tenantId, draft) => {
-    setEditDrafts((current) => ({ ...current, [tenantId]: draft }));
-  };
-
-  const handleCreateTenant = async (event) => {
-    event.preventDefault();
-    setClientFormError(null);
-    setCreatedAccount(null);
-    try {
-      const payload = draftToPayload(createDraft, { requirePassword: true });
-      const data = await createTenant(payload);
-      setCreatedAccount({
-        email: payload.email,
-        password: data.temporaryPassword || payload.password,
-        name: data.tenant?.businessName || payload.name,
-      });
-      setCreateDraft(EMPTY_TENANT_DRAFT);
-    } catch (err) {
-      setClientFormError(err.message);
-    }
-  };
-
-  const handleSaveTenant = async (event, tenant) => {
-    event.preventDefault();
-    setRowError((current) => ({ ...current, [tenant.id]: null }));
-    try {
-      const draft = editDrafts[tenant.id] || tenantToDraft(tenant);
-      const data = await updateTenant(tenant.id, draftToPayload(draft));
-      setEditDraft(tenant.id, {
-        ...tenantToDraft(data.tenant),
-        password: "",
-        inboundPhone: "",
-      });
-    } catch (err) {
-      setRowError((current) => ({ ...current, [tenant.id]: err.message }));
-    }
-  };
-
-  const handleCreateStaff = async (event) => {
-    event.preventDefault();
-    setStaffFormError(null);
-    try {
-      await createStaff({
-        email: staffEmail.trim(),
-        name: staffName.trim(),
-        password: staffPassword,
-      });
-      setStaffEmail("");
-      setStaffName("");
-      setStaffPassword("");
-    } catch (err) {
-      setStaffFormError(err.message);
-    }
-  };
-
-  const handleRevokeStaff = async (member) => {
-    const confirmed = window.confirm(
-      `Retirer l'accès back-office de ${member.email} ?`
+  } else if (selectedTenant) {
+    detail = (
+      <>
+        <PlatformOnboardingTracker tenant={selectedTenant} />
+        <div className="platform-admin-card">
+          <PlatformTenantEditor
+            mode="edit"
+            tenant={{
+              ...selectedTenant,
+              status: STATUS_LABELS[selectedTenant.status] || selectedTenant.status,
+            }}
+            draft={editDrafts[selectedTenant.id] || tenantToDraft(selectedTenant)}
+            onChange={(draft) => setEditDraft(selectedTenant.id, draft)}
+            onSubmit={(event) => handleSaveTenant(event, selectedTenant)}
+            busy={busyId === selectedTenant.id}
+            error={rowError[selectedTenant.id]}
+          >
+            {renderTenantActions(selectedTenant)}
+          </PlatformTenantEditor>
+        </div>
+      </>
     );
-    if (!confirmed) return;
-    setStaffFormError(null);
-    try {
-      await revokeStaff(member.id);
-    } catch (err) {
-      setStaffFormError(err.message);
-    }
-  };
+  } else if (selectedContact) {
+    detail = (
+      <div className="platform-admin-card">
+        <div className="platform-admin-card-head">
+          <h2>{selectedContact.subject}</h2>
+          <span className="platform-admin-status">
+            {STATUS_LABELS[selectedContact.status] || selectedContact.status}
+          </span>
+        </div>
+        <dl className="platform-admin-meta">
+          <div>
+            <dt>Nom</dt>
+            <dd>{selectedContact.name}</dd>
+          </div>
+          <div>
+            <dt>Email</dt>
+            <dd>{selectedContact.email}</dd>
+          </div>
+          <div>
+            <dt>Société</dt>
+            <dd>{selectedContact.company || "—"}</dd>
+          </div>
+          <div>
+            <dt>Date</dt>
+            <dd>{formatOpsDate(selectedContact.createdAt)}</dd>
+          </div>
+          <div className="platform-admin-webhook">
+            <dt>Message</dt>
+            <dd>{selectedContact.message}</dd>
+          </div>
+        </dl>
+        {renderLeadActions("contact", selectedContact)}
+      </div>
+    );
+  } else if (selectedDemo) {
+    detail = (
+      <div className="platform-admin-card">
+        <div className="platform-admin-card-head">
+          <h2>{selectedDemo.company}</h2>
+          <span className="platform-admin-status">
+            {STATUS_LABELS[selectedDemo.status] || selectedDemo.status}
+          </span>
+        </div>
+        <dl className="platform-admin-meta">
+          <div>
+            <dt>Nom</dt>
+            <dd>{selectedDemo.name}</dd>
+          </div>
+          <div>
+            <dt>Email</dt>
+            <dd>{selectedDemo.email}</dd>
+          </div>
+          <div>
+            <dt>Créneau</dt>
+            <dd>{selectedDemo.preferredTime}</dd>
+          </div>
+          <div>
+            <dt>Durée</dt>
+            <dd>{selectedDemo.duration}</dd>
+          </div>
+          <div>
+            <dt>Date</dt>
+            <dd>{formatOpsDate(selectedDemo.createdAt)}</dd>
+          </div>
+          <div className="platform-admin-webhook">
+            <dt>Besoin</dt>
+            <dd>{selectedDemo.needs}</dd>
+          </div>
+        </dl>
+        {renderLeadActions("demo", selectedDemo)}
+      </div>
+    );
+  } else if (lane === "staff" && canManageStaff) {
+    detail = (
+      <>
+        <form className="platform-admin-login platform-ops-staff-form" onSubmit={handleCreateStaff}>
+          <h2>Créer un admin back-office</h2>
+          <p>
+            Même accès que vous sur les restaurants et les instances. Seul votre
+            compte gère les comptes.
+          </p>
+          <label>
+            Nom
+            <input
+              type="text"
+              value={staffName}
+              onChange={(event) => setStaffName(event.target.value)}
+              autoComplete="off"
+            />
+          </label>
+          <label>
+            E-mail
+            <input
+              type="email"
+              required
+              value={staffEmail}
+              onChange={(event) => setStaffEmail(event.target.value)}
+              autoComplete="off"
+            />
+          </label>
+          <label>
+            Mot de passe
+            <input
+              type="password"
+              required
+              minLength={8}
+              value={staffPassword}
+              onChange={(event) => setStaffPassword(event.target.value)}
+              autoComplete="new-password"
+            />
+          </label>
+          {staffFormError && (
+            <p className="platform-admin-error" role="alert">
+              {staffFormError}
+            </p>
+          )}
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={busyId === "create-staff"}
+          >
+            {busyId === "create-staff" ? "Création..." : "Créer le compte"}
+          </button>
+        </form>
+        {selectedStaff && (
+          <div className="platform-admin-card">
+            <div className="platform-admin-card-head">
+              <h2>{selectedStaff.name || selectedStaff.email}</h2>
+              <span className="platform-admin-status">
+                {selectedStaff.isPlatformOwner ? "Propriétaire" : "Admin"}
+              </span>
+            </div>
+            <dl className="platform-admin-meta">
+              <div>
+                <dt>E-mail</dt>
+                <dd>{selectedStaff.email}</dd>
+              </div>
+              <div>
+                <dt>Dernière connexion</dt>
+                <dd>{formatOpsDate(selectedStaff.lastLoginAt)}</dd>
+              </div>
+            </dl>
+            {!selectedStaff.isPlatformOwner && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busyId === selectedStaff.id}
+                onClick={() => handleRevokeStaff(selectedStaff)}
+              >
+                Retirer l'accès
+              </button>
+            )}
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
-    <PageContainer>
+    <PageContainer className="platform-ops-page">
       {showSuccess && (
         <AuthSuccessModal
           isOpen
@@ -416,423 +778,20 @@ const PlatformAdmin = () => {
           onContinue={() => setShowSuccess(false)}
         />
       )}
-      <Hero
-        title="Back-office"
-        gradientText="demandes"
-        description="Onboarding clients, validation des dossiers et instances actives."
-      />
-      <Section variant="alt">
-        <div className="platform-admin">
-          <div className="platform-admin-toolbar">
-            <button
-              type="button"
-              className={tab === "restaurants" ? "btn btn-primary" : "btn btn-secondary"}
-              onClick={() => openTab("restaurants")}
-            >
-              Demandes ({tenants.length})
-            </button>
-            <button
-              type="button"
-              className={tab === "actifs" ? "btn btn-primary" : "btn btn-secondary"}
-              onClick={() => openTab("actifs")}
-            >
-              Actifs ({fleet.length})
-            </button>
-            <button
-              type="button"
-              className={tab === "contacts" ? "btn btn-primary" : "btn btn-secondary"}
-              onClick={() => setTab("contacts")}
-            >
-              Contacts ({contacts.length})
-            </button>
-            <button
-              type="button"
-              className={tab === "demos" ? "btn btn-primary" : "btn btn-secondary"}
-              onClick={() => setTab("demos")}
-            >
-              Démos ({demos.length})
-            </button>
-            {canManageStaff && (
-              <button
-                type="button"
-                className={tab === "comptes" ? "btn btn-primary" : "btn btn-secondary"}
-                onClick={() => openTab("comptes")}
-              >
-                Comptes ({staff.length})
-              </button>
-            )}
-          </div>
-
-          {error && (
-            <p className="platform-admin-error" role="alert">
-              {error}
-            </p>
-          )}
-          {isLoading && <p className="platform-admin-empty">Chargement...</p>}
-
-          {tab === "restaurants" && (
-            <div className="platform-admin-card">
-              <PlatformTenantEditor
-                mode="create"
-                draft={createDraft}
-                onChange={setCreateDraft}
-                onSubmit={handleCreateTenant}
-                busy={busyId === "create-tenant"}
-                error={clientFormError}
-              >
-                {createdAccount && (
-                  <p role="status">
-                    Compte créé pour {createdAccount.name}. E-mail :{" "}
-                    {createdAccount.email}. Mot de passe : {createdAccount.password}.
-                    Le restaurant est dans l'onglet Actifs. Notez le mot de passe,
-                    il ne sera plus réaffiché.
-                  </p>
-                )}
-              </PlatformTenantEditor>
-            </div>
-          )}
-
-          {tab === "restaurants" && !isLoading && tenants.length === 0 && (
-            <p className="platform-admin-empty">Aucune demande restaurant en attente.</p>
-          )}
-
-          {tab === "restaurants" && (
-            <ul className="platform-admin-list">
-              {tenants.map((tenant) => (
-                <li key={tenant.id} className="platform-admin-card">
-                  <PlatformTenantEditor
-                    mode="edit"
-                    tenant={{
-                      ...tenant,
-                      status: STATUS_LABELS[tenant.status] || tenant.status,
-                    }}
-                    draft={editDrafts[tenant.id] || tenantToDraft(tenant)}
-                    onChange={(draft) => setEditDraft(tenant.id, draft)}
-                    onSubmit={(event) => handleSaveTenant(event, tenant)}
-                    busy={busyId === tenant.id}
-                    error={rowError[tenant.id]}
-                  >
-                    <div className="platform-admin-assign">
-                      {tenant.status !== "active" && (
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          disabled={busyId === tenant.id}
-                          onClick={() => handleActivate(tenant.id)}
-                        >
-                          Accepter
-                        </button>
-                      )}
-                      {tenant.status !== "active" && (
-                        <input
-                          type="text"
-                          value={rejectDrafts[tenant.id] || ""}
-                          onChange={(event) =>
-                            setRejectDrafts((current) => ({
-                              ...current,
-                              [tenant.id]: event.target.value,
-                            }))
-                          }
-                          placeholder="Motif du refus"
-                          disabled={busyId === tenant.id}
-                        />
-                      )}
-                      {tenant.status !== "active" && (
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          disabled={busyId === tenant.id}
-                          onClick={() => handleReject(tenant.id)}
-                        >
-                          Refuser
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={busyId === tenant.id}
-                        onClick={() => handleClose(tenant)}
-                      >
-                        Supprimer
-                      </button>
-                    </div>
-                  </PlatformTenantEditor>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {tab === "actifs" && !isLoading && fleet.length === 0 && (
-            <p className="platform-admin-empty">Aucune instance active ou suspendue.</p>
-          )}
-
-          {tab === "actifs" && (
-            <ul className="platform-admin-list">
-              {fleet.map((tenant) => (
-                <li key={tenant.id} className="platform-admin-card">
-                  <PlatformTenantEditor
-                    mode="edit"
-                    tenant={{
-                      ...tenant,
-                      status: STATUS_LABELS[tenant.status] || tenant.status,
-                    }}
-                    draft={editDrafts[tenant.id] || tenantToDraft(tenant)}
-                    onChange={(draft) => setEditDraft(tenant.id, draft)}
-                    onSubmit={(event) => handleSaveTenant(event, tenant)}
-                    busy={busyId === tenant.id}
-                    error={rowError[tenant.id]}
-                  >
-                    <div className="platform-admin-assign">
-                      {tenant.status === "active" ? (
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          disabled={busyId === tenant.id}
-                          onClick={() => handleSuspend(tenant.id)}
-                        >
-                          Suspendre
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          disabled={busyId === tenant.id}
-                          onClick={() => handleActivate(tenant.id)}
-                        >
-                          Réactiver
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={busyId === tenant.id}
-                        onClick={() => handleClose(tenant)}
-                      >
-                        Supprimer
-                      </button>
-                    </div>
-                  </PlatformTenantEditor>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {tab === "contacts" && !isLoading && contacts.length === 0 && (
-            <p className="platform-admin-empty">Aucun message de contact à traiter.</p>
-          )}
-          {tab === "contacts" && (
-            <ul className="platform-admin-list">
-              {contacts.map((contact) => (
-                <li key={contact.id} className="platform-admin-card">
-                  <div className="platform-admin-card-head">
-                    <h2>{contact.subject}</h2>
-                    <span className="platform-admin-status">
-                      {STATUS_LABELS[contact.status] || contact.status}
-                    </span>
-                  </div>
-                  <dl className="platform-admin-meta">
-                    <div>
-                      <dt>Nom</dt>
-                      <dd>{contact.name}</dd>
-                    </div>
-                    <div>
-                      <dt>Email</dt>
-                      <dd>{contact.email}</dd>
-                    </div>
-                    <div>
-                      <dt>Société</dt>
-                      <dd>{contact.company || "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>Date</dt>
-                      <dd>{formatDate(contact.createdAt)}</dd>
-                    </div>
-                    <div className="platform-admin-webhook">
-                      <dt>Message</dt>
-                      <dd>{contact.message}</dd>
-                    </div>
-                  </dl>
-                  <div className="platform-admin-assign">
-                    {contact.status === "nouveau" && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={busyId === contact.id}
-                        onClick={() => markContact(contact.id, "en_cours")}
-                      >
-                        Prendre en cours
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      disabled={busyId === contact.id}
-                      onClick={() => markContact(contact.id, "traite")}
-                    >
-                      Marquer traité
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {tab === "demos" && !isLoading && demos.length === 0 && (
-            <p className="platform-admin-empty">Aucune demande de démo à traiter.</p>
-          )}
-          {tab === "demos" && (
-            <ul className="platform-admin-list">
-              {demos.map((demo) => (
-                <li key={demo.id} className="platform-admin-card">
-                  <div className="platform-admin-card-head">
-                    <h2>{demo.company}</h2>
-                    <span className="platform-admin-status">
-                      {STATUS_LABELS[demo.status] || demo.status}
-                    </span>
-                  </div>
-                  <dl className="platform-admin-meta">
-                    <div>
-                      <dt>Nom</dt>
-                      <dd>{demo.name}</dd>
-                    </div>
-                    <div>
-                      <dt>Email</dt>
-                      <dd>{demo.email}</dd>
-                    </div>
-                    <div>
-                      <dt>Créneau</dt>
-                      <dd>{demo.preferredTime}</dd>
-                    </div>
-                    <div>
-                      <dt>Durée</dt>
-                      <dd>{demo.duration}</dd>
-                    </div>
-                    <div>
-                      <dt>Date</dt>
-                      <dd>{formatDate(demo.createdAt)}</dd>
-                    </div>
-                    <div className="platform-admin-webhook">
-                      <dt>Besoin</dt>
-                      <dd>{demo.needs}</dd>
-                    </div>
-                  </dl>
-                  <div className="platform-admin-assign">
-                    {demo.status === "nouveau" && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={busyId === demo.id}
-                        onClick={() => markDemo(demo.id, "en_cours")}
-                      >
-                        Prendre en cours
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      disabled={busyId === demo.id}
-                      onClick={() => markDemo(demo.id, "traite")}
-                    >
-                      Marquer traité
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {tab === "comptes" && canManageStaff && (
-            <>
-              <form className="platform-admin-login" onSubmit={handleCreateStaff}>
-                <h2>Créer un admin back-office</h2>
-                <p>
-                  Même accès que vous sur les restaurants et les instances.
-                  Seul votre compte gère les comptes.
-                </p>
-                <label>
-                  Nom
-                  <input
-                    type="text"
-                    value={staffName}
-                    onChange={(event) => setStaffName(event.target.value)}
-                    autoComplete="off"
-                  />
-                </label>
-                <label>
-                  E-mail
-                  <input
-                    type="email"
-                    required
-                    value={staffEmail}
-                    onChange={(event) => setStaffEmail(event.target.value)}
-                    autoComplete="off"
-                  />
-                </label>
-                <label>
-                  Mot de passe
-                  <input
-                    type="password"
-                    required
-                    minLength={8}
-                    value={staffPassword}
-                    onChange={(event) => setStaffPassword(event.target.value)}
-                    autoComplete="new-password"
-                  />
-                </label>
-                {staffFormError && (
-                  <p className="platform-admin-error" role="alert">
-                    {staffFormError}
-                  </p>
-                )}
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={busyId === "create-staff"}
-                >
-                  {busyId === "create-staff" ? "Création..." : "Créer le compte"}
-                </button>
-              </form>
-
-              {staff.length === 0 && !isLoading && (
-                <p className="platform-admin-empty">Aucun compte back-office listé.</p>
-              )}
-
-              <ul className="platform-admin-list">
-                {staff.map((member) => (
-                  <li key={member.id} className="platform-admin-card">
-                    <div className="platform-admin-card-head">
-                      <h2>{member.name || member.email}</h2>
-                      <span className="platform-admin-status">
-                        {member.isPlatformOwner ? "Propriétaire" : "Admin"}
-                      </span>
-                    </div>
-                    <dl className="platform-admin-meta">
-                      <div>
-                        <dt>E-mail</dt>
-                        <dd>{member.email}</dd>
-                      </div>
-                      <div>
-                        <dt>Dernière connexion</dt>
-                        <dd>{formatDate(member.lastLoginAt)}</dd>
-                      </div>
-                    </dl>
-                    {!member.isPlatformOwner && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={busyId === member.id}
-                        onClick={() => handleRevokeStaff(member)}
-                      >
-                        Retirer l'accès
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      </Section>
+      <PlatformOpsBoard
+        groups={groups}
+        lane={lane}
+        onLaneChange={selectLane}
+        items={items}
+        selectedId={selected ? `${selected.kind}-${selected.id}` : null}
+        onSelectItem={(item) => setSelected({ kind: item.kind, id: item.id })}
+        isLoading={isLoading}
+        error={error}
+        emptyLabel={EMPTY_LABELS[lane] || "Aucun élément."}
+        hideList={lane === "create"}
+      >
+        {detail}
+      </PlatformOpsBoard>
     </PageContainer>
   );
 };

@@ -1,0 +1,128 @@
+@use "../../styles/variables" as *;
+
+.pdr {
+  padding-top: 0.25rem;
+  border-top: 1px solid $border-primary;
+
+  h3 {
+    margin: 0 0 0.5rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: $text-muted;
+  }
+}
+
+.pdr-intro {
+  margin: 0 0 1rem;
+  color: $text-secondary;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.pdr-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+  margin: 0 0 1.25rem;
+
+  dt {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: $text-muted;
+    margin-bottom: 0.2rem;
+  }
+
+  dd {
+    margin: 0;
+    color: $text-secondary;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+}
+
+.pdr-wide {
+  grid-column: 1 / -1;
+}
+
+.pdr-docs {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.pdr-doc {
+  padding: 0.9rem;
+  border: 1px solid $border-primary;
+  border-radius: 12px;
+  background: $bg-card;
+}
+
+.pdr-doc-head {
+  h4 {
+    margin: 0 0 0.25rem;
+    color: $text-primary;
+    font-size: 0.95rem;
+  }
+
+  p {
+    margin: 0;
+    color: $text-muted;
+    font-size: 0.8rem;
+  }
+}
+
+.pdr-sha {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  word-break: break-all;
+}
+
+.pdr-preview-img,
+.pdr-preview-frame {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+  border: 1px solid $border-primary;
+  border-radius: 8px;
+  background: $bg-secondary;
+}
+
+.pdr-preview-img {
+  max-height: 420px;
+  object-fit: contain;
+}
+
+.pdr-preview-frame {
+  min-height: 420px;
+}
+
+.pdr-download {
+  display: inline-block;
+  margin-top: 0.7rem;
+  color: $accent-primary;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.pdr-empty,
+.pdr-error {
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
+}
+
+.pdr-error {
+  color: #f87171;
+}
+
+@media (max-width: 700px) {
+  .pdr-grid {
+    grid-template-columns: 1fr;
+  }
+}
