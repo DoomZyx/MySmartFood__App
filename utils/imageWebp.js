@@ -50,6 +50,23 @@ function replaceExt(name, ext) {
   return `${base}.${ext}`;
 }
 
+const FFMPEG_TIMEOUT_MS = 20_000;
+const HEIF_TIMEOUT_MS = 15_000;
+
+function withTimeout(promise, ms, message) {
+  let timer;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        const err = new Error(message);
+        err.statusCode = 400;
+        reject(err);
+      }, ms);
+    }),
+  ]);
+}
+
 function runFfmpeg(input, output, extraArgs) {
   return new Promise((resolve, reject) => {
     if (!ffmpegPath) {
@@ -69,12 +86,20 @@ function runFfmpeg(input, output, extraArgs) {
       ["-y", "-i", input, ...codecArgs, output],
       { stdio: ["ignore", "ignore", "pipe"] }
     );
+    const timer = setTimeout(() => {
+      proc.kill("SIGKILL");
+      reject(new Error("Conversion image trop longue"));
+    }, FFMPEG_TIMEOUT_MS);
     let stderr = "";
     proc.stderr.on("data", (chunk) => {
       stderr += String(chunk);
     });
-    proc.on("error", reject);
+    proc.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
     proc.on("close", (code) => {
+      clearTimeout(timer);
       if (code === 0) {
         resolve();
         return;
@@ -85,11 +110,15 @@ function runFfmpeg(input, output, extraArgs) {
 }
 
 async function heifToJpeg(buffer) {
-  const jpeg = await heicConvert({
-    buffer: Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer),
-    format: "JPEG",
-    quality: 0.9,
-  });
+  const jpeg = await withTimeout(
+    heicConvert({
+      buffer: Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer),
+      format: "JPEG",
+      quality: 0.9,
+    }),
+    HEIF_TIMEOUT_MS,
+    "Fichier HEIF illisible ou trop long à convertir. Envoyez un JPEG, PNG ou WebP."
+  );
   return Buffer.from(jpeg);
 }
 
@@ -125,8 +154,12 @@ export async function compressToWebp(buffer, mimeType = "", filename = "") {
     try {
       source = await heifToJpeg(buffer);
       sourceMime = "image/jpeg";
-    } catch {
-      const err = new Error("Fichier HEIF illisible. Envoyez un JPEG, PNG, WebP ou HEIF valide.");
+    } catch (cause) {
+      const err = new Error(
+        cause?.message && String(cause.message).includes("HEIF")
+          ? cause.message
+          : "Fichier HEIF illisible. Envoyez un JPEG, PNG, WebP ou HEIF valide."
+      );
       err.statusCode = 400;
       throw err;
     }
