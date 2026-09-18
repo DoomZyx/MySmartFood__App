@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { fetchPlatformDocumentBlob } from "../../services/platformAdminService";
 import { fileToWebp, PHOTO_ACCEPT } from "../../utils/imageWebp";
+import {
+  REQUIRED_DOC_SLOTS,
+  scrollToDossierField,
+} from "../../utils/dossierModeration";
 import "./PlatformDossierReview.scss";
 
 const DOC_LABELS = {
@@ -9,11 +13,6 @@ const DOC_LABELS = {
   id_verso: "Pièce d'identité verso",
   address_proof: "Justificatif d'adresse",
 };
-
-const IDENTITY_SLOTS = [
-  { kind: "id_recto", label: "Carte d'identité — recto" },
-  { kind: "id_verso", label: "Carte d'identité — verso" },
-];
 
 function formatBytes(size) {
   const bytes = Number(size) || 0;
@@ -95,40 +94,21 @@ function DocumentPreview({ tenantId, document }) {
   );
 }
 
-const PlatformDossierReview = ({ tenant, onUploadIdentity, uploadBusyId }) => {
-  const [showDocuments, setShowDocuments] = useState(Boolean(tenant.needsReview));
+const PlatformDossierReview = ({ tenant, audit, onUploadIdentity, uploadBusyId }) => {
   const [uploadError, setUploadError] = useState(null);
   const [compressingKind, setCompressingKind] = useState(null);
-  const fields = useMemo(
-    () => [
-      ["Nom établissement", tenant.businessName || tenant.name],
-      ["Propriétaire", tenant.ownerName],
-      ["E-mail propriétaire", tenant.ownerEmail],
-      ["E-mail établissement", tenant.restaurantEmail],
-      ["Téléphone établissement", tenant.restaurantPhone],
-      ["Adresse", tenant.addressLine],
-      ["Code postal", tenant.postalCode],
-      ["Ville", tenant.city],
-      ["Pays", tenant.profileCountry || tenant.countryCode],
-      ["SIRET", tenant.siret],
-      ["SIREN", tenant.siren],
-      ["Couverts", tenant.seatCount],
-      ["Cuisine", tenant.cuisineType],
-      ["Offre", tenant.planName || tenant.planSlug],
-      ["Abonnement", tenant.subscriptionStatus],
-      ["Statut établissement", tenant.status],
-      ["Provisioning", tenant.provisioningState],
-      ["Bundle Twilio", tenant.bundleStatus],
-      ["Numéro vocal", tenant.phoneNumber],
-      ["Dossier envoyé le", formatDate(tenant.documentsSubmittedAt)],
-    ],
-    [tenant]
+  const reviewFields = useMemo(
+    () => (audit?.items || []).filter((item) => !String(item.key).startsWith("doc_")),
+    [audit]
   );
 
   const documents = Array.isArray(tenant.documents) ? tenant.documents : [];
   const documentsByKind = useMemo(
     () => Object.fromEntries(documents.map((item) => [item.kind, item])),
     [documents]
+  );
+  const extraDocuments = documents.filter(
+    (document) => !REQUIRED_DOC_SLOTS.some((slot) => slot.kind === document.kind)
   );
 
   const handleIdentityPick = async (kind, event) => {
@@ -137,7 +117,6 @@ const PlatformDossierReview = ({ tenant, onUploadIdentity, uploadBusyId }) => {
     if (!file || !onUploadIdentity) return;
     setUploadError(null);
     setCompressingKind(kind);
-    setShowDocuments(true);
     try {
       const webp = await fileToWebp(file);
       await onUploadIdentity(kind, webp);
@@ -152,43 +131,67 @@ const PlatformDossierReview = ({ tenant, onUploadIdentity, uploadBusyId }) => {
     <section className="pdr" aria-label="Vérification du dossier">
       <h3>Dossier à vérifier</h3>
       <p className="pdr-intro">
-        Comparez chaque champ et chaque pièce avec l&apos;identité de
-        l&apos;établissement avant d&apos;accepter.
+        Les champs manquants et ceux qui ne correspondent pas restent visibles.
+        Cliquez une ligne pour ouvrir l&apos;input à corriger, puis comparez avec
+        les pièces.
       </p>
       <dl className="pdr-grid">
-        {fields.map(([label, value]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>{value == null || value === "" ? "—" : String(value)}</dd>
+        {reviewFields.map((item) => (
+          <div
+            key={item.key}
+            className={[
+              item.key === "phoneNumberUsage" ? "pdr-wide" : "",
+              item.status === "missing" ? "pdr-field-missing" : "",
+              item.status === "mismatch" ? "pdr-field-mismatch" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            <dt>{item.label}</dt>
+            <dd>
+              <button type="button" onClick={() => scrollToDossierField(item.key)}>
+                {item.value ? item.value : "—"}
+              </button>
+              {item.status === "missing" ? (
+                <span className="pdr-flag">Manquant</span>
+              ) : null}
+              {item.status === "mismatch" ? (
+                <span className="pdr-flag">
+                  Ne correspond pas{item.reason ? ` · ${item.reason}` : ""}
+                </span>
+              ) : null}
+            </dd>
           </div>
         ))}
-        <div className="pdr-wide">
-          <dt>Usage du numéro</dt>
-          <dd>{tenant.phoneNumberUsage || "—"}</dd>
-        </div>
       </dl>
 
       <div className="pdr-id">
-        <h4>Carte d&apos;identité</h4>
+        <h4>Pièces à contrôler</h4>
         <p className="pdr-intro">
-          Photo recto et verso. Chaque cliché est compressé en WebP puis
-          enregistré en base.
+          Recto, verso et justificatif d&apos;adresse. Chaque photo est compressée
+          en WebP puis enregistrée en base.
         </p>
         <div className="pdr-id-slots">
-          {IDENTITY_SLOTS.map((slot) => {
+          {REQUIRED_DOC_SLOTS.map((slot) => {
             const current = documentsByKind[slot.kind];
+            const issue = audit?.byKey?.[slot.key];
             const busy =
               compressingKind === slot.kind ||
               uploadBusyId === `${tenant.id}:${slot.kind}`;
+            const missing = issue?.status === "missing";
             return (
-              <label key={slot.kind} className="pdr-id-slot">
+              <label
+                key={slot.kind}
+                className={missing ? "pdr-id-slot pdr-id-slot-missing" : "pdr-id-slot"}
+                id={`pte-field-${slot.key}`}
+              >
                 <span>{slot.label}</span>
                 {current ? (
                   <em>
                     {formatBytes(current.byteSize)} · {current.mimeType || "fichier"}
                   </em>
                 ) : (
-                  <em>Aucune photo</em>
+                  <em>{missing ? "Pièce manquante" : "Aucune photo"}</em>
                 )}
                 <input
                   type="file"
@@ -209,30 +212,39 @@ const PlatformDossierReview = ({ tenant, onUploadIdentity, uploadBusyId }) => {
         ) : null}
       </div>
 
-      {documents.length === 0 ? (
-        <p className="pdr-empty">Aucune pièce transmise pour le moment.</p>
-      ) : (
-        <>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setShowDocuments((current) => !current)}
-          >
-            {showDocuments ? "Masquer les pièces" : `Voir les pièces (${documents.length})`}
-          </button>
-          {showDocuments && (
-            <div className="pdr-docs">
-              {documents.map((document) => (
-                <DocumentPreview
-                  key={`${document.kind}-${document.uploadedAt || document.sha256 || ""}`}
-                  tenantId={tenant.id}
-                  document={document}
-                />
-              ))}
-            </div>
-          )}
-        </>
-      )}
+      <div className="pdr-docs">
+        {REQUIRED_DOC_SLOTS.map((slot) => {
+          const document = documentsByKind[slot.kind];
+          if (document) {
+            return (
+              <DocumentPreview
+                key={`${document.kind}-${document.uploadedAt || document.sha256 || ""}`}
+                tenantId={tenant.id}
+                document={document}
+              />
+            );
+          }
+          return (
+            <article
+              key={slot.kind}
+              className="pdr-doc pdr-doc-missing"
+              id={`pte-doc-${slot.key}`}
+            >
+              <header className="pdr-doc-head">
+                <h4>{slot.label}</h4>
+                <p>Pièce manquante — rien à comparer pour le moment.</p>
+              </header>
+            </article>
+          );
+        })}
+        {extraDocuments.map((document) => (
+          <DocumentPreview
+            key={`${document.kind}-${document.uploadedAt || document.sha256 || ""}`}
+            tenantId={tenant.id}
+            document={document}
+          />
+        ))}
+      </div>
     </section>
   );
 };

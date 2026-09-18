@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageContainer, Hero, Section } from "../components";
 import { useAuth } from "../hooks/useAuth";
 import { useCheckout } from "../hooks/useCheckout";
 import OnboardingNoticeModal from "../components/Shared/OnboardingNoticeModal/OnboardingNoticeModal";
+import { shouldOpenMonEspace } from "@shared/companyOnboarding";
 import "./Onboarding.scss";
 
 const Onboarding = () => {
@@ -20,6 +21,12 @@ const Onboarding = () => {
 
   const { startBetaAccess, createCheckoutSession } = useCheckout();
   const email = user?.email || "";
+
+  useEffect(() => {
+    if (shouldOpenMonEspace(user) || user?.accessUnlocked) {
+      navigate("/mon-espace", { replace: true });
+    }
+  }, [user, navigate]);
 
   const handleGoToSpace = async () => {
     setError(null);
@@ -48,6 +55,10 @@ const Onboarding = () => {
       setIsSubmitting(false);
     }
   };
+
+  if (shouldOpenMonEspace(user) || user?.accessUnlocked) {
+    return null;
+  }
 
   if (hasPlanId) {
     return (

@@ -172,6 +172,56 @@
   color: #f87171;
 }
 
+.pdr-field-missing,
+.pdr-field-mismatch {
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+}
+
+.pdr-field-missing {
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.pdr-field-mismatch {
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.pdr-grid dd button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pdr-flag {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #f87171;
+}
+
+.pdr-field-mismatch .pdr-flag {
+  color: #fbbf24;
+}
+
+.pdr-id-slot-missing {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.pdr-doc-missing {
+  border-style: dashed;
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.06);
+}
+
 @media (max-width: 700px) {
   .pdr-grid {
     grid-template-columns: 1fr;

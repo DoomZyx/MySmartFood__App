@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "./useAuth";
 import { useCheckout } from "./useCheckout";
+import { stillNeedsPayment } from "@shared/companyOnboarding";
 
 export function useMonEspaceBilling() {
   const { user, refreshUser } = useAuth();
@@ -10,9 +11,12 @@ export function useMonEspaceBilling() {
   const [syncState, setSyncState] = useState(null);
 
   useEffect(() => {
+    if (!user?.id) return undefined;
+
     const checkout = searchParams.get("checkout");
     const sessionId = searchParams.get("session_id");
-    if (checkout !== "success" || !sessionId) return undefined;
+    const looksUnpaid = stillNeedsPayment(user);
+    if (checkout !== "success" && !sessionId && !looksUnpaid) return undefined;
 
     let cancelled = false;
     setSyncState("syncing");
@@ -20,24 +24,22 @@ export function useMonEspaceBilling() {
       .then(() => refreshUser())
       .then(() => {
         if (!cancelled) setSyncState("ok");
-      })
-      .catch(() => {
-        if (!cancelled) setSyncState("error");
-      })
-      .finally(() => {
-        if (cancelled) return;
+        if (cancelled || !sessionId) return;
         const next = new URLSearchParams(searchParams);
         next.delete("checkout");
         next.delete("session_id");
         setSearchParams(next, { replace: true });
+      })
+      .catch(() => {
+        if (!cancelled) setSyncState("error");
       });
 
     return () => {
       cancelled = true;
     };
-    // Une seule fois au retour Stripe.
+    // Une fois par compte : retour Stripe ou compte encore marqué non payé.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user?.id]);
 
   return {
     user,

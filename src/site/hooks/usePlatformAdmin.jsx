@@ -50,13 +50,23 @@ export function usePlatformAdmin() {
       if (session?.platformVerified) {
         setElevated(true);
         setTotpStep(null);
-        return { elevated: true, user: session.user || null };
+        return {
+          elevated: true,
+          user: session.user
+            ? { ...session.user, tenants: session.tenants || session.user.tenants }
+            : null,
+        };
       }
       const devSession = await elevateDevPlatformAdmin();
       if (devSession?.platformVerified) {
         setElevated(true);
         setTotpStep(null);
-        return { elevated: true, user: devSession.user || null };
+        return {
+          elevated: true,
+          user: devSession.user
+            ? { ...devSession.user, tenants: devSession.tenants || devSession.user.tenants }
+            : null,
+        };
       }
       const challenge = await fetchPlatformChallenge();
       setElevated(false);
@@ -98,7 +108,8 @@ export function usePlatformAdmin() {
     setElevated(Boolean(data.platformVerified));
     setTotpStep(null);
     setTotpSetup(null);
-    return data.user ?? data;
+    if (!data.user) return data;
+    return { ...data.user, tenants: data.tenants || data.user.tenants };
   }, [totpStep]);
 
   const loadInbox = useCallback(async () => {

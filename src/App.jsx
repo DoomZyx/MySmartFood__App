@@ -42,7 +42,7 @@ const Configuration = lazy(() => import("./dashboard/Pages/Configuration/Configu
 
 const FLASH_ERROR_KEY = "app_flash_error";
 
-const PLATFORM_ADMIN_ENTRY_PATHS = new Set(["/", "/login", "/register", "/mon-espace", "/app"]);
+const PLATFORM_ADMIN_ENTRY_PATHS = new Set(["/login", "/register"]);
 
 function UnknownRoute() {
   const { pathname } = useLocation();

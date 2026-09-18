@@ -12,6 +12,49 @@ import { followSiteAuthPath, isPlatformAdminUser } from "@shared/postSiteAuthPat
 import AuthSuccessModal from "../AuthSuccessModal/AuthSuccessModal";
 import "./LoginModal.scss";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function registerFieldIssues({ email, password, confirmPassword }) {
+  const items = [];
+  const mail = email.trim();
+  if (!mail) {
+    items.push({ key: "email", label: "Adresse e-mail", status: "missing", reason: "Manquant" });
+  } else if (!EMAIL_RE.test(mail)) {
+    items.push({
+      key: "email",
+      label: "Adresse e-mail",
+      status: "mismatch",
+      reason: "Adresse e-mail invalide",
+    });
+  }
+  if (!password) {
+    items.push({ key: "password", label: "Mot de passe", status: "missing", reason: "Manquant" });
+  } else if (password.trim().length < 8) {
+    items.push({
+      key: "password",
+      label: "Mot de passe",
+      status: "mismatch",
+      reason: "Minimum 8 caractères",
+    });
+  }
+  if (!confirmPassword) {
+    items.push({
+      key: "confirm",
+      label: "Confirmation du mot de passe",
+      status: "missing",
+      reason: "Manquant",
+    });
+  } else if (password !== confirmPassword) {
+    items.push({
+      key: "confirm",
+      label: "Confirmation du mot de passe",
+      status: "mismatch",
+      reason: "Ne correspond pas au mot de passe",
+    });
+  }
+  return items;
+}
+
 const LoginModal = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const { loginIntent } = useLoginModal();
@@ -23,6 +66,7 @@ const LoginModal = ({ isOpen, onClose }) => {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [successUser, setSuccessUser] = useState(null);
+  const [registerAttempted, setRegisterAttempted] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
@@ -32,6 +76,7 @@ const LoginModal = ({ isOpen, onClose }) => {
       setError("");
       setIsRegisterMode(false);
       setSuccessUser(null);
+      setRegisterAttempted(false);
       return;
     }
     if (loginIntent?.error === "auth_failed") {
@@ -48,21 +93,28 @@ const LoginModal = ({ isOpen, onClose }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (!email.trim()) {
-      setError("Veuillez saisir votre adresse e-mail.");
-      return;
-    }
-    if (!password) {
-      setError(isRegisterMode ? "Veuillez saisir un mot de passe." : "Veuillez saisir votre mot de passe.");
-      return;
-    }
     if (isRegisterMode) {
-      if (password.trim().length < 8) {
-        setError("Le mot de passe doit contenir au moins 8 caractères.");
+      setRegisterAttempted(true);
+      const issues = registerFieldIssues({ email, password, confirmPassword });
+      if (issues.length) {
+        setError(
+          issues
+            .map((item) =>
+              item.status === "missing"
+                ? `${item.label} : manquant`
+                : `${item.label} : ${item.reason}`
+            )
+            .join(" · ")
+        );
         return;
       }
-      if (password !== confirmPassword) {
-        setError("Les deux mots de passe ne correspondent pas.");
+    } else {
+      if (!email.trim()) {
+        setError("Veuillez saisir votre adresse e-mail.");
+        return;
+      }
+      if (!password) {
+        setError("Veuillez saisir votre mot de passe.");
         return;
       }
     }
@@ -118,12 +170,30 @@ const LoginModal = ({ isOpen, onClose }) => {
         isOpen
         email={successUser.email}
         title={isRegisterMode ? "Compte créé" : "Connexion réussie"}
+        text={
+          isRegisterMode
+            ? `Compte créé pour ${successUser.email}. Prochaine étape : le dossier restaurant dans Mon espace.`
+            : undefined
+        }
         onContinue={() => finishAuth(successUser)}
       />
     );
   }
 
   if (!isOpen) return null;
+
+  const issues = isRegisterMode
+    ? registerFieldIssues({ email, password, confirmPassword })
+    : [];
+  const showIssues = isRegisterMode && registerAttempted;
+  const issueOf = (key) => (showIssues ? issues.find((item) => item.key === key) : null);
+  const fieldClass = (key) => {
+    const issue = issueOf(key);
+    if (!issue) return "form-group";
+    return issue.status === "missing"
+      ? "form-group login-field-missing"
+      : "form-group login-field-mismatch";
+  };
 
   return (
     <div className="login-modal-overlay" onClick={handleClose}>
@@ -139,21 +209,48 @@ const LoginModal = ({ isOpen, onClose }) => {
 
         <div className="login-modal-content">
           <h2 className="login-modal-title">
-            Connexion
+            {isRegisterMode ? "Inscription" : "Connexion"}
             <span className="text-gradient"> mySmartFood</span>
           </h2>
           <p className="login-modal-subtitle">
-            Connectez-vous avec votre adresse e-mail ou avec Google pour accéder à votre espace.
+            {isRegisterMode
+              ? "Créez votre compte avec e-mail ou Google. Le dossier restaurant se complète ensuite dans Mon espace."
+              : "Connectez-vous avec votre adresse e-mail ou avec Google pour accéder à votre espace."}
           </p>
-          {isRegisterMode && (
-            <p className="login-modal-subtitle login-modal-subtitle--info">
-              Après inscription, complétez obligatoirement vos informations personnelles et celles de votre restaurant dans Mon espace afin que les données soient transmises à votre instance.
-            </p>
-          )}
+          {showIssues && issues.length > 0 ? (
+            <div className="login-issues" aria-label="Champs à corriger">
+              {issues.filter((item) => item.status === "missing").length > 0 ? (
+                <p>
+                  Manquant :{" "}
+                  {issues
+                    .filter((item) => item.status === "missing")
+                    .map((item) => item.label)
+                    .join(", ")}
+                </p>
+              ) : null}
+              {issues.filter((item) => item.status === "mismatch").length > 0 ? (
+                <p>
+                  Ne correspond pas :{" "}
+                  {issues
+                    .filter((item) => item.status === "mismatch")
+                    .map((item) => `${item.label} (${item.reason})`)
+                    .join(", ")}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           <form onSubmit={handleSubmit} className="login-form">
-            <div className="form-group">
-              <label htmlFor="login-email">Adresse e-mail</label>
+            <div className={fieldClass("email")}>
+              <label htmlFor="login-email">
+                Adresse e-mail
+                {issueOf("email")?.status === "missing" ? (
+                  <em className="login-field-flag">Manquant</em>
+                ) : null}
+                {issueOf("email")?.status === "mismatch" ? (
+                  <em className="login-field-flag">Ne correspond pas</em>
+                ) : null}
+              </label>
               <input
                 type="email"
                 id="login-email"
@@ -166,8 +263,16 @@ const LoginModal = ({ isOpen, onClose }) => {
                 disabled={isLoading}
               />
             </div>
-            <div className="form-group">
-              <label htmlFor="login-password">Mot de passe</label>
+            <div className={fieldClass("password")}>
+              <label htmlFor="login-password">
+                Mot de passe
+                {issueOf("password")?.status === "missing" ? (
+                  <em className="login-field-flag">Manquant</em>
+                ) : null}
+                {issueOf("password")?.status === "mismatch" ? (
+                  <em className="login-field-flag">Ne correspond pas</em>
+                ) : null}
+              </label>
               <input
                 type="password"
                 id="login-password"
@@ -182,8 +287,16 @@ const LoginModal = ({ isOpen, onClose }) => {
               />
             </div>
             {isRegisterMode && (
-              <div className="form-group">
-                <label htmlFor="login-confirm">Confirmer le mot de passe</label>
+              <div className={fieldClass("confirm")}>
+                <label htmlFor="login-confirm">
+                  Confirmer le mot de passe
+                  {issueOf("confirm")?.status === "missing" ? (
+                    <em className="login-field-flag">Manquant</em>
+                  ) : null}
+                  {issueOf("confirm")?.status === "mismatch" ? (
+                    <em className="login-field-flag">Ne correspond pas</em>
+                  ) : null}
+                </label>
                 <input
                   type="password"
                   id="login-confirm"
@@ -226,7 +339,11 @@ const LoginModal = ({ isOpen, onClose }) => {
                   <button
                     type="button"
                     className="login-modal-toggle-btn"
-                    onClick={() => { setIsRegisterMode(false); setError(""); }}
+                    onClick={() => {
+                      setIsRegisterMode(false);
+                      setError("");
+                      setRegisterAttempted(false);
+                    }}
                   >
                     Se connecter
                   </button>
@@ -237,7 +354,11 @@ const LoginModal = ({ isOpen, onClose }) => {
                   <button
                     type="button"
                     className="login-modal-toggle-btn"
-                    onClick={() => { setIsRegisterMode(true); setError(""); }}
+                    onClick={() => {
+                      setIsRegisterMode(true);
+                      setError("");
+                      setRegisterAttempted(false);
+                    }}
                   >
                     Créer un compte
                   </button>
@@ -257,7 +378,7 @@ const LoginModal = ({ isOpen, onClose }) => {
             disabled={isLoading}
           >
             <GoogleIcon />
-            Connexion avec Google
+            {isRegisterMode ? "Inscription avec Google" : "Connexion avec Google"}
           </button>
         </div>
       </div>

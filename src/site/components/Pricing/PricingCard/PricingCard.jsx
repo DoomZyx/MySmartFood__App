@@ -7,6 +7,7 @@ import { useLoginModal } from "../../../contexts/LoginModalContext";
 import { useAuth } from "../../../hooks/useAuth";
 import { useOptimizedAnimation } from "../../../hooks/useOptimizedAnimation";
 import { useCheckout } from "../../../hooks/useCheckout";
+import { shouldOpenMonEspace } from "@shared/companyOnboarding";
 import "./PricingCard.scss";
 
 const PricingCard = ({ plan, delay = 0 }) => {
@@ -14,12 +15,16 @@ const PricingCard = ({ plan, delay = 0 }) => {
   const animationProps = useOptimizedAnimation(delay, "fadeUp");
   const { openDemoModal } = useDemoModal();
   const { openLoginModal } = useLoginModal();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { createCheckoutSession, isLoading, error } = useCheckout();
 
   const handleCheckout = () => {
     if (!isAuthenticated) {
       openLoginModal({ planId: plan.id });
+      return;
+    }
+    if (shouldOpenMonEspace(user) || user?.accessUnlocked) {
+      navigate("/mon-espace");
       return;
     }
     navigate(`/onboarding?planId=${plan.id}`);

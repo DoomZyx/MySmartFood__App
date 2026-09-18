@@ -1,6 +1,7 @@
 import { PLATFORM_ADMIN_PATH } from "./platformAdminPath";
 import { canOpenDashboard } from "./syncDashboardSession";
 import { DASHBOARD_PATH, openDashboard } from "./dashboardPath";
+import { shouldOpenMonEspace, stillNeedsPayment } from "./companyOnboarding";
 
 export function isPlatformAdminUser(user) {
   return Boolean(user?.isPlatformAdmin);
@@ -12,7 +13,12 @@ export function followSiteAuthPath(navigate, user, loginIntent) {
     return;
   }
 
-  if (loginIntent?.planId) {
+  if (shouldOpenMonEspace(user)) {
+    navigate("/mon-espace", { replace: true });
+    return;
+  }
+
+  if (loginIntent?.planId && stillNeedsPayment(user)) {
     navigate(`/onboarding?planId=${loginIntent.planId}`, { replace: true });
     return;
   }

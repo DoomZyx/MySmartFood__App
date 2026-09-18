@@ -25,7 +25,7 @@ import {
 import "./PlatformAdmin.scss";
 
 const PlatformAdmin = () => {
-  const { setAuth, user: authUser } = useAuth();
+  const { setAuth, refreshUser, user: authUser } = useAuth();
   const {
     tenants,
     fleet,
@@ -190,7 +190,12 @@ const PlatformAdmin = () => {
         password,
         accessCode: accessCode.trim(),
       });
-      setAuth(data.user);
+      if (data.user) {
+        setAuth({
+          ...data.user,
+          tenants: data.tenants || data.user.tenants,
+        });
+      }
       setPassword("");
       setAccessCode("");
       if (data.platformVerified) {
@@ -262,6 +267,7 @@ const PlatformAdmin = () => {
     setRowError((current) => ({ ...current, [tenantId]: null }));
     try {
       await activateTenant(tenantId);
+      await refreshUser?.();
       setLaneChosen(true);
       setLane("active");
       setSelected({ kind: "tenant", id: tenantId });

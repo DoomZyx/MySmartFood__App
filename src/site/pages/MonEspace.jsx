@@ -5,17 +5,26 @@ import { PageContainer, Hero, Section } from "../components";
 import RestaurateurProfilForm from "../components/RestaurateurProfil/RestaurateurProfilForm";
 import OnboardingNoticeModal from "../components/Shared/OnboardingNoticeModal/OnboardingNoticeModal";
 import { useAuth } from "../hooks/useAuth";
+import { useMonEspaceBilling } from "../hooks/useMonEspaceBilling";
 import { usePricingData } from "../hooks/usePricingData";
 import { canOpenDashboard } from "../services/syncDashboardSession";
 import { dashboardHomeHref } from "../utils/dashboardPath";
+import {
+  canResumeCompanyDossier,
+  clearPaidPendingDossier,
+  markPaidPendingDossier,
+  stillNeedsPayment,
+} from "@shared/companyOnboarding";
 import "./MonEspace.scss";
 
 const MonEspace = () => {
   const { user, refreshUser } = useAuth();
+  const { syncState, error: billingError } = useMonEspaceBilling();
   const { plans } = usePricingData();
   const [searchParams, setSearchParams] = useSearchParams();
   const checkoutSuccess = searchParams.get("checkout") === "success";
-  const [showCheckoutModal, setShowCheckoutModal] = useState(checkoutSuccess);
+  const paymentConfirmed = Boolean(user?.hasActiveSubscription);
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
 
   const subscriptionLabel =
     user?.planName ||
@@ -24,26 +33,43 @@ const MonEspace = () => {
     null;
   const displaySubscription = subscriptionLabel || "Aucun abonnement actif";
   const hasAppAccess = canOpenDashboard(user);
-  const hasTenant = Boolean(user?.smartcrmInstanceId || user?.planSlug || user?.hasActiveSubscription);
-  const onboardingStatus = user?.onboardingStatus;
-  const needsPayment =
-    onboardingStatus === "needs_payment" ||
-    (hasTenant && !user?.hasActiveSubscription && !hasAppAccess);
-  const needsDossier =
-    onboardingStatus === "needs_dossier" ||
-    (hasTenant && !user?.twilioDocsSubmittedAt && !hasAppAccess);
+  const needsPayment = stillNeedsPayment(user) && !paymentConfirmed;
+  const needsDossier = canResumeCompanyDossier(user);
   const pendingReview =
-    onboardingStatus === "pending_review" ||
-    (Boolean(user?.hasActiveSubscription) &&
-      Boolean(user?.twilioDocsSubmittedAt) &&
-      !hasAppAccess);
+    user?.onboardingStatus === "pending_review" ||
+    (Boolean(user?.twilioDocsSubmittedAt) && !hasAppAccess);
 
   useEffect(() => {
-    if (!checkoutSuccess) return undefined;
     refreshUser?.();
-    setShowCheckoutModal(true);
-    return undefined;
-  }, [checkoutSuccess, refreshUser]);
+  }, [refreshUser]);
+
+  useEffect(() => {
+    if (user?.twilioDocsSubmittedAt || hasAppAccess) {
+      clearPaidPendingDossier();
+      return;
+    }
+    if (user?.hasActiveSubscription || user?.onboardingStatus === "needs_dossier") {
+      markPaidPendingDossier(user.id);
+      return;
+    }
+    if (user?.onboardingStatus === "needs_payment" || user?.onboardingStatus === "none") {
+      clearPaidPendingDossier();
+    }
+  }, [
+    user?.id,
+    user?.hasActiveSubscription,
+    user?.onboardingStatus,
+    user?.twilioDocsSubmittedAt,
+    hasAppAccess,
+  ]);
+
+  useEffect(() => {
+    if (!user?.id || !user?.hasActiveSubscription) return;
+    markPaidPendingDossier(user.id);
+    if (checkoutSuccess || syncState === "ok") {
+      setShowCheckoutModal(true);
+    }
+  }, [syncState, user?.hasActiveSubscription, user?.id, checkoutSuccess]);
 
   const closeCheckoutModal = () => {
     setShowCheckoutModal(false);
@@ -124,6 +150,9 @@ const MonEspace = () => {
                   formulaire ci-dessous. Le tableau de bord reste fermé tant
                   que le dossier n&apos;est pas validé.
                 </p>
+                {billingError ? (
+                  <p className="mon-espace-instance-required-desc">{billingError}</p>
+                ) : null}
               </div>
             </div>
           )}
@@ -136,9 +165,10 @@ const MonEspace = () => {
                   Formulaire d&apos;inscription d&apos;entreprise
                 </h3>
                 <p className="mon-espace-instance-required-desc">
-                  Étape obligatoire : renseignez l&apos;établissement, le SIRET
-                  (ou le SIREN), la pièce d&apos;identité recto/verso et le
-                  justificatif d&apos;adresse. Sans ce dossier validé, le
+                  Reprenez le formulaire ci-dessous : établissement, SIRET (ou
+                  SIREN), pièce d&apos;identité recto/verso et justificatif
+                  d&apos;adresse. Vous pouvez quitter et revenir, les champs
+                  déjà enregistrés sont conservés. Sans ce dossier validé, le
                   tableau de bord n&apos;apparaît pas.
                 </p>
               </div>

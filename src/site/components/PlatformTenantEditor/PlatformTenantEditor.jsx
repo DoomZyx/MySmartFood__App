@@ -1,5 +1,9 @@
-import React from "react";
+import React, { useMemo } from "react";
 import PlatformDossierReview from "../PlatformDossierReview/PlatformDossierReview";
+import {
+  auditDossier,
+  scrollToDossierField,
+} from "../../utils/dossierModeration";
 import "./PlatformTenantEditor.scss";
 
 export const OPENAI_REALTIME_MODEL = "gpt-realtime-1.5";
@@ -79,11 +83,35 @@ export function draftToPayload(draft, { requirePassword } = {}) {
   return payload;
 }
 
-function Field({ label, hint, wide, children }) {
+function Field({ label, hint, wide, fieldKey, issue, children }) {
+  const status = issue?.status;
+  const className = [
+    "pte-field",
+    wide ? "pte-field-wide" : "",
+    status === "missing" ? "pte-field-missing" : "",
+    status === "mismatch" ? "pte-field-mismatch" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <label className={wide ? "pte-field pte-field-wide" : "pte-field"}>
-      <span className="pte-label">{label}</span>
+    <label
+      className={className}
+      id={fieldKey ? `pte-field-${fieldKey}` : undefined}
+    >
+      <span className="pte-label">
+        {label}
+        {status === "missing" ? (
+          <em className="pte-field-flag">Manquant</em>
+        ) : null}
+        {status === "mismatch" ? (
+          <em className="pte-field-flag">Ne correspond pas</em>
+        ) : null}
+      </span>
       {children}
+      {status === "mismatch" && issue?.reason ? (
+        <span className="pte-hint pte-hint-issue">{issue.reason}</span>
+      ) : null}
       {hint ? <span className="pte-hint">{hint}</span> : null}
     </label>
   );
@@ -113,7 +141,7 @@ function formatLogin(value) {
   }).format(new Date(value));
 }
 
-function UserAccessCard({ user, onSave, busy, error }) {
+function UserAccessCard({ user, onSave, busy, error, nameIssue, emailIssue }) {
   const [name, setName] = React.useState(user.name || "");
   const [email, setEmail] = React.useState(user.email || "");
   const [password, setPassword] = React.useState("");
@@ -144,7 +172,7 @@ function UserAccessCard({ user, onSave, busy, error }) {
         <span className="pte-chip">{ROLE_LABELS[user.role] || user.role}</span>
         <span className="pte-hint">{formatLogin(user.lastLoginAt)}</span>
       </div>
-      <Field label="Nom">
+      <Field label="Nom" fieldKey={nameIssue ? "ownerName" : undefined} issue={nameIssue}>
         <input
           type="text"
           maxLength={120}
@@ -153,7 +181,7 @@ function UserAccessCard({ user, onSave, busy, error }) {
           autoComplete="off"
         />
       </Field>
-      <Field label="E-mail">
+      <Field label="E-mail" fieldKey={emailIssue ? "email" : undefined} issue={emailIssue}>
         <input
           type="email"
           required
@@ -191,21 +219,48 @@ function UserAccessCard({ user, onSave, busy, error }) {
   );
 }
 
-function Checklist({ checklist }) {
-  if (!checklist?.items?.length) return null;
+function ModerationPanel({ audit }) {
+  if (!audit) return null;
+  const { missing, mismatch, okCount } = audit;
+  const blocked = missing.length + mismatch.length;
   return (
-    <div className="pte-check" aria-label="Validation du dossier">
-      {checklist.items.map((item) => (
-        <span
-          key={item.key}
-          className={item.ok ? "pte-chip pte-chip-ok" : "pte-chip pte-chip-ko"}
-        >
-          {item.label} : {item.ok ? "OK" : "manque"}
-        </span>
-      ))}
-      <span className={checklist.ready ? "pte-chip pte-chip-ready" : "pte-chip pte-chip-wait"}>
-        {checklist.ready ? "Prêt à valider" : "Dossier incomplet"}
-      </span>
+    <div className="pte-moderation" aria-label="Contrôle du dossier">
+      <p className="pte-moderation-summary">
+        {blocked === 0
+          ? "Tous les champs attendus sont renseignés."
+          : `${missing.length} manquant${missing.length > 1 ? "s" : ""} · ${mismatch.length} ne correspond${mismatch.length > 1 ? "ent" : ""} pas`}
+        {` · ${okCount} conforme${okCount > 1 ? "s" : ""}`}
+      </p>
+      {missing.length > 0 ? (
+        <div className="pte-moderation-group pte-moderation-missing">
+          <h3>Manquants</h3>
+          <ul>
+            {missing.map((item) => (
+              <li key={item.key}>
+                <button type="button" onClick={() => scrollToDossierField(item.key)}>
+                  {item.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {mismatch.length > 0 ? (
+        <div className="pte-moderation-group pte-moderation-mismatch">
+          <h3>Ne correspondent pas</h3>
+          <ul>
+            {mismatch.map((item) => (
+              <li key={item.key}>
+                <button type="button" onClick={() => scrollToDossierField(item.key)}>
+                  {item.label}
+                  {item.reason ? ` — ${item.reason}` : ""}
+                  {item.value ? ` (${item.value})` : ""}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -230,6 +285,11 @@ const PlatformTenantEditor = ({
   const setField = (field) => (event) => {
     onChange({ ...draft, [field]: event.target.value });
   };
+  const audit = useMemo(
+    () => (mode === "edit" ? auditDossier({ tenant, draft, users }) : null),
+    [mode, tenant, draft, users]
+  );
+  const issueOf = (key) => audit?.byKey?.[key];
 
   return (
     <form className="pte" onSubmit={onSubmit}>
@@ -258,7 +318,16 @@ const PlatformTenantEditor = ({
         )}
       </header>
 
-      {mode === "edit" && <Checklist checklist={tenant?.checklist} />}
+      {mode === "edit" && <ModerationPanel audit={audit} />}
+
+      {mode === "edit" && tenant && (
+        <PlatformDossierReview
+          tenant={tenant}
+          audit={audit}
+          onUploadIdentity={onUploadIdentity}
+          uploadBusyId={uploadBusyId}
+        />
+      )}
 
       <Section
         title={mode === "edit" ? "Accès dashboard" : "Compte"}
@@ -279,11 +348,17 @@ const PlatformTenantEditor = ({
                 onSave={onSaveUser}
                 busy={userBusyId === user.id}
                 error={userErrors?.[user.id]}
+                nameIssue={user.role === "owner" ? issueOf("ownerName") : null}
+                emailIssue={user.role === "owner" ? issueOf("email") : null}
               />
             ))
           : (
             <>
-              <Field label="Nom du propriétaire">
+              <Field
+                label="Nom du propriétaire"
+                fieldKey="ownerName"
+                issue={issueOf("ownerName")}
+              >
                 <input
                   type="text"
                   maxLength={120}
@@ -292,7 +367,11 @@ const PlatformTenantEditor = ({
                   autoComplete="off"
                 />
               </Field>
-              <Field label="E-mail du propriétaire">
+              <Field
+                label="E-mail du propriétaire"
+                fieldKey="email"
+                issue={issueOf("email")}
+              >
                 <input
                   type="email"
                   required={mode === "create"}
@@ -318,16 +397,8 @@ const PlatformTenantEditor = ({
           )}
       </Section>
 
-      {mode === "edit" && tenant && (
-        <PlatformDossierReview
-          tenant={tenant}
-          onUploadIdentity={onUploadIdentity}
-          uploadBusyId={uploadBusyId}
-        />
-      )}
-
       <Section title="Établissement">
-        <Field label="Nom de l'établissement">
+        <Field label="Nom de l'établissement" fieldKey="name" issue={issueOf("name")}>
           <input
             type="text"
             required
@@ -337,7 +408,11 @@ const PlatformTenantEditor = ({
             autoComplete="off"
           />
         </Field>
-        <Field label="Téléphone établissement">
+        <Field
+          label="Téléphone établissement"
+          fieldKey="restaurantPhone"
+          issue={issueOf("restaurantPhone")}
+        >
           <input
             type="text"
             maxLength={30}
@@ -346,7 +421,11 @@ const PlatformTenantEditor = ({
             autoComplete="off"
           />
         </Field>
-        <Field label="E-mail établissement">
+        <Field
+          label="E-mail établissement"
+          fieldKey="restaurantEmail"
+          issue={issueOf("restaurantEmail")}
+        >
           <input
             type="email"
             value={draft.restaurantEmail}
@@ -354,14 +433,19 @@ const PlatformTenantEditor = ({
             autoComplete="off"
           />
         </Field>
-        <Field label="Pays">
+        <Field label="Pays" fieldKey="countryCode" issue={issueOf("countryCode")}>
           <select value={draft.countryCode} onChange={setField("countryCode")}>
             <option value="FR">France</option>
             <option value="BE">Belgique</option>
             <option value="LU">Luxembourg</option>
           </select>
         </Field>
-        <Field label="Adresse" wide>
+        <Field
+          label="Adresse"
+          wide
+          fieldKey="addressLine"
+          issue={issueOf("addressLine")}
+        >
           <input
             type="text"
             maxLength={300}
@@ -370,7 +454,11 @@ const PlatformTenantEditor = ({
             autoComplete="off"
           />
         </Field>
-        <Field label="Code postal">
+        <Field
+          label="Code postal"
+          fieldKey="postalCode"
+          issue={issueOf("postalCode")}
+        >
           <input
             type="text"
             maxLength={10}
@@ -379,7 +467,7 @@ const PlatformTenantEditor = ({
             autoComplete="off"
           />
         </Field>
-        <Field label="Ville">
+        <Field label="Ville" fieldKey="city" issue={issueOf("city")}>
           <input
             type="text"
             maxLength={100}
@@ -409,6 +497,8 @@ const PlatformTenantEditor = ({
         <Field
           label="SIRET / SIREN"
           hint="14 chiffres (SIRET) ou 9 chiffres (SIREN) si le SIRET n'est pas connu."
+          fieldKey="siret"
+          issue={issueOf("siret")}
         >
           <input
             type="text"
@@ -419,7 +509,12 @@ const PlatformTenantEditor = ({
             autoComplete="off"
           />
         </Field>
-        <Field label="Usage du numéro (Twilio)" wide>
+        <Field
+          label="Usage du numéro (Twilio)"
+          wide
+          fieldKey="phoneNumberUsage"
+          issue={issueOf("phoneNumberUsage")}
+        >
           <input
             type="text"
             maxLength={2000}
@@ -436,17 +531,19 @@ const PlatformTenantEditor = ({
       >
         <Field
           label="Numéro Twilio déjà acheté"
+          fieldKey="inboundPhone"
+          issue={issueOf("inboundPhone")}
           hint={
             tenant?.phoneNumber
-              ? `Relié : ${tenant.phoneNumber}. Colle un autre +33 ou un SID PN… pour le remplacer.`
-              : "Format +33123456789 ou SID PN…"
+              ? `Relié : ${tenant.phoneNumber}. Colle un autre numéro ou un SID PN… pour le remplacer.`
+              : "Ex. +12768811832, +33123456789, ou SID PN…"
           }
         >
           <input
             type="text"
             value={draft.inboundPhone}
             onChange={setField("inboundPhone")}
-            placeholder="+33123456789"
+            placeholder="+12768811832"
             autoComplete="off"
           />
         </Field>

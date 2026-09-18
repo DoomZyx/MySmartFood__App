@@ -7,6 +7,7 @@ export default function AuthSuccessModal({
   isOpen,
   email,
   title = "Connexion réussie",
+  text,
   onContinue,
 }) {
   const onContinueRef = useRef(onContinue);
@@ -29,9 +30,10 @@ export default function AuthSuccessModal({
           {title}
         </h2>
         <p className="auth-success-text">
-          {email
-            ? `Vous êtes connecté avec ${email}.`
-            : "Vous êtes maintenant connecté."}
+          {text
+            || (email
+              ? `Vous êtes connecté avec ${email}.`
+              : "Vous êtes maintenant connecté.")}
         </p>
         <button type="button" className="btn btn-primary" onClick={onContinue}>
           Continuer

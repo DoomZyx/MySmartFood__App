@@ -4,6 +4,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useRestaurateurProfile } from "../../hooks/useRestaurateurProfile";
 import NotificationToast from "../Shared/NotificationToast/NotificationToast";
 import { fileToWebp, PHOTO_ACCEPT, PHOTO_MAX_MB } from "../../utils/imageWebp";
+import { canResumeCompanyDossier, clearPaidPendingDossier } from "@shared/companyOnboarding";
 import "./RestaurateurProfilForm.scss";
 
 const PAYS_OPTIONS = [
@@ -53,9 +54,7 @@ const RestaurateurProfilForm = () => {
     resetForm,
   } = useRestaurateurProfile();
 
-  const needsDocSubmission =
-    Boolean(user?.smartcrmInstanceId || user?.planSlug || user?.hasActiveSubscription) &&
-    !user?.twilioDocsSubmittedAt;
+  const needsDocSubmission = canResumeCompanyDossier(user);
 
   useEffect(() => {
     loadProfile();
@@ -172,6 +171,7 @@ const RestaurateurProfilForm = () => {
         idDocumentVerso: idVersoFile,
         addressDocument: addrDocFile,
       });
+      clearPaidPendingDossier();
       await refreshUser();
       setIdRectoFile(null);
       setIdVersoFile(null);
