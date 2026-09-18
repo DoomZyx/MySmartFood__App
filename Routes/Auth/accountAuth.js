@@ -2,6 +2,7 @@ import { AccountAuthController } from "../../API/controllers/AccountAuthControll
 import { TenantUserController } from "../../API/controllers/TenantUserController.js";
 import { requireAuth } from "../../middleware/sessionAuth.js";
 import { requireTenantStaffAdmin } from "../../middleware/tenantAccess.js";
+import { MAX_SOURCE_UPLOAD_BYTES } from "../../utils/imageWebp.js";
 
 export default async function accountAuthRoutes(fastify) {
   const authLimit = {
@@ -95,6 +96,7 @@ export default async function accountAuthRoutes(fastify) {
 
   fastify.post("/profile/submit-onboarding", {
     preHandler: [requireAuth],
+    bodyLimit: MAX_SOURCE_UPLOAD_BYTES * 3 + 1024 * 1024,
     handler: AccountAuthController.submitWebsiteOnboarding,
   });
 

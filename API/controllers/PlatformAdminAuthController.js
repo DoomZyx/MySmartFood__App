@@ -106,9 +106,10 @@ export const PlatformAdminAuthController = {
   },
 
   async session(request, reply) {
+    const payload = await sessionPayload(request.user);
     return reply.send({
+      ...payload,
       platformVerified: true,
-      user: User.publicUser(request.user),
     });
   },
 

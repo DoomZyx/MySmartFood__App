@@ -184,6 +184,11 @@ describe("parseOptionalInboundPhone", () => {
       phoneNumber: "+33123456789",
     });
     expect(parseOptionalInboundPhone({
+      phoneNumber: "1 (276) 881 - 1832",
+    })).toEqual({
+      phoneNumber: "+12768811832",
+    });
+    expect(parseOptionalInboundPhone({
       phoneNumberSid: "PNaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     })).toEqual({
       phoneNumberSid: "PNaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

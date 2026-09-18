@@ -60,7 +60,7 @@ export async function redeemDashboardAccessToken(rawToken) {
       EstablishmentProfile.findByTenantId(row.tenantId),
       Tenant.findById(row.tenantId),
     ]);
-    if (!isRestaurantDashboardReady(subscription, profile?.documentsSubmittedAt, tenant)) {
+    if (!isRestaurantDashboardReady(subscription, profile?.documentsSubmittedAt, tenant, user)) {
       if (!isPaidSubscription(subscription)) {
         throw new AccountAuthError("Aucun abonnement réglé", 403);
       }

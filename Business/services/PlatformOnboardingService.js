@@ -34,6 +34,14 @@ import {
 
 const E164 = /^\+[1-9]\d{7,14}$/;
 const PHONE_SID = /^PN[a-f0-9]{32}$/i;
+
+export function normalizeInboundE164(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  return `+${digits}`;
+}
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const COUNTRY_CODES = new Set(["FR", "BE", "LU"]);
 const COUNTRY_LABELS = { FR: "France", BE: "Belgique", LU: "Luxembourg" };
@@ -428,14 +436,14 @@ function profileFromInput(body, fallback = {}) {
 
 export function parseOptionalInboundPhone({ phoneNumber, phoneNumberSid } = {}) {
   const sid = String(phoneNumberSid || "").trim();
-  const e164 = String(phoneNumber || "").trim();
   if (sid) {
     if (!PHONE_SID.test(sid)) httpError("SID Twilio invalide", 400);
     return { phoneNumberSid: sid };
   }
+  const e164 = normalizeInboundE164(phoneNumber);
   if (!e164) return null;
   if (!E164.test(e164)) {
-    httpError("Numéro invalide (format E.164, ex. +33123456789)", 400);
+    httpError("Numéro invalide (ex. +12768811832 ou +33123456789)", 400);
   }
   return { phoneNumber: e164 };
 }
@@ -712,14 +720,14 @@ export async function assignInboundNumber(tenantId, { phoneNumber, phoneNumberSi
   }
 
   const sid = String(phoneNumberSid || "").trim();
-  const e164 = String(phoneNumber || "").trim();
+  const e164 = normalizeInboundE164(phoneNumber);
   if (sid && !PHONE_SID.test(sid)) {
     const err = new Error("SID Twilio invalide");
     err.statusCode = 400;
     throw err;
   }
   if (!sid && !E164.test(e164)) {
-    const err = new Error("Numéro invalide (format E.164, ex. +33123456789)");
+    const err = new Error("Numéro invalide (ex. +12768811832 ou +33123456789)");
     err.statusCode = 400;
     throw err;
   }

@@ -42,4 +42,21 @@ describe("RestaurantDashboardAccess", () => {
     expect(isPlatformProvisionedAccess(suspended)).toBe(false);
     expect(isRestaurantDashboardReady({ status: "active" }, null, suspended)).toBe(false);
   });
+
+  test("self-service accepté en back-office : dashboard même sans Stripe encore enregistré", () => {
+    const selfActive = { onboardedBy: "self", status: "active" };
+    const unlocked = { dashboardUnlockedAt: "2026-09-18T00:00:00.000Z" };
+    expect(isRestaurantDashboardReady({ status: "incomplete" }, "2026-01-01", selfActive, unlocked))
+      .toBe(true);
+    expect(isRestaurantDashboardReady({ status: "incomplete" }, "2026-01-01", selfActive))
+      .toBe(false);
+    expect(
+      isRestaurantDashboardReady(
+        { status: "incomplete" },
+        "2026-01-01",
+        { onboardedBy: "self", status: "suspended" },
+        unlocked
+      )
+    ).toBe(false);
+  });
 });

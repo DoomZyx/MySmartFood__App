@@ -166,7 +166,8 @@ export async function sessionPayload(user) {
   const accessUnlocked = isRestaurantDashboardReady(
     subscription,
     twilioDocsSubmittedAt,
-    first
+    first,
+    user
   );
   const publicUser = User.publicUser(user);
   return {

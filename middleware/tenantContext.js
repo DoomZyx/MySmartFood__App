@@ -2,7 +2,9 @@ import * as Membership from "../models/pg/Membership.js";
 import * as Subscription from "../models/pg/Subscription.js";
 import * as EstablishmentProfile from "../models/pg/EstablishmentProfile.js";
 import {
+  isBoValidatedAccess,
   isPaidSubscription,
+  isPlatformProvisionedAccess,
   isRestaurantDashboardReady,
 } from "../Business/services/RestaurantDashboardAccess.js";
 
@@ -77,10 +79,17 @@ export async function requireActiveSubscription(request, reply) {
     return reply.code(403).send({ error: "Contexte établissement manquant" });
   }
   const subscription = await Subscription.findCurrentByTenant(request.tenant.id);
-  if (!subscription || !Subscription.isAccessGranted(subscription.status)) {
-    return reply.code(402).send({ error: "Abonnement inactif" });
+  request.subscription = subscription || null;
+  if (subscription && Subscription.isAccessGranted(subscription.status)) {
+    return;
   }
-  request.subscription = subscription;
+  if (isPlatformProvisionedAccess(request.tenant)) {
+    return;
+  }
+  if (isBoValidatedAccess(request.tenant, request.user)) {
+    return;
+  }
+  return reply.code(402).send({ error: "Abonnement inactif" });
 }
 
 export async function requireRestaurantDashboard(request, reply) {
@@ -96,7 +105,8 @@ export async function requireRestaurantDashboard(request, reply) {
   if (isRestaurantDashboardReady(
     request.subscription,
     profile?.documentsSubmittedAt,
-    request.tenant
+    request.tenant,
+    request.user
   )) {
     return;
   }

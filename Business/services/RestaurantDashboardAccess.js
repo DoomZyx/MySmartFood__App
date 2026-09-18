@@ -7,6 +7,10 @@ export function isPlatformProvisionedAccess(tenant) {
   return tenant?.onboardedBy === "platform" && tenant?.status === "active";
 }
 
+export function isBoValidatedAccess(tenant, user) {
+  return tenant?.status === "active" && Boolean(user?.dashboardUnlockedAt);
+}
+
 export function isPaidSubscription(subscription) {
   return Boolean(
     subscription?.stripeSubscriptionId &&
@@ -18,8 +22,9 @@ export function hasActiveRestaurantAccess(subscription, tenant) {
   return isPaidSubscription(subscription) || isPlatformProvisionedAccess(tenant);
 }
 
-export function isRestaurantDashboardReady(subscription, documentsSubmittedAt, tenant) {
+export function isRestaurantDashboardReady(subscription, documentsSubmittedAt, tenant, user) {
   if (isPlatformProvisionedAccess(tenant)) return true;
+  if (isBoValidatedAccess(tenant, user)) return true;
   return (
     tenant?.status === "active" &&
     isPaidSubscription(subscription) &&

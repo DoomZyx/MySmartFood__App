@@ -11,9 +11,17 @@ const { Client } = pg;
  * Crée le rôle applicatif PostgreSQL, à lancer une fois par environnement avec un
  * compte administrateur, avant la première migration.
  *
+ * Nom du rôle : APP_DB_RUNTIME_ROLE (getRuntimeRole). Défaut : app_runtime.
+ * Prod : mysmartfood_app. Préprod : mysmartfood_preprod_app.
+ * DATABASE_URL_ADMIN (ou DATABASE_URL_OWNER) doit viser la base de CET
+ * environnement, jamais mysmartfood quand APP_ENV=preprod.
+ *
  * Le rôle est volontairement dépourvu de BYPASSRLS et de SUPERUSER, et ne possède
  * aucune table : ce sont les trois conditions pour que Row-Level Security s'applique
  * réellement aux requêtes de l'application.
+ *
+ * Ordre préprod : create-preprod-db.sh → APP_ENV=preprod node database/bootstrapRoles.js
+ * → APP_ENV=preprod pnpm db:migrate.
  */
 export async function bootstrapRoles() {
   const connectionString = process.env.DATABASE_URL_ADMIN || process.env.DATABASE_URL_OWNER;
