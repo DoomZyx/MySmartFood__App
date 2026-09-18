@@ -1,0 +1,12 @@
+http://{$VOICE_DOMAIN} {
+	@llm path /v1/models /v1/models/* /v1/chat/completions
+	handle @llm {
+		@unauthorized not header Authorization "Bearer {$VLLM_API_KEY}"
+		respond @unauthorized 401
+		reverse_proxy vllm:8000
+	}
+
+	handle {
+		reverse_proxy voice:8090
+	}
+}

@@ -1,0 +1,109 @@
+services:
+  vllm:
+    image: ${VLLM_IMAGE:?VLLM_IMAGE must use a tested immutable tag}
+    restart: unless-stopped
+    ipc: host
+    gpus: all
+    command:
+      - --model
+      - ${VLLM_MODEL}
+      - --served-model-name
+      - ${VLLM_SERVED_MODEL_NAME}
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --api-key
+      - ${VLLM_API_KEY}
+      - --enable-auto-tool-choice
+      - --tool-call-parser
+      - ${VLLM_TOOL_CALL_PARSER}
+      - --max-model-len
+      - ${VLLM_MAX_MODEL_LEN}
+      - --max-num-seqs
+      - ${VLLM_MAX_NUM_SEQS}
+      - --gpu-memory-utilization
+      - ${VLLM_GPU_MEMORY_UTILIZATION}
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - ${MODEL_CACHE_PATH:-./model-cache}:/root/.cache/huggingface
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"
+      interval: 10s
+      timeout: 6s
+      retries: 30
+      start_period: 180s
+
+  voice:
+    build:
+      context: ../../voice-server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    gpus: all
+    depends_on:
+      vllm:
+        condition: service_healthy
+    environment:
+      VOICE_HOST: 0.0.0.0
+      VOICE_PORT: "8090"
+      VOICE_EAGER_LOAD: "true"
+      NODE_BASE_URL: ${NODE_BASE_URL}
+      NODE_API_KEY: ${NODE_API_KEY}
+      LLM_PROVIDER: vllm
+      VLLM_BASE_URL: http://vllm:8000/v1
+      VLLM_MODEL: ${VLLM_SERVED_MODEL_NAME}
+      VLLM_API_KEY: ${VLLM_API_KEY}
+      WHISPER_MODEL_SIZE: small
+      WHISPER_DEVICE: cuda
+      WHISPER_COMPUTE_TYPE: float16
+      WHISPER_LANGUAGE: fr
+      KOKORO_VOICE: ff_siwis
+      KOKORO_LANG: fr-fr
+      KOKORO_SPEED: "1.2"
+      LLM_FALLBACK_GPT: ${LLM_FALLBACK_GPT:-true}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: https://api.openai.com/v1
+      OPENAI_MODEL: gpt-4o-mini
+      CACHE_DIR: /var/cache/mysmartfood-voice
+    volumes:
+      - voice_cache:/var/cache/mysmartfood-voice
+    expose:
+      - "8090"
+    healthcheck:
+      test:
+        - CMD
+        - python3.11
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/live', timeout=5)"
+      interval: 10s
+      timeout: 6s
+      retries: 18
+      start_period: 180s
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    depends_on:
+      voice:
+        condition: service_healthy
+    environment:
+      VOICE_DOMAIN: ${VOICE_DOMAIN}
+      VLLM_API_KEY: ${VLLM_API_KEY}
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
+  voice_cache:

@@ -1,0 +1,10 @@
+# Apex : redirige vers www (vitrine servie sur le VPS, plus Vercel).
+{$SITE_APEX} {
+	redir https://{$SITE_WWW}{uri} permanent
+}
+
+# Vitrine, dashboard et API : meme SPA nginx, /api proxifie vers Fastify.
+{$SITE_WWW}, {$DASHBOARD_DOMAIN}, {$APP_DOMAIN} {
+	encode gzip
+	reverse_proxy frontend:80
+}

@@ -1,0 +1,6 @@
+URL BACK OFFICE MYSMARTFOOD
+
+/bf-admin
+
+Ancien chemin encore valide :
+/x/bXlzbWFydGZvb2QtcGxhdGZvcm0tYWRtaW4
