@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { CreditCard, LayoutDashboard } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { PageContainer, Hero, Section } from "../components";
@@ -39,9 +39,19 @@ const MonEspace = () => {
     user?.onboardingStatus === "pending_review" ||
     (Boolean(user?.twilioDocsSubmittedAt) && !hasAppAccess);
 
+  const [companyFormStep, setCompanyFormStep] = useState(1);
+  const [establishmentReady, setEstablishmentReady] = useState(false);
+  const skipStepScroll = useRef(true);
+
   useEffect(() => {
     refreshUser?.();
   }, [refreshUser]);
+
+  useEffect(() => {
+    if (checkoutSuccess && user?.id) {
+      markPaidPendingDossier(user.id);
+    }
+  }, [checkoutSuccess, user?.id]);
 
   useEffect(() => {
     if (user?.twilioDocsSubmittedAt || hasAppAccess) {
@@ -50,10 +60,6 @@ const MonEspace = () => {
     }
     if (user?.hasActiveSubscription || user?.onboardingStatus === "needs_dossier") {
       markPaidPendingDossier(user.id);
-      return;
-    }
-    if (user?.onboardingStatus === "needs_payment" || user?.onboardingStatus === "none") {
-      clearPaidPendingDossier();
     }
   }, [
     user?.id,
@@ -62,6 +68,25 @@ const MonEspace = () => {
     user?.twilioDocsSubmittedAt,
     hasAppAccess,
   ]);
+
+  const scrollToId = useCallback((id) => {
+    document.getElementById(id)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, []);
+
+  const goToCompanyStep = useCallback((step) => {
+    setCompanyFormStep(step);
+  }, []);
+
+  useEffect(() => {
+    if (skipStepScroll.current) {
+      skipStepScroll.current = false;
+      return;
+    }
+    scrollToId(companyFormStep === 2 ? "dossier-form" : "etablissement-form");
+  }, [companyFormStep, scrollToId]);
 
   useEffect(() => {
     if (!user?.id || !user?.hasActiveSubscription) return;
@@ -78,10 +103,7 @@ const MonEspace = () => {
       searchParams.delete("session_id");
       setSearchParams(searchParams, { replace: true });
     }
-    document.getElementById("etablissement-form")?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+    goToCompanyStep(establishmentReady ? 2 : 1);
   };
 
   return (
@@ -94,11 +116,37 @@ const MonEspace = () => {
       <Section variant="alt">
         <div className="mon-espace-form-wrapper">
           <ol className="mon-espace-steps">
-            <li className={!needsPayment ? "is-done" : "is-current"}>Paiement</li>
+            <li
+              className={!needsPayment ? "is-done" : "is-current"}
+              role="button"
+              tabIndex={0}
+              onClick={() => scrollToId("mon-espace-paiement")}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  scrollToId("mon-espace-paiement");
+                }
+              }}
+            >
+              Paiement
+            </li>
             <li
               className={
-                pendingReview || hasAppAccess ? "is-done" : needsDossier ? "is-current" : ""
+                pendingReview || hasAppAccess
+                  ? "is-done"
+                  : companyFormStep === 2 || needsDossier
+                    ? "is-current"
+                    : ""
               }
+              role="button"
+              tabIndex={0}
+              onClick={() => goToCompanyStep(establishmentReady ? 2 : 1)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  goToCompanyStep(establishmentReady ? 2 : 1);
+                }
+              }}
             >
               Formulaire d&apos;entreprise
             </li>
@@ -108,7 +156,7 @@ const MonEspace = () => {
             <li className={hasAppAccess ? "is-done" : ""}>Tableau de bord</li>
           </ol>
 
-          <div className="mon-espace-subscription">
+          <div id="mon-espace-paiement" className="mon-espace-subscription">
             <CreditCard className="mon-espace-subscription-icon" />
             <div>
               <h3 className="mon-espace-subscription-title">
@@ -192,13 +240,19 @@ const MonEspace = () => {
           )}
 
           <h2 id="etablissement-form" className="mon-espace-form-title">
-            Informations de l&apos;établissement
+            {companyFormStep === 2
+              ? "Pièces du dossier entreprise"
+              : "Informations de l'établissement"}
           </h2>
           <p className="mon-espace-form-intro">
             Ces données et pièces sont contrôlées avant l&apos;ouverture du
             tableau de bord et l&apos;achat du numéro Twilio.
           </p>
-          <RestaurateurProfilForm />
+          <RestaurateurProfilForm
+            companyFormStep={companyFormStep}
+            onCompanyFormStepChange={goToCompanyStep}
+            onEstablishmentReadyChange={setEstablishmentReady}
+          />
         </div>
       </Section>
       <OnboardingNoticeModal

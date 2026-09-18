@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
+import { apiBaseUrl } from "@shared/apiBase";
 import { isAuthenticated } from "../API/auth";
 import notificationService from "../Services/notificationService.js";
 
@@ -7,25 +8,38 @@ const WebSocketContext = createContext(null);
 
 const PING_INTERVAL_MS = 25000;
 
+function isLocalHost(value) {
+  return /localhost|127\.0\.0\.1/.test(String(value || ""));
+}
+
+function wsUrlFromHttpBase(base) {
+  const trimmed = String(base || "").replace(/\/+$/, "");
+  if (!trimmed) return "";
+  if (trimmed.startsWith("https://")) {
+    return `${trimmed.replace(/^https:\/\//, "wss://")}/api/ws/notifications`;
+  }
+  if (trimmed.startsWith("http://")) {
+    return `${trimmed.replace(/^http:\/\//, "ws://")}/api/ws/notifications`;
+  }
+  return "";
+}
+
 /**
- * Construit l'URL WebSocket : utilise VITE_WS_URL ou déduit ws/wss depuis VITE_API_URL.
+ * Construit l'URL WebSocket.
+ * Ignore VITE_WS_URL localhost si la page n'est pas locale (build preprod/prod).
  */
 function getWebSocketUrl() {
-  const explicit = import.meta.env.VITE_WS_URL;
-  let url;
-  if (explicit && typeof explicit === "string" && explicit.trim()) {
-    url = explicit.trim();
-  } else {
-    const apiUrl = import.meta.env.VITE_API_URL;
-    const base = apiUrl.replace(/\/$/, "");
-    // Sous /api pour les reverse proxy qui ne forward que ce préfixe vers Node (ex. api.mysmartfood.fr).
-    if (base.startsWith("https://")) {
-      url = base.replace(/^https:\/\//, "wss://") + "/api/ws/notifications";
-    } else {
-      url = base.replace(/^http:\/\//, "ws://") + "/api/ws/notifications";
-    }
+  const pageIsLocal =
+    typeof window !== "undefined" && isLocalHost(window.location.hostname);
+  const explicit = String(import.meta.env.VITE_WS_URL || "").trim();
+  if (explicit && !(isLocalHost(explicit) && !pageIsLocal)) {
+    return explicit;
   }
-  return url;
+  const fromApi = wsUrlFromHttpBase(apiBaseUrl());
+  if (fromApi) return fromApi;
+  if (typeof window === "undefined") return "";
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}/api/ws/notifications`;
 }
 
 /** URL affichable en log (sans clé API en query). */

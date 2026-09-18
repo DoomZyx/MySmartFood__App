@@ -153,11 +153,22 @@ export const submitOnboardingDossierApi = async (formData, files) => {
   body.append("idDocumentRecto", idDocumentRecto);
   body.append("idDocumentVerso", idDocumentVerso);
   body.append("addressDocument", addressDocument);
-  const response = await fetch(`${API_BASE_URL}/api/auth/profile/submit-onboarding`, {
-    method: "POST",
-    credentials: "include",
-    body,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/auth/profile/submit-onboarding`, {
+      method: "POST",
+      credentials: "include",
+      body,
+      signal: AbortSignal.timeout(90_000),
+    });
+  } catch (err) {
+    if (err?.name === "TimeoutError" || err?.name === "AbortError") {
+      throw new Error(
+        "L'envoi du dossier a dépassé le délai (conversion HEIF). Réessayez en JPEG ou PNG.",
+      );
+    }
+    throw err;
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.message || "Impossible d'envoyer le dossier.");

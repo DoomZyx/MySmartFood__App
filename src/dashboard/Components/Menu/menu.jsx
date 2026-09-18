@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { getCurrentUser, logoutUser, isAdmin } from "../../API/auth";
-import { DASHBOARD_PATH } from "@shared/dashboardPath";
+import { DASHBOARD_PATH, dashboardPagePath } from "@shared/dashboardPath";
 import PhoneToggle from "../PhoneToggle/PhoneToggle";
 import "./menu.scss";
 
@@ -83,17 +83,17 @@ function Menu() {
 
         <div className="handleCall-container">
           <div className="call-features-list">
-            <Link to="/orders" onClick={closeMenu}>
+            <Link to={dashboardPagePath("orders")} onClick={closeMenu}>
               <i className="bi bi-bag-check"></i> <h3>{t("menu.orders")}</h3>
             </Link>
-            <Link to="/reservations" onClick={closeMenu}>
+            <Link to={dashboardPagePath("reservations")} onClick={closeMenu}>
               <i className="bi bi-calendar-check"></i>{" "}
               <h3>{t("menu.reservations")}</h3>
             </Link>
-            <Link to="/configuration" onClick={closeMenu}>
+            <Link to={dashboardPagePath("configuration")} onClick={closeMenu}>
               <i className="bi bi-gear"></i> <h3>{t("menu.configuration")}</h3>
             </Link>
-            <Link to="/monitoring" onClick={closeMenu}>
+            <Link to={dashboardPagePath("monitoring")} onClick={closeMenu}>
               <i className="bi bi-activity"></i> <h3>{t("menu.serviceMonitoring")}</h3>
             </Link>
             <div className="nav-phone-line">
@@ -108,12 +108,12 @@ function Menu() {
         </div>
 
         <div className="featLinks-container">
-          <Link className="myAccount" to="/profile" onClick={closeMenu}>
+          <Link className="myAccount" to={dashboardPagePath("profile")} onClick={closeMenu}>
             <i className="bi bi-person-badge"></i>
             <h3>{t("menu.myAccount")}</h3>
           </Link>
           {isAdmin() && (
-            <Link className="admin" to="/admin" onClick={closeMenu}>
+            <Link className="admin" to={dashboardPagePath("admin")} onClick={closeMenu}>
               <i className="bi bi-person-gear"></i>
               <h3>{t("menu.adminPanel")}</h3>
             </Link>

@@ -8,6 +8,12 @@ function normalizePath(value) {
 
 export const DASHBOARD_PATH = normalizePath(import.meta.env.VITE_DASHBOARD_PATH);
 
+/** Page dashboard sous le préfixe /d/... pour garder le slug dans l'URL. */
+export function dashboardPagePath(page = "") {
+  const extra = String(page || "").replace(/^\/+/, "");
+  return extra ? `${DASHBOARD_PATH}/${extra}` : DASHBOARD_PATH;
+}
+
 export function dashboardHomeHref() {
   const origin = String(import.meta.env.VITE_DASHBOARD_URL || "").replace(/\/+$/, "");
   const path = DASHBOARD_PATH;

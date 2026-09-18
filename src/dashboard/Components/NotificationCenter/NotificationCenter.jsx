@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { dashboardPagePath } from "@shared/dashboardPath";
 import notificationService from "../../Services/notificationService.js";
 import { useWebSocket } from "../../Context/WebSocketContext.jsx";
 import EmojiText from "../Common/EmojiText";
@@ -23,18 +24,18 @@ const NotificationCenter = () => {
     if (notification.notificationType === "call_completed" || notification.notificationType === "new_order") {
       if (reservationId && orderId) {
         if (appointmentType === "reservation") {
-          navigate(`/reservations?orderid=${reservationId}`);
+          navigate(`${dashboardPagePath("reservations")}?orderid=${reservationId}`);
         } else {
-          navigate(`/orders?orderid=${orderId}`);
+          navigate(`${dashboardPagePath("orders")}?orderid=${orderId}`);
         }
       } else if (reservationId) {
-        navigate(`/reservations?orderid=${reservationId}`);
+        navigate(`${dashboardPagePath("reservations")}?orderid=${reservationId}`);
       } else if (orderId) {
-        navigate(`/orders?orderid=${orderId}`);
+        navigate(`${dashboardPagePath("orders")}?orderid=${orderId}`);
       } else if (notification.notificationType === "call_completed") {
         navigate("/calls-list");
       } else {
-        navigate("/orders");
+        navigate(dashboardPagePath("orders"));
       }
     }
 

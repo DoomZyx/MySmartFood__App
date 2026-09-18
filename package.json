@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:preprod": "env VITE_API_BASE_URL=https://preprod.api.mysmartfood.fr VITE_API_URL=https://preprod.api.mysmartfood.fr/ vite build",
+    "build:preprod": "env VITE_API_BASE_URL=https://preprod.api.mysmartfood.fr VITE_API_URL=https://preprod.api.mysmartfood.fr/ VITE_WS_URL=wss://preprod.api.mysmartfood.fr/api/ws/notifications vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },

@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect, useLayoutEffect, lazy, Suspense } from "react";
 import { isAuthenticated, isAdmin, hasDashboardAccess, fetchSession } from "./dashboard/API/auth";
 import ErrorBoundary from "./dashboard/Components/Common/ErrorBoundary";
@@ -23,7 +23,7 @@ import {
   ProtectedRoute as WebsiteProtectedRoute,
 } from "./app/WebsiteRoot";
 import { PLATFORM_ADMIN_PATH, isPlatformAdminPath } from "@shared/platformAdminPath";
-import { DASHBOARD_PATH, openDashboard } from "@shared/dashboardPath";
+import { DASHBOARD_PATH, dashboardPagePath, openDashboard } from "@shared/dashboardPath";
 import { isDashboardPath, useWebsiteStyles } from "./app/WebsiteRoot";
 import { PlatformAdminScreen } from "./site/components/Shared/PlatformAdminShell/PlatformAdminShell";
 import { useAuth } from "./site/hooks/useAuth";
@@ -183,65 +183,35 @@ function App() {
 
             <Route element={<DashboardRoot />}>
               <Route
-                path={DASHBOARD_PATH}
                 element={
                   <DashboardProtectedRoute authChecked={authChecked} requireSubscription>
-                    <Homepage />
+                    <Outlet />
                   </DashboardProtectedRoute>
                 }
-              />
+              >
+                <Route path={DASHBOARD_PATH} element={<Homepage />} />
+                <Route path={dashboardPagePath("profile")} element={<Profile />} />
+                <Route path={dashboardPagePath("orders")} element={<AppointmentsPage />} />
+                <Route path={dashboardPagePath("reservations")} element={<ReservationsPage />} />
+                <Route path={dashboardPagePath("configuration")} element={<Configuration />} />
+                <Route path={dashboardPagePath("monitoring")} element={<ServiceHealth />} />
+              </Route>
               <Route
-                path="/profile"
-                element={
-                  <DashboardProtectedRoute authChecked={authChecked} requireSubscription>
-                    <Profile />
-                  </DashboardProtectedRoute>
-                }
-              />
-              <Route
-                path="/orders"
-                element={
-                  <DashboardProtectedRoute authChecked={authChecked} requireSubscription>
-                    <AppointmentsPage />
-                  </DashboardProtectedRoute>
-                }
-              />
-              <Route
-                path="/reservations"
-                element={
-                  <DashboardProtectedRoute authChecked={authChecked} requireSubscription>
-                    <ReservationsPage />
-                  </DashboardProtectedRoute>
-                }
-              />
-              <Route
-                path="/configuration"
-                element={
-                  <DashboardProtectedRoute authChecked={authChecked} requireSubscription>
-                    <Configuration />
-                  </DashboardProtectedRoute>
-                }
-              />
-              <Route
-                path="/monitoring"
-                element={
-                  <DashboardProtectedRoute authChecked={authChecked} requireSubscription>
-                    <ServiceHealth />
-                  </DashboardProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/services"
-                element={<Navigate to="/monitoring" replace />}
-              />
-              <Route
-                path="/admin"
                 element={
                   <DashboardProtectedRoute authChecked={authChecked} requireAdmin requireSubscription>
-                    <Admin />
+                    <Outlet />
                   </DashboardProtectedRoute>
                 }
-              />
+              >
+                <Route path={dashboardPagePath("admin")} element={<Admin />} />
+              </Route>
+              <Route path="/profile" element={<Navigate to={dashboardPagePath("profile")} replace />} />
+              <Route path="/orders" element={<Navigate to={dashboardPagePath("orders")} replace />} />
+              <Route path="/reservations" element={<Navigate to={dashboardPagePath("reservations")} replace />} />
+              <Route path="/configuration" element={<Navigate to={dashboardPagePath("configuration")} replace />} />
+              <Route path="/monitoring" element={<Navigate to={dashboardPagePath("monitoring")} replace />} />
+              <Route path="/admin/services" element={<Navigate to={dashboardPagePath("monitoring")} replace />} />
+              <Route path="/admin" element={<Navigate to={dashboardPagePath("admin")} replace />} />
             </Route>
 
             <Route path="*" element={<UnknownRoute />} />

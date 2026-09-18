@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { useAppointments } from "../../Hooks/Appointments/useAppointments";
 import { useNavigate } from "react-router-dom";
+import { dashboardPagePath } from "@shared/dashboardPath";
 import { AppointmentDetails } from "../Appointments/AppointmentDetails";
 import "./AppointmentsWidget.scss";
 
@@ -229,13 +230,13 @@ function AppointmentsWidget() {
       <div className="widget-footer">
         <button
           className="btn-view-all"
-          onClick={() => navigate("/orders")}
+          onClick={() => navigate(dashboardPagePath("orders"))}
         >
           {t('appointmentsWidget.viewAll')}
         </button>
         <button
           className="btn-add-appointment"
-          onClick={() => navigate("/orders")}
+          onClick={() => navigate(dashboardPagePath("orders"))}
         >
           {t('appointmentsWidget.newOrder')}
         </button>

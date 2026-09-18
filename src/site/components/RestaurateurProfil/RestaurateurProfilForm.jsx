@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Save, CheckCircle, AlertCircle } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useRestaurateurProfile } from "../../hooks/useRestaurateurProfile";
 import NotificationToast from "../Shared/NotificationToast/NotificationToast";
 import { fileToWebp, PHOTO_ACCEPT, PHOTO_MAX_MB } from "../../utils/imageWebp";
-import { canResumeCompanyDossier, clearPaidPendingDossier } from "@shared/companyOnboarding";
+import { clearPaidPendingDossier } from "@shared/companyOnboarding";
 import "./RestaurateurProfilForm.scss";
 
 const PAYS_OPTIONS = [
@@ -32,7 +32,23 @@ const defaultFormData = {
 
 const MAX_FILE_SIZE_MB = PHOTO_MAX_MB;
 
-const RestaurateurProfilForm = () => {
+function isEstablishmentComplete(data) {
+  return Boolean(
+    String(data.nomEtablissement || "").trim() &&
+      String(data.adresse || "").trim() &&
+      String(data.codePostal || "").trim() &&
+      String(data.ville || "").trim() &&
+      String(data.pays || "").trim() &&
+      String(data.telephone || "").trim() &&
+      String(data.email || "").trim()
+  );
+}
+
+const RestaurateurProfilForm = ({
+  companyFormStep = 1,
+  onCompanyFormStepChange,
+  onEstablishmentReadyChange,
+} = {}) => {
   const { user, refreshUser } = useAuth();
   const [formData, setFormData] = useState(defaultFormData);
   const [toast, setToast] = useState({ visible: false, message: "" });
@@ -40,6 +56,7 @@ const RestaurateurProfilForm = () => {
   const [idVersoFile, setIdVersoFile] = useState(null);
   const [addrDocFile, setAddrDocFile] = useState(null);
   const [dossierLocalError, setDossierLocalError] = useState(null);
+  const didAutoAdvance = useRef(false);
   const {
     profile,
     loadProfile,
@@ -54,7 +71,9 @@ const RestaurateurProfilForm = () => {
     resetForm,
   } = useRestaurateurProfile();
 
-  const needsDocSubmission = canResumeCompanyDossier(user);
+  const docsAlreadySent = Boolean(user?.twilioDocsSubmittedAt);
+  const establishmentComplete = isEstablishmentComplete(formData);
+  const showDossierStep = companyFormStep === 2 && !docsAlreadySent;
 
   useEffect(() => {
     loadProfile();
@@ -67,37 +86,55 @@ const RestaurateurProfilForm = () => {
   }, [user]);
 
   useEffect(() => {
+    onEstablishmentReadyChange?.(establishmentComplete);
+  }, [establishmentComplete, onEstablishmentReadyChange]);
+
+  useEffect(() => {
     if (
-      profile &&
-      (profile.nomEtablissement != null ||
-        profile.adresse != null ||
-        profile.email != null ||
-        profile.twilioNumberUsage != null)
+      !profile ||
+      (profile.nomEtablissement == null &&
+        profile.adresse == null &&
+        profile.email == null &&
+        profile.twilioNumberUsage == null)
     ) {
-      setFormData((prev) => ({
-        ...defaultFormData,
-        ...prev,
-        nomEtablissement: profile.nomEtablissement ?? "",
-        adresse: profile.adresse ?? "",
-        codePostal: profile.codePostal ?? "",
-        ville: profile.ville ?? "",
-        pays: profile.pays ?? "",
-        telephone: profile.telephone ?? "",
-        email: profile.email ?? user?.email ?? prev.email,
-        nombreCouverts: profile.nombreCouverts != null ? String(profile.nombreCouverts) : "",
-        typeCuisine: profile.typeCuisine ?? "",
-        twilioNumberUsage: profile.twilioNumberUsage ?? "",
-        siret: profile.siret || profile.siren || "",
-        accessibilitePmr:
-          profile.accessibilitePmr === true
-            ? "yes"
-            : profile.accessibilitePmr === false
-              ? "no"
-              : "",
-        nombreChaisesBebe:
-          profile.nombreChaisesBebe != null ? String(profile.nombreChaisesBebe) : "",
-      }));
+      return;
     }
+    const next = {
+      ...defaultFormData,
+      nomEtablissement: profile.nomEtablissement ?? "",
+      adresse: profile.adresse ?? "",
+      codePostal: profile.codePostal ?? "",
+      ville: profile.ville ?? "",
+      pays: profile.pays ?? "",
+      telephone: profile.telephone ?? "",
+      email: profile.email ?? user?.email ?? "",
+      nombreCouverts: profile.nombreCouverts != null ? String(profile.nombreCouverts) : "",
+      typeCuisine: profile.typeCuisine ?? "",
+      twilioNumberUsage: profile.twilioNumberUsage ?? "",
+      siret: profile.siret || profile.siren || "",
+      accessibilitePmr:
+        profile.accessibilitePmr === true
+          ? "yes"
+          : profile.accessibilitePmr === false
+            ? "no"
+            : "",
+      nombreChaisesBebe:
+        profile.nombreChaisesBebe != null ? String(profile.nombreChaisesBebe) : "",
+    };
+    setFormData((prev) => ({
+      ...next,
+      email: next.email || prev.email,
+    }));
+    if (
+      !didAutoAdvance.current &&
+      !user?.twilioDocsSubmittedAt &&
+      isEstablishmentComplete(next)
+    ) {
+      didAutoAdvance.current = true;
+      onCompanyFormStepChange?.(2);
+    }
+    // Hydratation unique quand le profil API change, pas à chaque frappe.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile]);
 
   useEffect(() => {
@@ -109,12 +146,20 @@ const RestaurateurProfilForm = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const goToDossierStep = () => {
+    if (!establishmentComplete) return;
+    onCompanyFormStepChange?.(2);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       await submitProfile(formData);
       await refreshUser();
       setToast({ visible: true, message: "Informations enregistrées avec succès." });
+      if (!docsAlreadySent) {
+        onCompanyFormStepChange?.(2);
+      }
     } catch (_) {
       // erreur gérée dans le hook
     }
@@ -137,14 +182,27 @@ const RestaurateurProfilForm = () => {
     }
     setDossierLocalError(null);
     assignPickedFile(kind, file);
-    const compressed = await fileToWebp(file);
-    assignPickedFile(kind, compressed);
+    try {
+      const compressed = await fileToWebp(file);
+      assignPickedFile(kind, compressed);
+    } catch {
+      assignPickedFile(kind, null);
+      e.target.value = "";
+      setDossierLocalError(
+        "Image illisible. Utilisez un JPEG, PNG, WebP ou HEIF valide (pas un fichier corrompu).",
+      );
+    }
   };
 
   const handleDossierSubmit = async (e) => {
     e.preventDefault();
     resetForm();
     setDossierLocalError(null);
+    if (!establishmentComplete) {
+      setDossierLocalError("Complétez d'abord les informations de l'établissement.");
+      onCompanyFormStepChange?.(1);
+      return;
+    }
     const usage = (formData.twilioNumberUsage || "").trim();
     if (usage.length < 15) {
       setDossierLocalError(
@@ -204,6 +262,7 @@ const RestaurateurProfilForm = () => {
         autoHide={4000}
         type="success"
       />
+      {!showDossierStep ? (
       <form onSubmit={handleSubmit} className="restaurateur-profil-form">
       <div className="form-row">
         <div className="form-group">
@@ -392,10 +451,58 @@ const RestaurateurProfilForm = () => {
         </div>
       </div>
 
+      {success && (
+        <div className="form-message success">
+          <CheckCircle className="icon" />
+          <span>Informations enregistrées avec succès.</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="form-message error">
+          <AlertCircle className="icon" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {!docsAlreadySent && (
+        <button
+          type="button"
+          className="btn btn-primary submit-btn"
+          disabled={!establishmentComplete || isLoading}
+          onClick={goToDossierStep}
+        >
+          Continuer vers les pièces
+        </button>
+      )}
+
+      <button
+        type="submit"
+        className="btn btn-primary submit-btn"
+        disabled={isLoading || isSubmittingOnboarding}
+      >
+        {isLoading ? (
+          <>
+            <div className="spinner" />
+            Enregistrement...
+          </>
+        ) : (
+          <>
+            <Save className="icon" />
+            Enregistrer les informations
+          </>
+        )}
+      </button>
+    </form>
+      ) : (
+      <form
+        id="dossier-form"
+        onSubmit={handleDossierSubmit}
+        className="restaurateur-profil-form"
+      >
       <div className="form-group">
         <label htmlFor="twilioNumberUsage" className="form-label">
-          Usage prévu du numéro professionnel
-          {needsDocSubmission ? " *" : ""}
+          Usage prévu du numéro professionnel *
         </label>
         <textarea
           id="twilioNumberUsage"
@@ -405,14 +512,11 @@ const RestaurateurProfilForm = () => {
           className="form-input"
           rows={4}
           maxLength={2000}
-          required={needsDocSubmission}
+          required
           placeholder="Ex : réception des appels clients pour réservations et informations sur la carte et les horaires."
           disabled={isSubmittingOnboarding}
         />
       </div>
-
-      {needsDocSubmission && (
-        <>
           <div className="form-group">
             <label htmlFor="siret" className="form-label">
               SIRET (ou SIREN) *
@@ -427,7 +531,7 @@ const RestaurateurProfilForm = () => {
               inputMode="numeric"
               autoComplete="off"
               maxLength={17}
-              required={needsDocSubmission}
+              required
               placeholder="14 chiffres, ou 9 chiffres pour le SIREN"
               disabled={isSubmittingOnboarding}
             />
@@ -482,9 +586,16 @@ const RestaurateurProfilForm = () => {
           )}
           <button
             type="button"
+            className="btn btn-secondary submit-btn"
+            disabled={isSubmittingOnboarding}
+            onClick={() => onCompanyFormStepChange?.(1)}
+          >
+            Retour aux informations
+          </button>
+          <button
+            type="submit"
             className="btn btn-primary submit-btn"
             disabled={isSubmittingOnboarding || isLoading}
-            onClick={handleDossierSubmit}
           >
             {isSubmittingOnboarding ? (
               <>
@@ -495,41 +606,8 @@ const RestaurateurProfilForm = () => {
               <>Transmettre le dossier Twilio</>
             )}
           </button>
-        </>
-      )}
-
-      {success && (
-        <div className="form-message success">
-          <CheckCircle className="icon" />
-          <span>Informations enregistrées avec succès.</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="form-message error">
-          <AlertCircle className="icon" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      <button
-        type="submit"
-        className="btn btn-primary submit-btn"
-        disabled={isLoading || isSubmittingOnboarding}
-      >
-        {isLoading ? (
-          <>
-            <div className="spinner" />
-            Enregistrement...
-          </>
-        ) : (
-          <>
-            <Save className="icon" />
-            Enregistrer les informations
-          </>
-        )}
-      </button>
     </form>
+      )}
     </>
   );
 };
