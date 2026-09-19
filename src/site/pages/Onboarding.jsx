@@ -4,7 +4,7 @@ import { PageContainer, Hero, Section } from "../components";
 import { useAuth } from "../hooks/useAuth";
 import { useCheckout } from "../hooks/useCheckout";
 import OnboardingNoticeModal from "../components/Shared/OnboardingNoticeModal/OnboardingNoticeModal";
-import { shouldOpenMonEspace } from "@shared/companyOnboarding";
+import { isDeveloperUser, shouldOpenMonEspace } from "@shared/companyOnboarding";
 import "./Onboarding.scss";
 
 const Onboarding = () => {
@@ -23,7 +23,7 @@ const Onboarding = () => {
   const email = user?.email || "";
 
   useEffect(() => {
-    if (shouldOpenMonEspace(user) || user?.accessUnlocked) {
+    if (shouldOpenMonEspace(user) || user?.accessUnlocked || isDeveloperUser(user)) {
       navigate("/mon-espace", { replace: true });
     }
   }, [user, navigate]);
@@ -56,7 +56,7 @@ const Onboarding = () => {
     }
   };
 
-  if (shouldOpenMonEspace(user) || user?.accessUnlocked) {
+  if (shouldOpenMonEspace(user) || user?.accessUnlocked || isDeveloperUser(user)) {
     return null;
   }
 

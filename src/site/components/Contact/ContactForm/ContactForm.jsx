@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from "react";
 import { Send, CheckCircle, AlertCircle } from "lucide-react";
 import { useContactForm } from "../../../hooks/useContactForm";
+import { useContactFormInitialValues } from "../../../hooks/useContactFormInitialValues";
 import "./ContactForm.scss";
 
 const ContactForm = () => {
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    company: "",
-    subject: "",
-    message: "",
-  });
+  const initialValues = useContactFormInitialValues();
+  const [formData, setFormData] = useState(initialValues);
 
   const { submitContactForm, isLoading, error, success, resetForm } =
     useContactForm();
+
+  useEffect(() => {
+    setFormData(initialValues);
+  }, [initialValues]);
 
   const handleChange = (e) => {
     setFormData({
@@ -27,10 +27,9 @@ const ContactForm = () => {
 
     try {
       await submitContactForm(formData);
-      // Réinitialiser le formulaire en cas de succès
       setFormData({
-        name: "",
-        email: "",
+        name: initialValues.name,
+        email: initialValues.email,
         company: "",
         subject: "",
         message: "",
@@ -46,7 +45,7 @@ const ContactForm = () => {
   }, [resetForm]);
 
   return (
-    <form onSubmit={handleSubmit} className="contact-form">
+    <form id="contact-form" onSubmit={handleSubmit} className="contact-form">
       <div className="form-row">
         <div className="form-group">
           <label htmlFor="name" className="form-label">

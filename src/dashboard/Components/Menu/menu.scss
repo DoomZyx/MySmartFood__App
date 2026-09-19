@@ -1,4 +1,4 @@
-nav {
+.dashboard-nav {
   position: fixed;
   left: 0;
   top: 0;
@@ -94,7 +94,7 @@ nav {
   }
 }
 
-nav a.dashboard-link {
+.dashboard-nav a.dashboard-link {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -278,14 +278,14 @@ nav a.dashboard-link {
 
 // Responsive pour écrans moyens (1024px - 1919px)
 @media (min-width: 1024px) and (max-width: 1919px) {
-  nav {
+  .dashboard-nav {
     width: 260px;
   }
 }
 
 // Responsive pour petits écrans
 @media (max-width: 1024px) {
-  nav {
+  .dashboard-nav {
     width: 300px;
     transform: translateX(-100%);
     transition: transform var(--transition-base);
@@ -300,7 +300,7 @@ nav a.dashboard-link {
 }
 
 @media (max-width: 768px) {
-  nav {
+  .dashboard-nav {
     width: 100%;
     max-width: 360px;
   }

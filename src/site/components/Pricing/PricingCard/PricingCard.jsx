@@ -7,7 +7,7 @@ import { useLoginModal } from "../../../contexts/LoginModalContext";
 import { useAuth } from "../../../hooks/useAuth";
 import { useOptimizedAnimation } from "../../../hooks/useOptimizedAnimation";
 import { useCheckout } from "../../../hooks/useCheckout";
-import { shouldOpenMonEspace } from "@shared/companyOnboarding";
+import { isDeveloperUser, shouldOpenMonEspace } from "@shared/companyOnboarding";
 import "./PricingCard.scss";
 
 const PricingCard = ({ plan, delay = 0 }) => {
@@ -23,7 +23,7 @@ const PricingCard = ({ plan, delay = 0 }) => {
       openLoginModal({ planId: plan.id });
       return;
     }
-    if (shouldOpenMonEspace(user) || user?.accessUnlocked) {
+    if (shouldOpenMonEspace(user) || user?.accessUnlocked || isDeveloperUser(user)) {
       navigate("/mon-espace");
       return;
     }

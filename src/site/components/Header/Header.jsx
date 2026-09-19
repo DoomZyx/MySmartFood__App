@@ -1,63 +1,26 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import React, { useState, useEffect } from "react";
 import Logo from "./Logo/Logo";
-import Navigation, {
-  MobileNavButton,
-  MobileNavMenu,
-} from "../Navigation/Navigation";
+import { DesktopNav, SiteMenuButton, SiteMenuPanel } from "../Navigation/Navigation";
 import HeaderActions from "./HeaderActions/HeaderActions";
+import UserIdentity from "./UserIdentity/UserIdentity";
 import { useAuth } from "../../hooks/useAuth";
+import { useSiteMenu } from "../../hooks/useSiteMenu";
+import { getAccountStatus } from "../../utils/accountStatus";
 import "./Header.scss";
 
 const Header = () => {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { isAuthenticated } = useAuth();
-  const location = useLocation();
-  const menuRef = useRef(null);
-  const buttonRef = useRef(null);
+  const { isOpen, toggle, close, menuRef, buttonRef } = useSiteMenu();
 
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
     };
 
-    window.addEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  useEffect(() => {
-    setIsMenuOpen(false);
-  }, [location.pathname]);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        isMenuOpen &&
-        menuRef.current &&
-        !menuRef.current.contains(event.target) &&
-        buttonRef.current &&
-        !buttonRef.current.contains(event.target)
-      ) {
-        setIsMenuOpen(false);
-      }
-    };
-
-    if (isMenuOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("touchstart", handleClickOutside);
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("touchstart", handleClickOutside);
-      document.body.style.overflow = "unset";
-    };
-  }, [isMenuOpen]);
 
   const headerClassName = [
     "header",
@@ -69,25 +32,33 @@ const Header = () => {
 
   return (
     <header className={headerClassName}>
+      {isOpen ? (
+        <button
+          type="button"
+          className="site-menu-backdrop"
+          aria-label="Fermer le menu"
+          onClick={close}
+        />
+      ) : null}
       <div className="header-container">
         <div className="header-content">
           <Logo />
-          <Navigation />
+          <DesktopNav />
           <div className="header-end">
+            {!isAuthenticated ? (
+              <span className="account-status-badge">
+                {getAccountStatus(null).label}
+              </span>
+            ) : null}
             <HeaderActions />
-            <MobileNavButton
-              isOpen={isMenuOpen}
-              onToggle={() => setIsMenuOpen((open) => !open)}
-              buttonRef={buttonRef}
-            />
+            <div className="header-menu" ref={menuRef}>
+              <UserIdentity isOpen={isOpen} onToggle={toggle} />
+              <SiteMenuButton isOpen={isOpen} onToggle={toggle} buttonRef={buttonRef} />
+              <SiteMenuPanel isOpen={isOpen} onClose={close} />
+            </div>
           </div>
         </div>
       </div>
-      <MobileNavMenu
-        isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
-        menuRef={menuRef}
-      />
     </header>
   );
 };

@@ -21,19 +21,21 @@ const NotificationCenter = () => {
     const reservationId = notification.details?.reservationId;
     const appointmentType = notification.details?.appointmentType;
 
+    if (notification.notificationType === "call_missed") {
+      setShowNotifications(false);
+      return;
+    }
+
     if (notification.notificationType === "call_completed" || notification.notificationType === "new_order") {
-      if (reservationId && orderId) {
-        if (appointmentType === "reservation") {
-          navigate(`${dashboardPagePath("reservations")}?orderid=${reservationId}`);
-        } else {
-          navigate(`${dashboardPagePath("orders")}?orderid=${orderId}`);
-        }
-      } else if (reservationId) {
-        navigate(`${dashboardPagePath("reservations")}?orderid=${reservationId}`);
-      } else if (orderId) {
+      const targetId = reservationId || orderId;
+      if (appointmentType === "reservation" || reservationId) {
+        navigate(`${dashboardPagePath("reservations")}?orderid=${reservationId || orderId}`);
+      } else if (appointmentType === "order" || orderId) {
         navigate(`${dashboardPagePath("orders")}?orderid=${orderId}`);
+      } else if (targetId) {
+        navigate(`${dashboardPagePath("reservations")}?orderid=${targetId}`);
       } else if (notification.notificationType === "call_completed") {
-        navigate("/calls-list");
+        navigate(dashboardPagePath());
       } else {
         navigate(dashboardPagePath("orders"));
       }
@@ -57,6 +59,8 @@ const NotificationCenter = () => {
       case "call_completed":
         return "bi-telephone-check";
       case "call_error":
+        return "bi-telephone-x";
+      case "call_missed":
         return "bi-telephone-x";
       case "new_client":
         return "bi-person-plus";
@@ -94,21 +98,30 @@ const NotificationCenter = () => {
   };
 
   useEffect(() => {
+    let cancelled = false;
     const unsubscribe = notificationService.subscribe((newNotifications) => {
-      setNotifications(newNotifications);
+      if (!cancelled) setNotifications(newNotifications);
     });
-    setNotifications([...notificationService.notifications]);
+    notificationService.loadUnread().then((items) => {
+      if (!cancelled) setNotifications(Array.isArray(items) ? [...items] : []);
+    });
 
     return () => {
+      cancelled = true;
       unsubscribe();
     };
   }, []);
 
   // Resynchroniser la liste avec le service à chaque reconnexion WebSocket
   useEffect(() => {
-    if (isConnected) {
-      setNotifications([...notificationService.notifications]);
-    }
+    if (!isConnected) return undefined;
+    let cancelled = false;
+    notificationService.loadUnread().then((items) => {
+      if (!cancelled) setNotifications(Array.isArray(items) ? [...items] : []);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [isConnected]);
 
   // Compter les notifications non lues

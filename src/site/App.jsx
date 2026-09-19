@@ -1,26 +1,11 @@
-import React, { useEffect } from "react";
+import React from "react";
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
-  Outlet,
-  useLocation,
-  useNavigate,
-  useSearchParams,
 } from "react-router-dom";
-import Header from "./components/Header/Header";
-import Footer from "./components/Footer/Footer";
-import CookieBanner from "./components/Shared/CookieBanner/CookieBanner";
-import ScrollToTop from "./components/Shared/ScrollToTop/ScrollToTop";
-import DemoModal from "./components/Shared/DemoModal/DemoModal";
-import LoginModal from "./components/Shared/LoginModal/LoginModal";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
-import { DemoModalProvider, useDemoModal } from "./contexts/DemoModalContext";
-import { LoginModalProvider, useLoginModal } from "./contexts/LoginModalContext";
-import { AuthProvider } from "./contexts/AuthContext";
-import { AnimationProvider } from "./components/Shared/AnimationProvider/AnimationProvider";
-import ErrorBoundary from "./components/Shared/ErrorBoundary/ErrorBoundary";
 import Home from "./pages/Home";
 import Services from "./pages/Services";
 import Pricing from "./pages/Pricing";
@@ -33,105 +18,23 @@ import ServiceIATelephonique from "./pages/ServiceIATelephonique";
 import FonctionnalitesPrevues from "./pages/FonctionnalitesPrevues";
 import Onboarding from "./pages/Onboarding";
 import PlatformAdmin from "./pages/PlatformAdmin";
-import { PLATFORM_ADMIN_PATH, isPlatformAdminPath } from "./utils/platformAdminPath";
-import { openDashboard } from "./utils/dashboardPath";
-import { apiBaseUrl } from "./services/apiBase";
+import {
+  DashboardEntry,
+  GoogleCallbackRedirect,
+  GoogleStartRedirect,
+  LoginRedirect,
+  WebsiteLayout,
+  WebsiteProviders,
+} from "./WebsiteChrome.jsx";
 
-function DashboardEntry() {
-  const navigate = useNavigate();
-  useEffect(() => {
-    openDashboard(navigate);
-  }, [navigate]);
-  return <div>Redirection...</div>;
-}
-
-function redirectToApi(pathWithSearch) {
-  const apiBase = apiBaseUrl();
-  if (!apiBase) return;
-  const target = `${apiBase}${pathWithSearch}`;
-  try {
-    if (new URL(target).origin === window.location.origin) return;
-  } catch {
-    return;
-  }
-  window.location.assign(target);
-}
-
-/** Redirige vers le callback backend si Google a renvoyé l'utilisateur sur le frontend. */
-export function GoogleCallbackRedirect() {
-  useEffect(() => {
-    redirectToApi(`/api/auth/google/callback${window.location.search}`);
-  }, []);
-  return <div>Redirection...</div>;
-}
-
-/** Evite que la SPA avale /api/auth/google et redirige vers /login. */
-export function GoogleStartRedirect() {
-  useEffect(() => {
-    const search = window.location.search || "?return=site";
-    redirectToApi(`/api/auth/google${search}`);
-  }, []);
-  return <div>Redirection...</div>;
-}
-
-/** /login : ouvre la modale de connexion avec intent (planId, from) puis redirige vers /. */
-export function LoginRedirect() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { openLoginModal } = useLoginModal();
-
-  useEffect(() => {
-    const from = location.state?.from;
-    const fromPath = typeof from?.pathname === "string" ? from.pathname : "";
-    if (isPlatformAdminPath(fromPath)) {
-      navigate(fromPath || PLATFORM_ADMIN_PATH, { replace: true });
-      return;
-    }
-    const planIdParam = searchParams.get("planId");
-    const planId = planIdParam ? parseInt(planIdParam, 10) : undefined;
-    const authError = searchParams.get("error");
-    openLoginModal({
-      planId: Number.isInteger(planId) ? planId : undefined,
-      from,
-      error: authError,
-    });
-    navigate("/", { replace: true });
-  }, [location.state?.from, searchParams, openLoginModal, navigate]);
-
-  return null;
-}
-
-export function WebsiteLayout() {
-  const { isDemoModalOpen, closeDemoModal } = useDemoModal();
-  const { isLoginModalOpen, closeLoginModal } = useLoginModal();
-
-  return (
-    <div className="App">
-      <ScrollToTop />
-      <Header />
-      <Outlet />
-      <Footer />
-      <CookieBanner />
-      <DemoModal isOpen={isDemoModalOpen} onClose={closeDemoModal} />
-      <LoginModal isOpen={isLoginModalOpen} onClose={closeLoginModal} />
-    </div>
-  );
-}
-
-export function WebsiteProviders({ children }) {
-  return (
-    <ErrorBoundary>
-      <AnimationProvider>
-        <AuthProvider>
-          <DemoModalProvider>
-            <LoginModalProvider>{children}</LoginModalProvider>
-          </DemoModalProvider>
-        </AuthProvider>
-      </AnimationProvider>
-    </ErrorBoundary>
-  );
-}
+export {
+  DashboardEntry,
+  GoogleCallbackRedirect,
+  GoogleStartRedirect,
+  LoginRedirect,
+  WebsiteLayout,
+  WebsiteProviders,
+};
 
 function AppContent() {
   return (

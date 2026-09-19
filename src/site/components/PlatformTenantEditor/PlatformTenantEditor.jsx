@@ -4,6 +4,7 @@ import {
   auditDossier,
   scrollToDossierField,
 } from "../../utils/dossierModeration";
+import { describeBilling } from "../../utils/platformOpsLanes";
 import "./PlatformTenantEditor.scss";
 
 export const OPENAI_REALTIME_MODEL = "gpt-realtime-1.5";
@@ -141,7 +142,16 @@ function formatLogin(value) {
   }).format(new Date(value));
 }
 
-function UserAccessCard({ user, onSave, busy, error, nameIssue, emailIssue }) {
+export function UserAccessCard({
+  user,
+  onSave,
+  busy,
+  error,
+  nameIssue,
+  emailIssue,
+  onChangeRole,
+  onRemove,
+}) {
   const [name, setName] = React.useState(user.name || "");
   const [email, setEmail] = React.useState(user.email || "");
   const [password, setPassword] = React.useState("");
@@ -192,7 +202,7 @@ function UserAccessCard({ user, onSave, busy, error, nameIssue, emailIssue }) {
       </Field>
       <Field label="Nouveau mot de passe" hint="Laisser vide pour ne pas changer.">
         <input
-          type="text"
+          type="password"
           minLength={8}
           value={password}
           onChange={(event) => setPassword(event.target.value)}
@@ -200,6 +210,7 @@ function UserAccessCard({ user, onSave, busy, error, nameIssue, emailIssue }) {
         />
       </Field>
       <div className="pte-user-actions">
+        {onSave ? (
         <button
           type="button"
           className="btn btn-secondary"
@@ -208,11 +219,35 @@ function UserAccessCard({ user, onSave, busy, error, nameIssue, emailIssue }) {
         >
           {busy ? "Enregistrement..." : "Enregistrer l'accès"}
         </button>
+        ) : null}
         {saved && !error ? <span className="pte-hint">Accès enregistré.</span> : null}
         {error ? (
           <p className="platform-admin-error" role="alert">
             {error}
           </p>
+        ) : null}
+        {onChangeRole && user.role !== "owner" ? (
+          <label>
+            Rôle
+            <select
+              value={user.role === "admin" ? "admin" : "member"}
+              disabled={busy}
+              onChange={(event) => onChangeRole(user.id, event.target.value)}
+            >
+              <option value="member">Membre</option>
+              <option value="admin">Admin restaurant</option>
+            </select>
+          </label>
+        ) : null}
+        {onRemove && user.role !== "owner" ? (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={busy}
+            onClick={() => onRemove(user.id)}
+          >
+            Retirer
+          </button>
         ) : null}
       </div>
     </div>
@@ -280,6 +315,8 @@ const PlatformTenantEditor = ({
   userErrors,
   onUploadIdentity,
   uploadBusyId,
+  showAccess = true,
+  readOnly = false,
   children,
 }) => {
   const setField = (field) => (event) => {
@@ -329,6 +366,7 @@ const PlatformTenantEditor = ({
         />
       )}
 
+      {showAccess ? (
       <Section
         title={mode === "edit" ? "Accès dashboard" : "Compte"}
         hint={
@@ -385,7 +423,7 @@ const PlatformTenantEditor = ({
                 hint={mode === "edit" ? "Laisser vide pour ne pas changer." : null}
               >
                 <input
-                  type="text"
+                  type="password"
                   required={mode === "create"}
                   minLength={mode === "create" ? 8 : undefined}
                   value={draft.password}
@@ -396,6 +434,7 @@ const PlatformTenantEditor = ({
             </>
           )}
       </Section>
+      ) : null}
 
       <Section title="Établissement">
         <Field label="Nom de l'établissement" fieldKey="name" issue={issueOf("name")}>
@@ -588,6 +627,14 @@ const PlatformTenantEditor = ({
               <dd>{tenant.planName || tenant.planSlug || "—"}</dd>
             </div>
             <div>
+              <dt>Facturation</dt>
+              <dd>{describeBilling(tenant).label}</dd>
+            </div>
+            <div>
+              <dt>Dossier</dt>
+              <dd>{tenant.dossierComplete ? "Complet" : "Incomplet"}</dd>
+            </div>
+            <div>
               <dt>Provisioning</dt>
               <dd>{tenant.provisioningState || "—"}</dd>
             </div>
@@ -633,6 +680,7 @@ const PlatformTenantEditor = ({
       )}
 
       <footer className="pte-actions">
+        {!readOnly ? (
         <button type="submit" className="btn btn-primary" disabled={busy}>
           {busy
             ? "Enregistrement..."
@@ -640,6 +688,7 @@ const PlatformTenantEditor = ({
               ? "Créer le client"
               : "Enregistrer"}
         </button>
+        ) : null}
         {children}
       </footer>
     </form>

@@ -1,5 +1,4 @@
 import { useTranslation } from "react-i18next";
-import AppLayout from "../../Components/Layout/AppLayout";
 import "./Admin.scss";
 import UserManagement from "../../Components/Admin/userManagement";
 import { useAdmin } from "../../Hooks/Admin/useAdmin";
@@ -28,17 +27,14 @@ function Admin() {
 
   if (loading && users.length === 0) {
     return (
-      <AppLayout>
-        <div className="loading-state">
-          <i className="bi bi-repeat spinning"></i>
-        </div>
-      </AppLayout>
+      <div className="loading-state">
+        <i className="bi bi-repeat spinning"></i>
+      </div>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="admin-container">
+    <div className="admin-container">
         {error && (
           <div className="notification-toast error-message">
             <i className="bi bi-exclamation-triangle"></i>
@@ -157,8 +153,7 @@ function Admin() {
             </div>
           </div>
         )}
-      </div>
-    </AppLayout>
+    </div>
   );
 }
 

@@ -1,18 +1,12 @@
-import { PLATFORM_ADMIN_PATH } from "./platformAdminPath";
 import { canOpenDashboard } from "./syncDashboardSession";
 import { DASHBOARD_PATH, openDashboard } from "./dashboardPath";
 import { shouldOpenMonEspace, stillNeedsPayment } from "./companyOnboarding";
 
 export function isPlatformAdminUser(user) {
-  return Boolean(user?.isPlatformAdmin);
+  return Boolean(user?.isPlatformAdmin) && !user?.impersonation;
 }
 
 export function followSiteAuthPath(navigate, user, loginIntent) {
-  if (isPlatformAdminUser(user)) {
-    navigate(PLATFORM_ADMIN_PATH, { replace: true });
-    return;
-  }
-
   if (shouldOpenMonEspace(user)) {
     navigate("/mon-espace", { replace: true });
     return;

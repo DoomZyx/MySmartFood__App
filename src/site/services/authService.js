@@ -176,6 +176,36 @@ export const submitOnboardingDossierApi = async (formData, files) => {
   return data;
 };
 
+export const fetchWebsiteDocumentBlob = async (kind) => {
+  if (!API_BASE_URL) throw new Error("API non configurée.");
+  const response = await fetch(
+    `${API_BASE_URL}/api/auth/profile/documents/${encodeURIComponent(kind)}`,
+    { credentials: "include" }
+  );
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || data.message || "Pièce indisponible");
+  }
+  return {
+    blob: await response.blob(),
+    mimeType: response.headers.get("content-type") || "application/octet-stream",
+  };
+};
+
+export const ackDossierNoticeApi = async () => {
+  if (!API_BASE_URL) return null;
+  const response = await fetch(`${API_BASE_URL}/api/auth/dossier-notice/ack`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.message || data.error || "Impossible de fermer la notification.");
+  }
+  const data = await response.json();
+  return data.user ?? data;
+};
+
 /**
  * Déconnexion : demande au backend d'invalider / supprimer le cookie.
  * À appeler avec credentials: 'include' pour envoyer le cookie à invalider.

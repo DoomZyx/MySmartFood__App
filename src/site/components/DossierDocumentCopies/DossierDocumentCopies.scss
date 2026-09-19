@@ -1,0 +1,75 @@
+@use "../../styles/variables" as *;
+
+.dossier-document-copies {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.dossier-document-copies-title {
+  margin: 0;
+  font-size: 1.125rem;
+  color: $text-primary;
+}
+
+.dossier-document-copies-intro {
+  margin: 0;
+  color: $text-secondary;
+  font-size: 0.95rem;
+}
+
+.dossier-document-copies-list {
+  display: grid;
+  gap: 16px;
+}
+
+.dossier-document-copy {
+  padding: 16px;
+  border: 1px solid $border-primary;
+  border-radius: 12px;
+  background: $bg-secondary;
+}
+
+.dossier-document-copy-head {
+  h3 {
+    margin: 0 0 4px;
+    font-size: 0.95rem;
+    color: $text-primary;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: $text-muted;
+  }
+}
+
+.dossier-document-copy-status,
+.dossier-document-copy-error {
+  margin: 12px 0 0;
+  font-size: 0.875rem;
+}
+
+.dossier-document-copy-error {
+  color: #dc2626;
+}
+
+.dossier-document-copy-image,
+.dossier-document-copy-frame {
+  display: block;
+  width: 100%;
+  max-height: 280px;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: $bg-primary;
+  object-fit: contain;
+}
+
+.dossier-document-copy-link {
+  display: inline-block;
+  margin-top: 12px;
+  color: $accent-primary;
+  font-size: 0.875rem;
+}

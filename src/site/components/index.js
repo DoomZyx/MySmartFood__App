@@ -1,7 +1,8 @@
 // Composants Header
 export { default as Header } from "./Header/Header.jsx";
-export { default as Navigation } from "./Navigation/Navigation.jsx";
+export { DesktopNav, SiteMenuButton, SiteMenuPanel } from "./Navigation/Navigation.jsx";
 export { default as HeaderActions } from "./Header/HeaderActions/HeaderActions.jsx";
+export { default as UserIdentity } from "./Header/UserIdentity/UserIdentity.jsx";
 export { default as Logo } from "./Header/Logo/Logo.jsx";
 
 // Composants Shared (utilisés par plusieurs pages)

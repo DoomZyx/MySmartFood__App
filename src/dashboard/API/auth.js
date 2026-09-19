@@ -1,5 +1,6 @@
-import { getApiKey, clearTenantApiKey, clearWebsiteUser } from "./apiKey.js";
+import { clearTenantApiKey, clearWebsiteUser } from "./apiKey.js";
 import { apiFetch, clearSession, persistSession, sessionHeaders } from "./http.js";
+import { canOpenDashboard } from "@shared/syncDashboardSession";
 const VITE_API_URL = import.meta.env.VITE_API_URL;
 
 // Connexion utilisateur
@@ -108,14 +109,22 @@ export function isAuthenticated() {
 export function isAdmin() {
   const user = getCurrentUser();
   if (!user) return false;
+  if (user.impersonation) {
+    return user.role === "admin" || user.role === "owner";
+  }
   if (user.isPlatformAdmin || user.role === "admin" || user.role === "owner") return true;
   return false;
 }
 
 export function hasDashboardAccess(session) {
   const user = session?.user || session || getCurrentUser();
-  if (!user) return false;
-  return Boolean(user.accessUnlocked);
+  if (user?.impersonation) return true;
+  return canOpenDashboard(user);
+}
+
+export async function stopImpersonationSession() {
+  await apiFetch("api/auth/impersonate/stop", { method: "POST" });
+  return fetchSession();
 }
 
 function requireAuth() {

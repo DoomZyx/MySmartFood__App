@@ -4,7 +4,7 @@ import "./Logo.scss";
 
 const Logo = () => {
   return (
-    <Link to="/" className="logo">
+    <Link to="/" className="logo" aria-label="mySmartFood, accueil">
       <div className="logo-icon">
         <span>S</span>
       </div>
@@ -13,4 +13,4 @@ const Logo = () => {
   );
 };
 
-export default Logo; 
+export default Logo;

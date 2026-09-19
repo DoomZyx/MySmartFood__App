@@ -1,9 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useAppointments } from "../../Hooks/Appointments/useAppointments";
-import { useConfiguration } from "../../Hooks/Configuration/useConfiguration";
+import { useVenue } from "../../Hooks/Dashboard/useVenue";
 import { getCurrentService } from "../../utils/serviceUtils";
-import AppLayout from "../../Components/Layout/AppLayout";
 import { AppointmentsFilters } from "../../Components/Appointments/AppointmentsFilters";
 import { AppointmentsList } from "../../Components/Appointments/AppointmentsList";
 import { CreateAppointmentForm } from "../../Components/Appointments/CreateAppointmentForm";
@@ -26,16 +25,16 @@ const ZONE_STATUS = {
 
 function ReservationsPage() {
   const { t } = useTranslation();
-  const { pricing } = useConfiguration();
+  const { venue } = useVenue();
   const [activeService, setActiveService] = useState("midi");
   const [dragOverZone, setDragOverZone] = useState(null);
 
   useEffect(() => {
-    const horaires = pricing?.restaurantInfo?.horairesOuverture;
+    const horaires = venue?.horairesOuverture;
     if (!horaires) return;
     const current = getCurrentService(horaires, new Date());
     if (current?.service) setActiveService(current.service);
-  }, [pricing]);
+  }, [venue]);
   const [touchDraggingId, setTouchDraggingId] = useState(null);
   const [dragPreviewPosition, setDragPreviewPosition] = useState(null);
   const touchDragJustEndedRef = useRef(false);
@@ -99,7 +98,7 @@ function ReservationsPage() {
     });
   }, [appointments, activeService]);
 
-  const capacity = pricing?.restaurantInfo?.nombreCouverts ?? null;
+  const capacity = venue?.nombreCouverts ?? null;
   const todayStr = getTodayDateStr();
   const isViewingToday = filters.date === todayStr;
 
@@ -211,8 +210,7 @@ function ReservationsPage() {
   );
 
   return (
-    <AppLayout>
-      <div className="appointments-page">
+    <div className="appointments-page">
 
         {/* Ghost de la card qui suit le doigt pendant le drag tactile */}
         {touchDraggingId && dragPreviewPosition && draggedAppointment && (
@@ -474,8 +472,7 @@ function ReservationsPage() {
             </div>
           </div>
         )}
-      </div>
-    </AppLayout>
+    </div>
   );
 }
 

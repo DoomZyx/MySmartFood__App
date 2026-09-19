@@ -1,4 +1,3 @@
-import AppLayout from "../../Components/Layout/AppLayout";
 import "./Profile.scss";
 import { useProfile } from "../../Hooks/Profile/useProfile";
 
@@ -23,17 +22,14 @@ function Profile() {
 
   if (loading) {
     return (
-      <AppLayout>
-        <div className="loading-state">
-          <i className="bi bi-repeat spinning"></i>
-        </div>
-      </AppLayout>
+      <div className="loading-state">
+        <i className="bi bi-repeat spinning"></i>
+      </div>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="my-profile-container">
+    <div className="my-profile-container">
         {error && (
           <div className="error-message">
             <i className="bi bi-exclamation-triangle"></i>
@@ -188,7 +184,6 @@ function Profile() {
           </div>
         </div>
       </div>
-    </AppLayout>
   );
 }
 

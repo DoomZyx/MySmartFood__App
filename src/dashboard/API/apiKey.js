@@ -8,9 +8,7 @@ const WEBSITE_USER_KEY = "app_website_user";
 let memoryKey = null;
 
 export function getApiKey() {
-  const fromStorage = memoryKey || sessionStorage.getItem(STORAGE_KEY) || "";
-  if (fromStorage) return fromStorage;
-  return import.meta.env.VITE_API_KEY || "";
+  return "";
 }
 
 export function setTenantApiKey(key) {

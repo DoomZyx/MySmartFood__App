@@ -4,16 +4,37 @@ export const STATUS_LABELS = {
   ready: "Prêt à activer",
   active: "Actif",
   suspended: "Suspendu",
+  rejected: "Refusé",
+  closed: "Fermé",
   nouveau: "Nouveau",
   en_cours: "En cours",
   traite: "Traité",
 };
+
+export function describeBilling(source) {
+  const status = String(source?.subscriptionStatus || "");
+  const hasStripe = Boolean(source?.hasStripeCustomer || source?.stripeSubscriptionId);
+  const unpaid = Boolean(source?.billingUnpaid) ||
+    ["past_due", "unpaid", "incomplete", "incomplete_expired"].includes(status);
+  const canceled = Boolean(source?.billingCanceled) || status === "canceled";
+  const grant = Boolean(source?.isManualGrant) ||
+    (source?.onboardedBy === "platform" && !hasStripe);
+  const paid = Boolean(source?.billingOk) && hasStripe;
+  let label = "—";
+  if (unpaid) label = "Impayé";
+  else if (canceled) label = "Annulé";
+  else if (paid) label = "Payé Stripe";
+  else if (grant && (status === "active" || status === "trialing" || !status)) label = "Grant BO";
+  else if (status) label = status;
+  return { label, status, unpaid, canceled, paid, grant, hasStripe };
+}
 
 export const KIND_LABELS = {
   tenant: "Restaurant",
   contact: "Contact",
   demo: "Démo",
   staff: "Compte",
+  user: "Utilisateur",
 };
 
 export function formatOpsDate(value) {
@@ -31,20 +52,71 @@ export function checklistProgress(tenant) {
   return { done, total, ratio: total ? done / total : 0 };
 }
 
+const REVIEWED_PROVISIONING = new Set([
+  "completed",
+  "bundle_approved",
+  "bundle_rejected",
+]);
+
+export function isDossierAwaitingReview(tenant) {
+  if (!tenant?.documentsSubmittedAt) return false;
+  if (tenant.status === "suspended") return false;
+  const state = String(tenant.provisioningState || "");
+  if (state && REVIEWED_PROVISIONING.has(state)) return false;
+  return true;
+}
+
 export function restaurantStage(tenant) {
   if (tenant?.status === "pending_payment") return "pending_payment";
-  if (tenant?.status === "pending_compliance") {
+  if (tenant?.status === "pending_compliance" || isDossierAwaitingReview(tenant)) {
     return tenant?.checklist?.ready ? "ready" : "pending_compliance";
   }
+  if (tenant?.status === "closed") return "closed";
   if (tenant?.status === "active") return "active";
-  if (tenant?.status === "suspended") return "suspended";
+  if (tenant?.status === "suspended") {
+    return tenant?.provisioningState === "bundle_rejected" ? "rejected" : "suspended";
+  }
   return tenant?.status || "pending_compliance";
 }
 
-export function mergeRestaurants(tenants, fleet) {
+function documentCount(tenant) {
+  if (Array.isArray(tenant?.documents) && tenant.documents.length) {
+    return tenant.documents.length;
+  }
+  if (Array.isArray(tenant?.documentKinds)) return tenant.documentKinds.length;
+  return 0;
+}
+
+function withPreservedDocuments(base, other) {
+  if (documentCount(base) > 0 || documentCount(other) === 0) {
+    return base;
+  }
+  return {
+    ...base,
+    documents: other.documents,
+    documentKinds: other.documentKinds?.length
+      ? other.documentKinds
+      : base.documentKinds,
+    documentsSubmittedAt: base.documentsSubmittedAt || other.documentsSubmittedAt,
+  };
+}
+
+export function mergeTenantRecords(previous, next) {
+  if (!previous) return next;
+  if (!next) return previous;
+  const previousOpen = previous.status && previous.status !== "closed";
+  const nextClosed = next.status === "closed";
+  if (previousOpen && nextClosed) {
+    return withPreservedDocuments(previous, next);
+  }
+  return withPreservedDocuments(next, previous);
+}
+
+export function mergeRestaurants(...lists) {
   const map = new Map();
-  [...(tenants || []), ...(fleet || [])].forEach((tenant) => {
-    if (tenant?.id) map.set(tenant.id, tenant);
+  lists.flat().forEach((tenant) => {
+    if (!tenant?.id) return;
+    map.set(tenant.id, mergeTenantRecords(map.get(tenant.id), tenant));
   });
   return [...map.values()];
 }
@@ -93,6 +165,33 @@ export function toOpsItem(kind, entity) {
       raw: entity,
     };
   }
+  if (kind === "user") {
+    const tenants = entity.tenants || [];
+    let status = "Sans établissement";
+    if (entity.isPlatformOwner) status = "Propriétaire";
+    else if (entity.isPlatformAdmin) {
+      status =
+        entity.platformRole === "support"
+          ? "Support"
+          : entity.platformRole === "billing"
+            ? "Facturation"
+            : entity.platformRole === "readonly"
+              ? "Lecture"
+              : "Exploitation";
+    }
+    else if (tenants[0]?.status) status = STATUS_LABELS[tenants[0].status] || tenants[0].status;
+    return {
+      id: entity.id,
+      kind,
+      title: entity.name || entity.email,
+      subtitle: entity.email,
+      status,
+      statusKey: entity.isPlatformOwner ? "owner" : entity.isPlatformAdmin ? "admin" : tenants[0]?.status || "none",
+      date: entity.lastLoginAt || entity.createdAt,
+      source: tenants.map((tenant) => tenant.businessName || tenant.name).filter(Boolean).join(", ") || "Aucun restaurant",
+      raw: entity,
+    };
+  }
   return {
     id: entity.id,
     kind: "staff",
@@ -112,6 +211,8 @@ export function restaurantsByStage(restaurants) {
     ready: [],
     active: [],
     suspended: [],
+    rejected: [],
+    closed: [],
   };
   restaurants.forEach((tenant) => {
     const stage = restaurantStage(tenant);
@@ -129,16 +230,20 @@ export function buildOpsGroups({
   contacts,
   demos,
   staff,
+  users = [],
+  usersTotal,
   canManageStaff,
+  canCreateTenant = true,
 }) {
   const stages = restaurantsByStage(restaurants);
-  const groups = [
-    {
+  const groups = [];
+  if (canCreateTenant) {
+    groups.push({
       id: "action",
       title: null,
       lanes: [{ id: "create", label: "Nouveau client", count: null, variant: "primary" }],
-    },
-  ];
+    });
+  }
 
   const waiting = [
     withCount("ready", "Prêt à activer", stages.ready.length),
@@ -154,6 +259,12 @@ export function buildOpsGroups({
   if (stages.suspended.length > 0) {
     fleetLanes.push(withCount("suspended", "Suspendus", stages.suspended.length));
   }
+  if (stages.rejected.length > 0) {
+    fleetLanes.push(withCount("rejected", "Refusés", stages.rejected.length));
+  }
+  if (stages.closed.length > 0) {
+    fleetLanes.push(withCount("closed", "Fermés", stages.closed.length));
+  }
   groups.push({ id: "fleet", title: "Restaurants", lanes: fleetLanes });
 
   const messages = [
@@ -164,6 +275,12 @@ export function buildOpsGroups({
   if (messages.length) {
     groups.push({ id: "messages", title: "Messages", lanes: messages });
   }
+
+  groups.push({
+    id: "directory",
+    title: "Supervision",
+    lanes: [withCount("users", "Utilisateurs", usersTotal ?? users.length)],
+  });
 
   if (canManageStaff) {
     groups.push({
@@ -188,7 +305,7 @@ export function laneIdsFromGroups(groups) {
   return groups.flatMap((group) => group.lanes.map((lane) => lane.id));
 }
 
-export function itemsForLane(lane, { restaurants, contacts, demos, staff }) {
+export function itemsForLane(lane, { restaurants, contacts, demos, staff, users }) {
   const stages = restaurantsByStage(restaurants);
   if (lane === "inbox") {
     return [
@@ -202,8 +319,30 @@ export function itemsForLane(lane, { restaurants, contacts, demos, staff }) {
   if (lane === "contacts") return contacts.map((row) => toOpsItem("contact", row)).sort(sortByDate);
   if (lane === "demos") return demos.map((row) => toOpsItem("demo", row)).sort(sortByDate);
   if (lane === "staff") return staff.map((row) => toOpsItem("staff", row));
+  if (lane === "users") return (users || []).map((row) => toOpsItem("user", row));
   if (stages[lane]) return stages[lane].map((row) => toOpsItem("tenant", row)).sort(sortByDate);
   return [];
+}
+
+export function platformUserDeleteReason(actor, target) {
+  if (!target?.id) return "Compte introuvable.";
+  if (actor?.id && String(actor.id) === String(target.id)) {
+    return "Vous ne pouvez pas supprimer votre propre compte.";
+  }
+  if (target.isPlatformOwner) {
+    return "Le propriétaire de la plateforme ne peut pas être supprimé.";
+  }
+  if (target.isPlatformAdmin && !actor?.isPlatformOwner) {
+    return "Les comptes back-office se gèrent dans Comptes.";
+  }
+  return null;
+}
+
+export function ownedRestaurantNames(target) {
+  return (target?.tenants || [])
+    .filter((tenant) => tenant.isOwner || tenant.role === "owner")
+    .map((tenant) => tenant.businessName || tenant.name)
+    .filter(Boolean);
 }
 
 export const EMPTY_LABELS = {
@@ -214,9 +353,12 @@ export const EMPTY_LABELS = {
   ready: "Aucun dossier prêt à activer.",
   active: "Aucune instance active.",
   suspended: "Aucune instance suspendue.",
+  rejected: "Aucun dossier refusé.",
+  closed: "Aucun établissement fermé.",
   contacts: "Aucun message de contact à traiter.",
   demos: "Aucune demande de démo à traiter.",
   staff: "Aucun compte back-office listé.",
+  users: "Aucun utilisateur trouvé.",
 };
 
 export function onboardingSteps(tenant) {

@@ -106,7 +106,6 @@ export function useAppointments(mode = "orders") {
   const paginationRef = useRef(pagination);
   const filtersRef = useRef(filtersHook.filters);
   const loadAppointmentsRef = useRef(null);
-  const loadTodayAppointmentsRef = useRef(null);
 
   // Récupérer tous les rendez-vous avec filtres (réservations ou commandes selon mode)
   const loadAppointments = useCallback(
@@ -223,7 +222,6 @@ export function useAppointments(mode = "orders") {
           const normalize = isReservations ? normalizeReservation : normalizeOrder;
           const data = normalize(response.data);
           await loadAppointments(pagination.page, pagination.limit, filtersRef.current);
-          await loadTodayAppointments();
           return data;
         }
       } catch (err) {
@@ -364,52 +362,28 @@ export function useAppointments(mode = "orders") {
     }
   }, [isReservations]);
 
-  // Charger les rendez-vous du jour au montage du composant
-  useEffect(() => {
-    loadTodayAppointments();
-  }, [loadTodayAppointments]);
-
-  // Mettre à jour les refs
   useEffect(() => {
     paginationRef.current = pagination;
     filtersRef.current = filtersHook.filters;
     loadAppointmentsRef.current = loadAppointments;
-    loadTodayAppointmentsRef.current = loadTodayAppointments;
-  }, [pagination, filtersHook.filters, loadAppointments, loadTodayAppointments]);
+  }, [pagination, filtersHook.filters, loadAppointments]);
 
-  // Callback pour rafraîchir quand une nouvelle commande arrive via WebSocket
-const handleNewOrder = useCallback((notificationData) => {
+  const handleNewOrder = useCallback(() => {
     if (loadAppointmentsRef.current) {
-      loadAppointmentsRef.current(paginationRef.current.page, paginationRef.current.limit, filtersRef.current);
-    }
-    if (loadTodayAppointmentsRef.current) {
-      loadTodayAppointmentsRef.current();
+      loadAppointmentsRef.current(
+        paginationRef.current.page,
+        paginationRef.current.limit,
+        filtersRef.current
+      );
     }
   }, []);
 
-  // Connecter au WebSocket centralisé
-  const { isConnected, subscribe, lastOrderNotificationAt } = useWebSocket();
-  const lastRefetchedForNotifRef = useRef(null);
+  const { isConnected, subscribe } = useWebSocket();
 
   useEffect(() => {
     const unsubscribe = subscribe("order", handleNewOrder);
     return () => unsubscribe();
   }, [subscribe, handleNewOrder]);
-
-  // Refetch quand une notif commande/resa arrive (meme si on n'etait pas sur la page au moment de la notif)
-  useEffect(() => {
-    if (lastOrderNotificationAt == null || lastOrderNotificationAt === lastRefetchedForNotifRef.current) return;
-    lastRefetchedForNotifRef.current = lastOrderNotificationAt;
-    const t = setTimeout(() => {
-      if (loadAppointmentsRef.current) {
-        loadAppointmentsRef.current(paginationRef.current.page, paginationRef.current.limit, filtersRef.current);
-      }
-      if (loadTodayAppointmentsRef.current) {
-        loadTodayAppointmentsRef.current();
-      }
-    }, 0);
-    return () => clearTimeout(t);
-  }, [lastOrderNotificationAt]);
 
   // Fonctions utilitaires
   const getAppointmentsByStatus = useCallback(
@@ -464,11 +438,16 @@ const handleNewOrder = useCallback((notificationData) => {
       return;
     }
 
-    if (appointments.length > 0 && !hasTriedRefetchForOrderIdRef.current) {
+    if (!hasTriedRefetchForOrderIdRef.current) {
       hasTriedRefetchForOrderIdRef.current = true;
-      loadAppointments(1, 50, filtersHook.filters);
+      loadAppointment(orderId).then((data) => {
+        if (data) {
+          modalHook.openDetailsModal(data);
+          setSearchParams({});
+        }
+      });
     }
-  }, [searchParams, appointments, modalHook, setSearchParams, loadAppointments, filtersHook.filters]);
+  }, [searchParams, appointments, modalHook, setSearchParams, loadAppointment]);
 
   // Wrappers pour les actions avec confirmation
   const handleStatusChange = useCallback(async (appointmentId, newStatus) => {

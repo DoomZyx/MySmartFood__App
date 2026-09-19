@@ -6,7 +6,7 @@
   left: 0;
   right: 0;
   z-index: 998;
-  transition: all 0.3s ease;
+  transition: background 0.25s ease, border-color 0.25s ease, backdrop-filter 0.25s ease;
 
   &.transparent {
     background: transparent;
@@ -21,21 +21,19 @@
 }
 
 .header-container {
+  position: relative;
+  z-index: 999;
   margin: 0 auto;
-  padding: 0 calc(0.85rem + 1.1vw);
-  max-width: 100%;
-
-  @media (max-width: 768px) {
-    padding: 0 20px;
-  }
+  padding: 0 clamp(1rem, 2.4vw, 2rem);
+  max-width: 1200px;
 }
 
 .header-content {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: calc(4.1rem + 0.35vw);
-  gap: calc(0.4rem + 0.7vw);
+  height: 4.35rem;
+  gap: 1rem;
   min-width: 0;
   width: 100%;
 }
@@ -43,33 +41,51 @@
 .header-end {
   display: flex;
   align-items: center;
-  gap: calc(0.35rem + 0.35vw);
+  justify-content: flex-end;
+  gap: 0.7rem;
   flex-shrink: 0;
   min-width: 0;
 }
 
-.header--authenticated {
+@media (min-width: 768px) {
   .header-content {
-    gap: calc(0.3rem + 0.55vw);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    height: 4.6rem;
+    gap: 1.25rem;
   }
 
-  .nav-desktop {
-    gap: calc(0.55rem + 0.7vw);
+  .header--authenticated .header-end {
+    gap: 0.85rem;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1100px) {
+  .header-content {
+    gap: 0.85rem;
+    height: 4.35rem;
   }
 
-  .nav-link {
-    font-size: calc(0.72rem + 0.18vw);
+  .header-end {
+    gap: 0.5rem;
   }
+}
 
-  @media (max-width: 1280px) {
-    .nav-link {
-      font-size: calc(0.68rem + 0.14vw);
-    }
-  }
+.account-status-badge {
+  display: none;
+  padding: 0.28rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: $text-muted;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
 
-  @media (max-width: 1100px) {
-    .nav-link {
-      font-size: calc(0.64rem + 0.1vw);
-    }
+@media (min-width: 768px) {
+  .account-status-badge {
+    display: inline-flex;
+    align-items: center;
   }
 }

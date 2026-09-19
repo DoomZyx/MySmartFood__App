@@ -2,7 +2,11 @@
  * Service de gestion des notifications
  * Gère les notifications email, sonores et desktop
  */
-import { getApiKey } from "../API/apiKey.js";
+import {
+  listUnreadNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "../API/Notifications/api.js";
 
 class NotificationService {
   constructor() {
@@ -70,15 +74,19 @@ class NotificationService {
    */
   addNotification(notificationData) {
     const payload = notificationData && typeof notificationData === "object" ? notificationData : {};
+    const id = payload.id || Date.now() + Math.random();
+    if (this.notifications.some((item) => item.id === id)) {
+      return this.notifications.find((item) => item.id === id);
+    }
     const newNotification = {
-      id: Date.now() + Math.random(),
+      id,
       title: payload.title ?? "Notification",
       message: payload.message ?? "",
       priority: payload.priority ?? "info",
       details: payload.details && typeof payload.details === "object" ? payload.details : {},
       notificationType: payload.notificationType ?? "call_completed",
-      timestamp: new Date(),
-      read: false,
+      timestamp: payload.timestamp ? new Date(payload.timestamp) : new Date(),
+      read: Boolean(payload.read),
     };
 
     this.notifications = [newNotification, ...this.notifications.slice(0, 19)];
@@ -90,6 +98,44 @@ class NotificationService {
     return newNotification;
   }
 
+  hydrate(items) {
+    const incoming = Array.isArray(items) ? items : [];
+    const byId = new Map();
+    incoming.forEach((item) => {
+      if (!item?.id) return;
+      byId.set(item.id, {
+        id: item.id,
+        title: item.title ?? "Notification",
+        message: item.message ?? "",
+        priority: item.priority ?? "info",
+        details: item.details && typeof item.details === "object" ? item.details : {},
+        notificationType: item.notificationType ?? "call_completed",
+        timestamp: item.timestamp ? new Date(item.timestamp) : new Date(),
+        read: Boolean(item.read),
+      });
+    });
+    this.notifications.forEach((item) => {
+      if (!byId.has(item.id)) byId.set(item.id, item);
+    });
+    this.notifications = Array.from(byId.values())
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .slice(0, 20);
+    this.notifyListeners();
+  }
+
+  async loadUnread() {
+    try {
+      const items = await listUnreadNotifications();
+      this.hydrate(items);
+      return this.notifications;
+    } catch (error) {
+      if (typeof import.meta !== "undefined" && import.meta.env?.DEV) {
+        console.warn("[NOTIF] loadUnread failed", error);
+      }
+      return this.notifications;
+    }
+  }
+
   /**
    * Supprime une notification de la liste
    * @param {string} id - ID de la notification à supprimer
@@ -97,6 +143,7 @@ class NotificationService {
   removeNotification(id) {
     this.notifications = this.notifications.filter(notif => notif.id !== id);
     this.notifyListeners();
+    markNotificationRead(id).catch(() => {});
   }
 
   /**
@@ -109,6 +156,7 @@ class NotificationService {
       notification.read = true;
       this.notifyListeners();
     }
+    markNotificationRead(id).catch(() => {});
   }
 
   /**
@@ -117,6 +165,7 @@ class NotificationService {
   clearAllNotifications() {
     this.notifications = [];
     this.notifyListeners();
+    markAllNotificationsRead().catch(() => {});
   }
 
   /**
@@ -302,8 +351,8 @@ class NotificationService {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": getApiKey(),
         },
+        credentials: "include",
         body: JSON.stringify({ to, subject, message }),
       });
 

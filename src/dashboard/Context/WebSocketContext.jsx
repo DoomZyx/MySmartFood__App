@@ -137,12 +137,14 @@ export function WebSocketProvider({ children }) {
         const notificationType = data.notificationType ?? data.data?.notificationType ?? "call_completed";
         const inner = data.data && typeof data.data === "object" ? data.data : data;
         const notificationData = {
+          id: inner.id || null,
           title: inner.title ?? inner.details?.callTypeLabel ?? "Appel IA",
           message: inner.message ?? inner.details?.type_demande ?? "Nouvelle notification",
           hasOrder: inner.hasOrder === true,
           priority: inner.priority ?? "info",
           details: inner.details && typeof inner.details === "object" ? inner.details : {},
           notificationType,
+          timestamp: data.timestamp || inner.timestamp || null,
         };
 
         const d = notificationData.details;

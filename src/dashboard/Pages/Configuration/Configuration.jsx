@@ -1,6 +1,5 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import AppLayout from "../../Components/Layout/AppLayout";
 import { useConfiguration } from "../../Hooks/Configuration/useConfiguration";
 import { ConfigurationRestaurant } from "../../Components/Configuration/ConfigurationRestaurant";
 import { ConfigurationLanguage } from "../../Components/Configuration/ConfigurationLanguage";
@@ -48,17 +47,14 @@ function Configuration() {
   // Affichage du chargement
   if (loading) {
     return (
-      <AppLayout>
-        <div className="configuration-page">
-          <div className="loading">{t('common.loading')}</div>
-        </div>
-      </AppLayout>
+      <div className="configuration-page">
+        <div className="loading">{t('common.loading')}</div>
+      </div>
     );
   }
 
   return (
-    <AppLayout>
-      <div className="configuration-page">
+    <div className="configuration-page">
         
         {error && (
           <div className="notification-toast error-message">
@@ -160,7 +156,6 @@ function Configuration() {
             </button>
           </div>
       </div>
-    </AppLayout>
   );
 }
 

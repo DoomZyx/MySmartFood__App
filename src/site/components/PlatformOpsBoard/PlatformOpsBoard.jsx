@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { formatOpsDate, KIND_LABELS } from "../../utils/platformOpsLanes";
+import PlatformUserCard from "../PlatformUserCard/PlatformUserCard";
 import "./PlatformOpsBoard.scss";
 
 function LaneButton({ lane, current, onSelect }) {
@@ -70,6 +71,9 @@ const PlatformOpsBoard = ({
   listTitle,
   hideList,
   listHeader,
+  actor,
+  busyId,
+  onDeleteItem,
 }) => {
   return (
     <div className={hideList ? "platform-ops is-create" : "platform-ops"}>
@@ -106,14 +110,26 @@ const PlatformOpsBoard = ({
             <p className="platform-ops-empty">{emptyLabel}</p>
           )}
           <div className="platform-ops-cards">
-            {items.map((item) => (
-              <OpsCard
-                key={`${item.kind}-${item.id}`}
-                item={item}
-                selected={selectedId === `${item.kind}-${item.id}`}
-                onSelect={onSelectItem}
-              />
-            ))}
+            {items.map((item) =>
+              item.kind === "user" || item.kind === "staff" ? (
+                <PlatformUserCard
+                  key={`${item.kind}-${item.id}`}
+                  item={item}
+                  selected={selectedId === `${item.kind}-${item.id}`}
+                  actor={actor}
+                  busy={busyId === item.id}
+                  onEdit={onSelectItem}
+                  onDelete={onDeleteItem}
+                />
+              ) : (
+                <OpsCard
+                  key={`${item.kind}-${item.id}`}
+                  item={item}
+                  selected={selectedId === `${item.kind}-${item.id}`}
+                  onSelect={onSelectItem}
+                />
+              )
+            )}
           </div>
         </section>
       )}

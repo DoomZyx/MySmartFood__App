@@ -1,9 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useAppointments } from "../../Hooks/Appointments/useAppointments";
-import { useConfiguration } from "../../Hooks/Configuration/useConfiguration";
+import { useVenue } from "../../Hooks/Dashboard/useVenue";
 import { getCurrentService } from "../../utils/serviceUtils";
-import AppLayout from "../../Components/Layout/AppLayout";
 import { AppointmentsFilters } from "../../Components/Appointments/AppointmentsFilters";
 import { AppointmentsList } from "../../Components/Appointments/AppointmentsList";
 import { CreateAppointmentForm } from "../../Components/Appointments/CreateAppointmentForm";
@@ -29,16 +28,16 @@ function getOrderTotal(appointment) {
 
 function AppointmentsPage() {
   const { t } = useTranslation();
-  const { pricing } = useConfiguration();
+  const { venue } = useVenue();
   const [activeService, setActiveService] = useState("midi"); // "midi" ou "soir"
   const [dragOverZone, setDragOverZone] = useState(null);
 
   useEffect(() => {
-    const horaires = pricing?.restaurantInfo?.horairesOuverture;
+    const horaires = venue?.horairesOuverture;
     if (!horaires) return;
     const current = getCurrentService(horaires, new Date());
     if (current?.service) setActiveService(current.service);
-  }, [pricing]);
+  }, [venue]);
   const [touchDraggingId, setTouchDraggingId] = useState(null);
   const [dragPreviewPosition, setDragPreviewPosition] = useState(null);
   const touchDragJustEndedRef = useRef(false);
@@ -166,8 +165,7 @@ function AppointmentsPage() {
   );
 
   return (
-    <AppLayout>
-      <div className="appointments-page">
+    <div className="appointments-page">
 
         {/* Ghost de la card pendant le drag tactile (commandes) */}
         {touchDraggingId && dragPreviewPosition && draggedOrder && (
@@ -367,8 +365,7 @@ function AppointmentsPage() {
             </div>
           </div>
         )}
-      </div>
-    </AppLayout>
+    </div>
   );
 }
 

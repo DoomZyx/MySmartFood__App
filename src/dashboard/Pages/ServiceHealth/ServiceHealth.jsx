@@ -1,5 +1,4 @@
 import { useTranslation } from "react-i18next";
-import AppLayout from "../../Components/Layout/AppLayout";
 import TokenUsageList from "../../Components/Dashboard/TokenUsageList";
 import { useServiceHealth } from "../../Hooks/Admin/useServiceHealth";
 import { useTokenUsage } from "../../Hooks/Dashboard/useTokenUsage";
@@ -61,27 +60,23 @@ function ServiceHealth() {
 
   if (loading && !monitoring) {
     return (
-      <AppLayout>
-        <div className="service-health__state" role="status" aria-live="polite">
-          <span className="spinner spinner-lg" aria-hidden="true" />
-          <p>{t("monitoring.loading")}</p>
-        </div>
-      </AppLayout>
+      <div className="service-health__state" role="status" aria-live="polite">
+        <span className="spinner spinner-lg" aria-hidden="true" />
+        <p>{t("monitoring.loading")}</p>
+      </div>
     );
   }
 
   if (!monitoring) {
     return (
-      <AppLayout>
-        <div className="service-health__state service-health__state--error" role="alert">
-          <i className="bi bi-exclamation-triangle" aria-hidden="true" />
-          <h2>{t("monitoring.errorTitle")}</h2>
-          <p>{t(error || "monitoring.errors.fetchFailed")}</p>
-          <button type="button" className="service-health__retry" onClick={refresh}>
-            {t("common.retry")}
-          </button>
-        </div>
-      </AppLayout>
+      <div className="service-health__state service-health__state--error" role="alert">
+        <i className="bi bi-exclamation-triangle" aria-hidden="true" />
+        <h2>{t("monitoring.errorTitle")}</h2>
+        <p>{t(error || "monitoring.errors.fetchFailed")}</p>
+        <button type="button" className="service-health__retry" onClick={refresh}>
+          {t("common.retry")}
+        </button>
+      </div>
     );
   }
 
@@ -89,8 +84,7 @@ function ServiceHealth() {
   const latencies = monitoring.latencies || [];
 
   return (
-    <AppLayout>
-      <div className="service-health">
+    <div className="service-health">
         <div className="title-section">
           <h1>{t("monitoring.title")}</h1>
           <p className="subtitle">{t("monitoring.subtitle")}</p>
@@ -408,7 +402,6 @@ function ServiceHealth() {
           )}
         </div>
       </div>
-    </AppLayout>
   );
 }
 

@@ -1,8 +1,9 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Mail, Phone, MapPin, Linkedin, Twitter, Facebook } from "lucide-react";
+import { Mail, Phone, MapPin } from "lucide-react";
 import { useOptimizedAnimation } from "../../hooks/useOptimizedAnimation";
+import Logo from "../Header/Logo/Logo";
 import "./Footer.scss";
 
 const Footer = () => {
@@ -14,19 +15,8 @@ const Footer = () => {
         <motion.div {...animationProps} className="footer-content">
           <div className="footer-section">
             <div className="footer-logo">
-              <h3>mySmartFood</h3>
+              <Logo />
               <p>L'accueil téléphonique des restaurateurs, 24/7, par l'IA</p>
-            </div>
-            <div className="footer-social">
-              <a href="#" className="social-link">
-                <Linkedin className="icon" />
-              </a>
-              <a href="#" className="social-link">
-                <Twitter className="icon" />
-              </a>
-              <a href="#" className="social-link">
-                <Facebook className="icon" />
-              </a>
             </div>
           </div>
 

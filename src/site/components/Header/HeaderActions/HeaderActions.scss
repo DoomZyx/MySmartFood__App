@@ -1,110 +1,48 @@
 @use "../../../styles/variables" as *;
 
 .header-actions {
-  display: flex;
-  gap: calc(0.35rem + 0.35vw);
+  display: none;
   align-items: center;
+  gap: 0.55rem;
   flex-shrink: 0;
   min-width: 0;
 
-  @media (max-width: 992px) {
-    display: none;
-  }
-
   .btn {
-    font-size: calc(0.72rem + 0.18vw);
-    padding: calc(0.35rem + 0.1vw) calc(0.6rem + 0.35vw);
+    font-size: 0.88rem;
+    padding: 0.55rem 0.95rem;
     white-space: nowrap;
     line-height: 1.2;
   }
 
-  .header-link-btn {
-    text-decoration: none;
-    color: inherit;
+  .header-login-btn__short,
+  .header-demo-btn__short {
+    display: none;
   }
+}
 
-  .header-text-link {
-    color: $text-secondary;
-    text-decoration: none;
-    background: none;
-    border: none;
-    cursor: pointer;
-    font: inherit;
-    font-size: calc(0.72rem + 0.18vw);
-    font-weight: 500;
-    white-space: nowrap;
-    padding: 0;
-    transition: color 0.2s ease;
+@media (min-width: 768px) {
+  .header-actions {
+    display: flex;
+  }
+}
 
-    &:hover {
-      color: $accent-primary;
+@media (min-width: 768px) and (max-width: 1100px) {
+  .header-actions {
+    gap: 0.4rem;
+
+    .btn {
+      font-size: 0.8rem;
+      padding: 0.45rem 0.7rem;
     }
-  }
 
-  .header-text-link--button {
-    color: $text-secondary;
-  }
-
-  .header-demo-btn {
-    .header-demo-btn__short {
+    .header-login-btn__full,
+    .header-demo-btn__full {
       display: none;
     }
-  }
 
-  &--authenticated {
-    gap: calc(0.4rem + 0.45vw);
-
-    .header-demo-btn {
-      font-size: calc(0.7rem + 0.16vw);
-      padding: calc(0.32rem + 0.08vw) calc(0.55rem + 0.3vw);
-    }
-
-    @media (max-width: 1280px) {
-      gap: calc(0.3rem + 0.3vw);
-
-      .header-text-link,
-      .btn {
-        font-size: calc(0.66rem + 0.14vw);
-      }
-
-      .header-demo-btn {
-        padding: calc(0.28rem + 0.06vw) calc(0.45rem + 0.22vw);
-      }
-    }
-
-    @media (max-width: 1100px) {
-      gap: calc(0.25rem + 0.2vw);
-
-      .header-text-link,
-      .btn {
-        font-size: calc(0.62rem + 0.1vw);
-      }
-
-      .header-demo-btn {
-        .header-demo-btn__full {
-          display: none;
-        }
-
-        .header-demo-btn__short {
-          display: inline;
-        }
-      }
-    }
-  }
-
-  &:not(.header-actions--authenticated) {
-    @media (max-width: 1280px) {
-      .btn {
-        font-size: calc(0.68rem + 0.15vw);
-        padding: calc(0.3rem + 0.08vw) calc(0.5rem + 0.25vw);
-      }
-    }
-
-    @media (max-width: 1100px) {
-      .btn {
-        font-size: calc(0.64rem + 0.12vw);
-        padding: calc(0.28rem + 0.06vw) calc(0.4rem + 0.2vw);
-      }
+    .header-login-btn__short,
+    .header-demo-btn__short {
+      display: inline;
     }
   }
 }

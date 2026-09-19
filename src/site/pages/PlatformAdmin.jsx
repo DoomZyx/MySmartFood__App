@@ -12,23 +12,35 @@ import PlatformTenantEditor, {
 import PlatformOpsBoard from "../components/PlatformOpsBoard/PlatformOpsBoard";
 import PlatformOpsModal from "../components/PlatformOpsBoard/PlatformOpsModal";
 import PlatformOnboardingTracker from "../components/PlatformOpsBoard/PlatformOnboardingTracker";
+import PlatformUserEditor from "../components/PlatformUserEditor/PlatformUserEditor";
+import PlatformStaffCreateForm from "../components/PlatformStaffEditor/PlatformStaffCreateForm";
+import PlatformStaffEditor from "../components/PlatformStaffEditor/PlatformStaffEditor";
+import PlatformRestaurantSupport from "../components/PlatformRestaurantSupport/PlatformRestaurantSupport";
 import {
   EMPTY_LABELS,
   STATUS_LABELS,
   buildOpsGroups,
   firstUsefulLane,
   formatOpsDate,
+  platformUserDeleteReason,
+  ownedRestaurantNames,
   itemsForLane,
   laneIdsFromGroups,
+  isDossierAwaitingReview,
   mergeRestaurants,
+  restaurantStage,
 } from "../utils/platformOpsLanes";
+import { hasPlatformCapability } from "../utils/platformAccess";
+import { dashboardHomeHref } from "../utils/dashboardPath";
 import "./PlatformAdmin.scss";
+import "../components/PlatformStaffEditor/PlatformStaffEditor.scss";
 
 const PlatformAdmin = () => {
   const { setAuth, refreshUser, user: authUser } = useAuth();
   const {
     tenants,
     fleet,
+    closed,
     contacts,
     demos,
     isLoading,
@@ -57,11 +69,31 @@ const PlatformAdmin = () => {
     createStaff,
     updateStaff,
     revokeStaff,
+    users,
+    usersTotal,
+    usersOffset,
+    loadUsers,
+    loadClosed,
+    ensureUser,
+    updateUser,
+    deleteUser,
+    ensureTenant,
     tenantUsers,
     tenantUsersLoading,
     loadTenantUsers,
+    addTenantUser,
+    removeTenantUser,
+    saveLeadNote,
+    convertLead,
     updateTenantUser,
+    tenantOps,
+    tenantOpsLoading,
+    tenantOpsError,
+    loadTenantOps,
+    updateTenantHours,
+    updateTenantMenuItem,
     uploadTenantDocument,
+    impersonateUser,
   } = usePlatformAdmin();
   const [lane, setLane] = useState("active");
   const [laneChosen, setLaneChosen] = useState(false);
@@ -76,22 +108,37 @@ const PlatformAdmin = () => {
   const [totpToken, setTotpToken] = useState("");
   const [oauthDenied, setOauthDenied] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [staffEmail, setStaffEmail] = useState("");
-  const [staffName, setStaffName] = useState("");
-  const [staffPassword, setStaffPassword] = useState("");
   const [staffFormError, setStaffFormError] = useState(null);
+  const [staffCreated, setStaffCreated] = useState(null);
   const [createDraft, setCreateDraft] = useState(EMPTY_TENANT_DRAFT);
   const [editDrafts, setEditDrafts] = useState({});
   const [clientFormError, setClientFormError] = useState(null);
   const [createdAccount, setCreatedAccount] = useState(null);
   const [userErrors, setUserErrors] = useState({});
   const [staffDrafts, setStaffDrafts] = useState({});
+  const [userSearch, setUserSearch] = useState("");
+  const [leadNotes, setLeadNotes] = useState({});
+  const [convertedLead, setConvertedLead] = useState(null);
+  const [userDrafts, setUserDrafts] = useState({});
+  const [userFormError, setUserFormError] = useState(null);
+  const [supportUserId, setSupportUserId] = useState(null);
   const isDevBypass = import.meta.env.DEV;
-  const canManageStaff = Boolean(authUser?.isPlatformOwner);
+  const can = (capability) => hasPlatformCapability(authUser, capability);
+  const canManageStaff = can("staff.manage");
+  const canCreateTenant = can("tenant.write");
+  const canWriteTenant = can("tenant.write");
+  const canLifecycle = can("tenant.lifecycle");
+  const canWriteUser = can("user.write");
+  const canDeleteUser = can("user.delete");
+  const canWriteMembership = can("membership.write");
+  const canWriteLead = can("lead.write");
+  const canConvertLead = can("lead.convert");
+  const canImpersonate = can("impersonate");
+  const canWriteOps = can("tenant.ops");
 
   const restaurants = useMemo(
-    () => mergeRestaurants(tenants, fleet),
-    [tenants, fleet]
+    () => mergeRestaurants(tenants, fleet, closed),
+    [tenants, fleet, closed]
   );
   const groups = useMemo(
     () =>
@@ -100,13 +147,16 @@ const PlatformAdmin = () => {
         contacts,
         demos,
         staff,
+        users,
+        usersTotal,
         canManageStaff,
+        canCreateTenant,
       }),
-    [restaurants, contacts, demos, staff, canManageStaff]
+    [restaurants, contacts, demos, staff, users, usersTotal, canManageStaff, canCreateTenant]
   );
   const items = useMemo(
-    () => itemsForLane(lane, { restaurants, contacts, demos, staff }),
-    [lane, restaurants, contacts, demos, staff]
+    () => itemsForLane(lane, { restaurants, contacts, demos, staff, users }),
+    [lane, restaurants, contacts, demos, staff, users]
   );
   const visibleLaneIds = useMemo(() => laneIdsFromGroups(groups), [groups]);
   const listTitle = useMemo(
@@ -130,7 +180,15 @@ const PlatformAdmin = () => {
       if (result?.elevated) {
         loadInbox();
         loadFleet();
-        if (result.user?.isPlatformOwner) loadStaff();
+        loadClosed();
+        const userId = new URLSearchParams(window.location.search).get("user");
+        loadUsers().then(() => {
+          if (cancelled || !userId) return;
+          ensureUser(userId).catch((err) => setUserFormError(err.message));
+        });
+        if (result.user && hasPlatformCapability(result.user, "staff.manage")) {
+          loadStaff();
+        }
       }
       if (result?.totpStep === "enroll") {
         loadTotpSetup().catch((err) => setLoginError(err.message));
@@ -139,7 +197,7 @@ const PlatformAdmin = () => {
     return () => {
       cancelled = true;
     };
-  }, [checkSession, loadInbox, loadFleet, loadStaff, loadTotpSetup, setAuth]);
+  }, [checkSession, loadInbox, loadFleet, loadClosed, loadStaff, loadUsers, loadTotpSetup, setAuth]);
 
   useEffect(() => {
     setEditDrafts((current) => {
@@ -165,19 +223,56 @@ const PlatformAdmin = () => {
 
   useEffect(() => {
     if (lane === "create" || isLoading) return;
-    const stillThere =
-      selected &&
-      items.some((item) => item.id === selected.id && item.kind === selected.kind);
-    if (stillThere) return;
+    if (!selected) return;
+    if (selected.kind === "tenant") {
+      if (restaurants.some((tenant) => tenant.id === selected.id)) return;
+    } else if (selected.kind === "user") {
+      return;
+    } else if (
+      items.some((item) => item.id === selected.id && item.kind === selected.kind)
+    ) {
+      return;
+    }
     setSelected(null);
-  }, [items, selected, isLoading, lane]);
+  }, [items, selected, isLoading, lane, restaurants]);
+
+  useEffect(() => {
+    if (!elevated) return;
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get("user");
+    if (!userId) return;
+    let cancelled = false;
+    setLaneChosen(true);
+    setLane("users");
+    setSelected({ kind: "user", id: userId });
+    return () => {
+      cancelled = true;
+    };
+  }, [elevated]);
+
+  useEffect(() => {
+    if (selected?.kind === "user") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("user", selected.id);
+      window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+      return;
+    }
+    if (elevated) {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("user")) {
+        url.searchParams.delete("user");
+        window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+      }
+    }
+  }, [selected, elevated]);
 
   useEffect(() => {
     if (!elevated || selected?.kind !== "tenant" || !selected.id) return;
     loadTenantUsers(selected.id).catch((err) => {
       setRowError((current) => ({ ...current, [selected.id]: err.message }));
     });
-  }, [elevated, selected?.kind, selected?.id, loadTenantUsers]);
+    loadTenantOps(selected.id).catch(() => {});
+  }, [elevated, selected?.kind, selected?.id, loadTenantUsers, loadTenantOps]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -202,6 +297,8 @@ const PlatformAdmin = () => {
         setShowSuccess(true);
         await loadInbox();
         await loadFleet();
+        await loadClosed();
+        await loadUsers();
         if (data.user?.isPlatformOwner) await loadStaff();
         return;
       }
@@ -226,6 +323,8 @@ const PlatformAdmin = () => {
       setShowSuccess(true);
       await loadInbox();
       await loadFleet();
+      await loadClosed();
+      await loadUsers();
       if (user?.isPlatformOwner) await loadStaff();
     } catch (err) {
       setLoginError(err.message);
@@ -238,7 +337,9 @@ const PlatformAdmin = () => {
     setLaneChosen(true);
     setLane(next);
     setSelected(null);
-    if (next === "active" || next === "suspended") loadFleet();
+    setSupportUserId(null);
+    if (next === "active" || next === "suspended" || next === "rejected") loadFleet();
+    if (next === "closed") loadClosed();
     if (
       next === "pending_payment" ||
       next === "pending_compliance" ||
@@ -251,12 +352,22 @@ const PlatformAdmin = () => {
     if (next === "staff" && canManageStaff) loadStaff();
   };
 
+  useEffect(() => {
+    if (!elevated || lane !== "users") return undefined;
+    const delay = userSearch.trim() ? 300 : 0;
+    const timer = window.setTimeout(() => {
+      loadUsers(userSearch, { limit: 50, offset: 0 });
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [elevated, lane, userSearch, loadUsers]);
+
   const closeModal = () => {
     if (lane === "create") {
       setLaneChosen(true);
       setLane("active");
     }
     setSelected(null);
+    setSupportUserId(null);
   };
 
   const setEditDraft = (tenantId, draft) => {
@@ -323,7 +434,6 @@ const PlatformAdmin = () => {
       const data = await createTenant(payload);
       setCreatedAccount({
         email: payload.email,
-        password: data.temporaryPassword || payload.password,
         name: data.tenant?.businessName || payload.name,
       });
       setCreateDraft(EMPTY_TENANT_DRAFT);
@@ -370,6 +480,14 @@ const PlatformAdmin = () => {
     }
   };
 
+  const handleSaveTenantHours = async (tenant, horairesOuverture) => {
+    await updateTenantHours(tenant.id, horairesOuverture);
+  };
+
+  const handleSaveTenantMenuItem = async (tenant, itemId, payload) => {
+    await updateTenantMenuItem(tenant.id, itemId, payload);
+  };
+
   const handleSaveStaff = async (event, member) => {
     event.preventDefault();
     setStaffFormError(null);
@@ -377,6 +495,7 @@ const PlatformAdmin = () => {
       name: member.name || "",
       email: member.email || "",
       password: "",
+      role: member.platformRole || "ops",
     };
     try {
       const payload = {
@@ -386,6 +505,9 @@ const PlatformAdmin = () => {
       if (String(draft.password || "").trim()) {
         payload.password = String(draft.password).trim();
       }
+      if (draft.role && !member.isPlatformOwner) {
+        payload.role = draft.role;
+      }
       await updateStaff(member.id, payload);
       setStaffDrafts((current) => ({
         ...current,
@@ -393,6 +515,7 @@ const PlatformAdmin = () => {
           name: draft.name,
           email: draft.email,
           password: "",
+          role: draft.role || member.platformRole || "ops",
         },
       }));
     } catch (err) {
@@ -400,20 +523,155 @@ const PlatformAdmin = () => {
     }
   };
 
-  const handleCreateStaff = async (event) => {
+  const handleSavePlatformUser = async (event, member) => {
     event.preventDefault();
-    setStaffFormError(null);
+    setUserFormError(null);
+    const draft = userDrafts[member.id] || {
+      name: member.name || "",
+      email: member.email || "",
+      password: "",
+      emailVerified: Boolean(member.emailVerified),
+    };
     try {
-      await createStaff({
-        email: staffEmail.trim(),
-        name: staffName.trim(),
-        password: staffPassword,
+      const payload = {
+        name: draft.name,
+        email: draft.email,
+        emailVerified: Boolean(draft.emailVerified),
+      };
+      if (String(draft.password || "").trim()) {
+        payload.password = String(draft.password).trim();
+      }
+      const updated = await updateUser(member.id, payload);
+      setUserDrafts((current) => ({
+        ...current,
+        [member.id]: {
+          name: updated?.name || draft.name,
+          email: updated?.email || draft.email,
+          password: "",
+          emailVerified: Boolean(updated?.emailVerified ?? draft.emailVerified),
+        },
+      }));
+    } catch (err) {
+      setUserFormError(err.message);
+    }
+  };
+
+  const handleChangeUserMembership = async (tenantSummary, role) => {
+    setUserFormError(null);
+    try {
+      await updateTenantUser(tenantSummary.id, selectedUser?.id || selected?.id, { role });
+      if (selected?.id) await ensureUser(selected.id);
+    } catch (err) {
+      setUserFormError(err.message);
+    }
+  };
+
+  const handleRemoveUserMembership = async (tenantSummary) => {
+    const label = tenantSummary.businessName || tenantSummary.name || "ce restaurant";
+    if (!window.confirm(`Retirer ce compte de ${label} ?`)) return;
+    setUserFormError(null);
+    try {
+      await removeTenantUser(tenantSummary.id, selectedUser?.id || selected?.id);
+      if (selected?.id) await ensureUser(selected.id);
+    } catch (err) {
+      setUserFormError(err.message);
+    }
+  };
+
+  const handleUnlockPlatformUser = async (member) => {
+    setUserFormError(null);
+    try {
+      await updateUser(member.id, { unlockDashboard: true });
+    } catch (err) {
+      setUserFormError(err.message);
+    }
+  };
+
+  const handleImpersonateUser = async (tenantSummary) => {
+    setUserFormError(null);
+    const userId = selectedUser?.id || selected?.id;
+    if (!userId || !tenantSummary?.id) {
+      setUserFormError("Impossible d'ouvrir le dashboard client.");
+      return;
+    }
+    try {
+      await impersonateUser({ userId, tenantId: tenantSummary.id });
+      localStorage.setItem("tenantId", tenantSummary.id);
+      window.location.assign(dashboardHomeHref());
+    } catch (err) {
+      setUserFormError(err.message);
+    }
+  };
+
+  const handleOpenUserRestaurant = async (tenantSummary) => {
+    setUserFormError(null);
+    if (!tenantSummary?.id) {
+      setUserFormError("Ce restaurant n'est plus disponible.");
+      return;
+    }
+    try {
+      const fromUserId = selected?.kind === "user" ? selected.id : supportUserId;
+      const tenant = await ensureTenant(tenantSummary.id, {
+        includeClosed: tenantSummary.status === "closed",
       });
-      setStaffEmail("");
-      setStaffName("");
-      setStaffPassword("");
+      const stage = restaurantStage(tenant);
+      const nextLane = [
+        "pending_payment",
+        "pending_compliance",
+        "ready",
+        "active",
+        "suspended",
+        "rejected",
+        "closed",
+      ].includes(stage)
+        ? stage
+        : "active";
+      if (fromUserId) setSupportUserId(fromUserId);
+      setLaneChosen(true);
+      setLane(nextLane);
+      setSelected({ kind: "tenant", id: tenant.id });
+    } catch (err) {
+      setUserFormError(err.message);
+    }
+  };
+
+  const handleCreateStaff = async ({ email, name, password, role }) => {
+    setStaffFormError(null);
+    setStaffCreated(null);
+    try {
+      const created = await createStaff({ email, name, password, role });
+      setStaffCreated(created);
     } catch (err) {
       setStaffFormError(err.message);
+      throw err;
+    }
+  };
+
+  const handleDeleteAccount = async (item) => {
+    const target = item.raw || item;
+    const reason = platformUserDeleteReason(authUser, target);
+    if (reason) {
+      if (item.kind === "staff") setStaffFormError(reason);
+      else setUserFormError(reason);
+      return;
+    }
+    const label = target.email || target.name || "ce compte";
+    const restaurants = ownedRestaurantNames(target);
+    const restaurantNote = restaurants.length
+      ? ` Ses restaurants seront aussi supprimés : ${restaurants.join(", ")}.`
+      : " S'il possède un restaurant, celui-ci sera aussi supprimé.";
+    const confirmed = window.confirm(
+      `Supprimer définitivement ${label} ?${restaurantNote} Cette action est irréversible.`
+    );
+    if (!confirmed) return;
+    setUserFormError(null);
+    setStaffFormError(null);
+    try {
+      await deleteUser(target.id);
+      if (selected?.id === target.id) setSelected(null);
+    } catch (err) {
+      if (item.kind === "staff") setStaffFormError(err.message);
+      else setUserFormError(err.message);
     }
   };
 
@@ -564,13 +822,17 @@ const PlatformAdmin = () => {
     selected?.kind === "demo" ? demos.find((demo) => demo.id === selected.id) : null;
   const selectedStaff =
     selected?.kind === "staff" ? staff.find((member) => member.id === selected.id) : null;
+  const selectedUser =
+    selected?.kind === "user" ? users.find((item) => item.id === selected.id) : null;
 
   const canAcceptSelfService = (tenant) =>
     tenant.onboardedBy === "platform" || Boolean(tenant.dossierComplete);
 
-  const renderTenantActions = (tenant) => (
+  const renderTenantActions = (tenant) =>
+    canLifecycle ? (
     <div className="platform-admin-assign">
-      {tenant.status !== "active" && tenant.status !== "suspended" && (
+      {(tenant.status !== "active" && tenant.status !== "suspended") ||
+      isDossierAwaitingReview(tenant) ? (
         <>
           <button
             type="button"
@@ -578,30 +840,34 @@ const PlatformAdmin = () => {
             disabled={busyId === tenant.id || !canAcceptSelfService(tenant)}
             onClick={() => handleActivate(tenant.id)}
           >
-            Accepter
+            {tenant.status === "active" ? "Valider le dossier" : "Accepter"}
           </button>
-          <input
-            type="text"
-            value={rejectDrafts[tenant.id] || ""}
-            onChange={(event) =>
-              setRejectDrafts((current) => ({
-                ...current,
-                [tenant.id]: event.target.value,
-              }))
-            }
-            placeholder="Motif du refus"
-            disabled={busyId === tenant.id}
-          />
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={busyId === tenant.id}
-            onClick={() => handleReject(tenant.id)}
-          >
-            Refuser
-          </button>
+          {tenant.status !== "active" ? (
+            <>
+              <input
+                type="text"
+                value={rejectDrafts[tenant.id] || ""}
+                onChange={(event) =>
+                  setRejectDrafts((current) => ({
+                    ...current,
+                    [tenant.id]: event.target.value,
+                  }))
+                }
+                placeholder="Motif du refus"
+                disabled={busyId === tenant.id}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busyId === tenant.id}
+                onClick={() => handleReject(tenant.id)}
+              >
+                Refuser
+              </button>
+            </>
+          ) : null}
         </>
-      )}
+      ) : null}
       {tenant.status === "active" && (
         <button
           type="button"
@@ -622,20 +888,44 @@ const PlatformAdmin = () => {
           Réactiver
         </button>
       )}
-      <button
-        type="button"
-        className="btn btn-secondary"
-        disabled={busyId === tenant.id}
-        onClick={() => handleClose(tenant)}
-      >
-        Supprimer
-      </button>
+      {tenant.status !== "closed" ? (
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={busyId === tenant.id}
+          onClick={() => handleClose(tenant)}
+        >
+          Supprimer
+        </button>
+      ) : null}
     </div>
-  );
+    ) : null;
 
   const renderLeadActions = (kind, item) => (
     <div className="platform-admin-assign">
-      {item.status === "nouveau" && (
+      <label>
+        Note interne
+        <textarea
+          rows={3}
+          maxLength={2000}
+          value={leadNotes[item.id] ?? item.internalNote ?? ""}
+          onChange={(event) =>
+            setLeadNotes((current) => ({ ...current, [item.id]: event.target.value }))
+          }
+          readOnly={!canWriteLead}
+        />
+      </label>
+      {canWriteLead ? (
+      <button
+        type="button"
+        className="btn btn-secondary"
+        disabled={busyId === item.id}
+        onClick={() => saveLeadNote(kind, item.id, leadNotes[item.id] ?? item.internalNote ?? "")}
+      >
+        Enregistrer la note
+      </button>
+      ) : null}
+      {canWriteLead && item.status === "nouveau" && (
         <button
           type="button"
           className="btn btn-secondary"
@@ -649,6 +939,7 @@ const PlatformAdmin = () => {
           Prendre en cours
         </button>
       )}
+      {canWriteLead ? (
       <button
         type="button"
         className="btn btn-primary"
@@ -661,12 +952,45 @@ const PlatformAdmin = () => {
       >
         Marquer traité
       </button>
+      ) : null}
+      {canConvertLead && !item.convertedTenantId ? (
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={busyId === `convert-${item.id}`}
+          onClick={async () => {
+            try {
+              const data = await convertLead(kind, item.id);
+              setConvertedLead({
+                email: item.email,
+                password: data.temporaryPassword,
+                tenantId: data.tenant?.id,
+              });
+              if (data.tenant?.id) {
+                setLaneChosen(true);
+                setLane("active");
+                setSelected({ kind: "tenant", id: data.tenant.id });
+              }
+            } catch (err) {
+              setUserFormError(err.message);
+            }
+          }}
+        >
+          Convertir en restaurant
+        </button>
+      ) : null}
+      {convertedLead?.tenantId && convertedLead.password ? (
+        <p role="status">
+          Restaurant créé. Mot de passe temporaire : {convertedLead.password}. Notez-le,
+          il ne sera plus réaffiché.
+        </p>
+      ) : null}
     </div>
   );
 
   let detail = null;
 
-  if (lane === "create") {
+  if (lane === "create" && canCreateTenant) {
     detail = (
       <div className="platform-admin-card">
         <PlatformTenantEditor
@@ -680,44 +1004,124 @@ const PlatformAdmin = () => {
           {createdAccount && (
             <p role="status">
               Compte créé pour {createdAccount.name}. E-mail : {createdAccount.email}.
-              Mot de passe : {createdAccount.password}. Notez-le, il ne sera plus
-              réaffiché.
+              Le mot de passe saisi ne sera plus réaffiché.
             </p>
           )}
         </PlatformTenantEditor>
       </div>
     );
   } else if (selectedTenant) {
+    const fromUser = supportUserId
+      ? users.find((item) => item.id === supportUserId)
+      : null;
     detail = (
       <>
-        <PlatformOnboardingTracker tenant={selectedTenant} />
-        <div className="platform-admin-card">
-          <PlatformTenantEditor
-            mode="edit"
-            tenant={{
-              ...selectedTenant,
-              status: STATUS_LABELS[selectedTenant.status] || selectedTenant.status,
-            }}
-            draft={editDrafts[selectedTenant.id] || tenantToDraft(selectedTenant)}
-            onChange={(draft) => setEditDraft(selectedTenant.id, draft)}
-            onSubmit={(event) => handleSaveTenant(event, selectedTenant)}
-            busy={busyId === selectedTenant.id}
-            error={rowError[selectedTenant.id]}
-            users={tenantUsers[selectedTenant.id] || []}
-            usersLoading={Boolean(tenantUsersLoading[selectedTenant.id])}
-            onSaveUser={(userId, payload) =>
-              handleSaveUser(selectedTenant, userId, payload)
-            }
-            userBusyId={busyId}
-            userErrors={userErrors}
-            onUploadIdentity={(kind, file) =>
-              uploadTenantDocument(selectedTenant.id, kind, file)
-            }
-            uploadBusyId={busyId}
-          >
-            {renderTenantActions(selectedTenant)}
-          </PlatformTenantEditor>
-        </div>
+        {fromUser ? (
+          <div className="platform-admin-assign">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                setLaneChosen(true);
+                setLane("users");
+                setSelected({ kind: "user", id: fromUser.id });
+              }}
+            >
+              Retour au compte {fromUser.name || fromUser.email}
+            </button>
+          </div>
+        ) : null}
+        {convertedLead?.tenantId === selectedTenant.id && convertedLead.password ? (
+          <p role="status">
+            Mot de passe temporaire : {convertedLead.password}. Notez-le, il ne
+            sera plus réaffiché.
+          </p>
+        ) : null}
+        <PlatformRestaurantSupport
+          tenant={selectedTenant}
+          tenantId={selectedTenant.id}
+          users={tenantUsers[selectedTenant.id] || []}
+          usersLoading={Boolean(tenantUsersLoading[selectedTenant.id])}
+          onSaveUser={
+            canWriteUser
+              ? (userId, payload) => handleSaveUser(selectedTenant, userId, payload)
+              : undefined
+          }
+          onAddUser={
+            canWriteMembership
+              ? (payload) => addTenantUser(selectedTenant.id, payload)
+              : undefined
+          }
+          onRemoveUser={
+            canWriteMembership
+              ? async (userId) => {
+                  if (!window.confirm("Retirer ce compte du restaurant ?")) return;
+                  await removeTenantUser(selectedTenant.id, userId);
+                }
+              : undefined
+          }
+          userBusyId={busyId}
+          userErrors={userErrors}
+          ops={tenantOps[selectedTenant.id]}
+          opsLoading={Boolean(tenantOpsLoading[selectedTenant.id])}
+          opsError={tenantOpsError[selectedTenant.id]}
+          onSaveHours={
+            canWriteOps
+              ? (horaires) => handleSaveTenantHours(selectedTenant, horaires)
+              : undefined
+          }
+          onSaveMenuItem={
+            canWriteOps
+              ? (itemId, payload) =>
+                  handleSaveTenantMenuItem(selectedTenant, itemId, payload)
+              : undefined
+          }
+          busyId={busyId}
+        >
+          <PlatformOnboardingTracker tenant={selectedTenant} />
+          <div className="platform-admin-card">
+            {selectedTenant.status === "closed" ? (
+              <p>Établissement fermé. Consultation uniquement.</p>
+            ) : null}
+            <PlatformTenantEditor
+              mode="edit"
+              showAccess={false}
+              tenant={{
+                ...selectedTenant,
+                status: STATUS_LABELS[selectedTenant.status] || selectedTenant.status,
+              }}
+              draft={editDrafts[selectedTenant.id] || tenantToDraft(selectedTenant)}
+              onChange={(draft) => setEditDraft(selectedTenant.id, draft)}
+              onSubmit={(event) => {
+                if (selectedTenant.status === "closed") {
+                  event.preventDefault();
+                  return;
+                }
+                handleSaveTenant(event, selectedTenant);
+              }}
+              readOnly={!canWriteTenant || selectedTenant.status === "closed"}
+              busy={busyId === selectedTenant.id || selectedTenant.status === "closed"}
+              error={rowError[selectedTenant.id]}
+              users={tenantUsers[selectedTenant.id] || []}
+              usersLoading={Boolean(tenantUsersLoading[selectedTenant.id])}
+              onSaveUser={
+                canWriteUser
+                  ? (userId, payload) => handleSaveUser(selectedTenant, userId, payload)
+                  : undefined
+              }
+              userBusyId={busyId}
+              userErrors={userErrors}
+              onUploadIdentity={
+                canWriteTenant
+                  ? (kind, file) => uploadTenantDocument(selectedTenant.id, kind, file)
+                  : undefined
+              }
+              uploadBusyId={busyId}
+            >
+              {renderTenantActions(selectedTenant)}
+            </PlatformTenantEditor>
+          </div>
+        </PlatformRestaurantSupport>
       </>
     );
   } else if (selectedContact) {
@@ -797,149 +1201,140 @@ const PlatformAdmin = () => {
       name: selectedStaff.name || "",
       email: selectedStaff.email || "",
       password: "",
+      role: selectedStaff.platformRole || "ops",
     };
     detail = (
-      <form
-        className="platform-admin-login"
+      <PlatformStaffEditor
+        user={selectedStaff}
+        draft={staffDraft}
+        onChange={(draft) =>
+          setStaffDrafts((current) => ({ ...current, [selectedStaff.id]: draft }))
+        }
         onSubmit={(event) => handleSaveStaff(event, selectedStaff)}
-      >
-        <h2>{selectedStaff.name || selectedStaff.email}</h2>
-        <p>
-          {selectedStaff.isPlatformOwner ? "Propriétaire" : "Admin"}
-          {" · "}
-          Dernière connexion : {formatOpsDate(selectedStaff.lastLoginAt)}
-        </p>
-        <label>
-          Nom
-          <input
-            type="text"
-            value={staffDraft.name}
-            onChange={(event) =>
-              setStaffDrafts((current) => ({
-                ...current,
-                [selectedStaff.id]: { ...staffDraft, name: event.target.value },
-              }))
-            }
-            autoComplete="off"
-          />
-        </label>
-        <label>
-          E-mail
-          <input
-            type="email"
-            required
-            value={staffDraft.email}
-            onChange={(event) =>
-              setStaffDrafts((current) => ({
-                ...current,
-                [selectedStaff.id]: { ...staffDraft, email: event.target.value },
-              }))
-            }
-            autoComplete="off"
-          />
-        </label>
-        <label>
-          Nouveau mot de passe
-          <input
-            type="text"
-            minLength={8}
-            value={staffDraft.password}
-            onChange={(event) =>
-              setStaffDrafts((current) => ({
-                ...current,
-                [selectedStaff.id]: {
-                  ...staffDraft,
-                  password: event.target.value,
-                },
-              }))
-            }
-            autoComplete="off"
-          />
-        </label>
-        {staffFormError && (
-          <p className="platform-admin-error" role="alert">
-            {staffFormError}
-          </p>
-        )}
-        <div className="platform-admin-assign">
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={busyId === selectedStaff.id}
-          >
-            {busyId === selectedStaff.id ? "Enregistrement..." : "Enregistrer"}
-          </button>
-          {!selectedStaff.isPlatformOwner && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={busyId === selectedStaff.id}
-              onClick={() => handleRevokeStaff(selectedStaff)}
-            >
-              Retirer l'accès
-            </button>
-          )}
-        </div>
-      </form>
+        busy={busyId === selectedStaff.id}
+        error={staffFormError}
+        onRevoke={handleRevokeStaff}
+        onDelete={
+          selectedStaff.isPlatformOwner
+            ? undefined
+            : () => handleDeleteAccount({ kind: "staff", raw: selectedStaff })
+        }
+      />
+    );
+  } else if (selectedUser) {
+    const userDraft = userDrafts[selectedUser.id] || {
+      name: selectedUser.name || "",
+      email: selectedUser.email || "",
+      password: "",
+      emailVerified: Boolean(selectedUser.emailVerified),
+    };
+    detail = (
+      <PlatformUserEditor
+        user={selectedUser}
+        draft={userDraft}
+        onChange={(draft) =>
+          setUserDrafts((current) => ({ ...current, [selectedUser.id]: draft }))
+        }
+        onSubmit={(event) => handleSavePlatformUser(event, selectedUser)}
+        busy={Boolean(busyId)}
+        error={userFormError}
+        canEdit={
+          canWriteUser && (!selectedUser.isPlatformAdmin || canManageStaff)
+        }
+        onUnlockDashboard={
+          canWriteUser ? () => handleUnlockPlatformUser(selectedUser) : undefined
+        }
+        onOpenRestaurant={handleOpenUserRestaurant}
+        onChangeMembership={canWriteMembership ? handleChangeUserMembership : undefined}
+        onRemoveMembership={canWriteMembership ? handleRemoveUserMembership : undefined}
+        onImpersonate={
+          canImpersonate && !selectedUser.isPlatformAdmin
+            ? handleImpersonateUser
+            : undefined
+        }
+        onDelete={
+          !canDeleteUser || platformUserDeleteReason(authUser, selectedUser)
+            ? undefined
+            : () => handleDeleteAccount({ kind: "user", raw: selectedUser })
+        }
+      />
     );
   }
 
   const staffCreateForm =
     lane === "staff" && canManageStaff ? (
-      <form className="platform-admin-login platform-ops-staff-form" onSubmit={handleCreateStaff}>
-        <h2>Créer un admin back-office</h2>
-        <p>
-          Même accès que vous sur les restaurants et les instances. Seul votre
-          compte gère les comptes.
-        </p>
-        <label>
-          Nom
+      <PlatformStaffCreateForm
+        onSubmit={handleCreateStaff}
+        busy={busyId === "create-staff"}
+        error={!selectedStaff ? staffFormError : null}
+        success={
+          staffCreated
+            ? `Compte créé pour ${staffCreated.name || staffCreated.email}.`
+            : null
+        }
+      />
+    ) : null;
+
+  const userSearchForm =
+    lane === "users" ? (
+      <form
+        className="pse-search"
+        onSubmit={(event) => {
+          event.preventDefault();
+          loadUsers(userSearch, { limit: 50, offset: 0 });
+        }}
+      >
+        <label className="pse-field" htmlFor="platform-user-search">
+          <span className="pse-label">Rechercher un compte</span>
           <input
-            type="text"
-            value={staffName}
-            onChange={(event) => setStaffName(event.target.value)}
+            id="platform-user-search"
+            type="search"
+            value={userSearch}
+            onChange={(event) => setUserSearch(event.target.value)}
+            placeholder="Nom, e-mail, restaurant, SIRET ou n° Twilio"
             autoComplete="off"
           />
         </label>
-        <label>
-          E-mail
-          <input
-            type="email"
-            required
-            value={staffEmail}
-            onChange={(event) => setStaffEmail(event.target.value)}
-            autoComplete="off"
-          />
-        </label>
-        <label>
-          Mot de passe
-          <input
-            type="password"
-            required
-            minLength={8}
-            value={staffPassword}
-            onChange={(event) => setStaffPassword(event.target.value)}
-            autoComplete="new-password"
-          />
-        </label>
-        {staffFormError && !selectedStaff && (
-          <p className="platform-admin-error" role="alert">
-            {staffFormError}
+        {usersTotal ? (
+          <p className="pse-search-count">
+            {usersTotal} compte{usersTotal > 1 ? "s" : ""}
           </p>
-        )}
-        <button
-          type="submit"
-          className="btn btn-primary"
-          disabled={busyId === "create-staff"}
-        >
-          {busyId === "create-staff" ? "Création..." : "Créer le compte"}
-        </button>
+        ) : null}
+        {userFormError ? (
+          <p className="pse-error" role="alert">
+            {userFormError}
+          </p>
+        ) : null}
+        {usersTotal > 50 ? (
+          <div className="platform-admin-assign">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={usersOffset <= 0}
+              onClick={() =>
+                loadUsers(userSearch, { limit: 50, offset: Math.max(0, usersOffset - 50) })
+              }
+            >
+              Précédent
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={usersOffset + 50 >= usersTotal}
+              onClick={() =>
+                loadUsers(userSearch, { limit: 50, offset: usersOffset + 50 })
+              }
+            >
+              Suivant
+            </button>
+          </div>
+        ) : null}
       </form>
     ) : null;
 
   const modalOpen =
     lane === "create" ||
-    Boolean(selectedTenant || selectedContact || selectedDemo || selectedStaff);
+    Boolean(selectedTenant || selectedContact || selectedDemo || selectedStaff || selectedUser);
 
   return (
     <PageContainer className="platform-ops-page">
@@ -956,13 +1351,27 @@ const PlatformAdmin = () => {
         onLaneChange={selectLane}
         items={items}
         selectedId={selected ? `${selected.kind}-${selected.id}` : null}
-        onSelectItem={(item) => setSelected({ kind: item.kind, id: item.id })}
+        actor={authUser}
+        busyId={busyId}
+        onDeleteItem={handleDeleteAccount}
+        onSelectItem={(item) => {
+          setSelected({ kind: item.kind, id: item.id });
+          if (item.kind === "user") {
+            setUserFormError(null);
+            ensureUser(item.id).catch((err) => setUserFormError(err.message));
+          }
+        }}
         isLoading={isLoading}
         error={error}
         emptyLabel={EMPTY_LABELS[lane] || "Aucun élément."}
         listTitle={listTitle}
         hideList={lane === "create"}
-        listHeader={staffCreateForm}
+        listHeader={
+          <>
+            {staffCreateForm}
+            {userSearchForm}
+          </>
+        }
       />
       <PlatformOpsModal isOpen={modalOpen} onClose={closeModal}>
         {detail}

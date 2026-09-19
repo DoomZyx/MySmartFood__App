@@ -1,6 +1,6 @@
 /**
  * Dashboard opérationnel restaurant.
- * Données chargées via useDashboard (API : commandes, réservations, appels, pricing).
+ * Données chargées via useDashboard (GET /api/dashboard/today).
  */
 import ActiveOrders from "./ActiveOrders";
 import ActiveReservations from "./ActiveReservations";

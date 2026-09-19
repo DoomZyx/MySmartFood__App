@@ -58,7 +58,7 @@ function Menu() {
           aria-label={t("menu.closeMenu")}
         />
       )}
-      <nav className={isMenuOpen ? "open" : ""}>
+      <nav className={isMenuOpen ? "dashboard-nav open" : "dashboard-nav"}>
         <button
           type="button"
           className="nav-close"

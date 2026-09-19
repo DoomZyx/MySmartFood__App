@@ -3,8 +3,12 @@ import { Save, CheckCircle, AlertCircle } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useRestaurateurProfile } from "../../hooks/useRestaurateurProfile";
 import NotificationToast from "../Shared/NotificationToast/NotificationToast";
+import DossierDocumentCopies from "../DossierDocumentCopies/DossierDocumentCopies";
 import { fileToWebp, PHOTO_ACCEPT, PHOTO_MAX_MB } from "../../utils/imageWebp";
-import { clearPaidPendingDossier } from "@shared/companyOnboarding";
+import {
+  canOpenCompanyDossierForm,
+  clearPaidPendingDossier,
+} from "@shared/companyOnboarding";
 import "./RestaurateurProfilForm.scss";
 
 const PAYS_OPTIONS = [
@@ -71,9 +75,10 @@ const RestaurateurProfilForm = ({
     resetForm,
   } = useRestaurateurProfile();
 
-  const docsAlreadySent = Boolean(user?.twilioDocsSubmittedAt);
   const establishmentComplete = isEstablishmentComplete(formData);
-  const showDossierStep = companyFormStep === 2 && !docsAlreadySent;
+  const hasNewFiles = Boolean(idRectoFile && idVersoFile && addrDocFile);
+  const canOpenDossier = canOpenCompanyDossierForm(user);
+  const showDossierStep = companyFormStep === 2 && canOpenDossier;
 
   useEffect(() => {
     loadProfile();
@@ -127,7 +132,7 @@ const RestaurateurProfilForm = ({
     }));
     if (
       !didAutoAdvance.current &&
-      !user?.twilioDocsSubmittedAt &&
+      canOpenCompanyDossierForm(user) &&
       isEstablishmentComplete(next)
     ) {
       didAutoAdvance.current = true;
@@ -157,7 +162,7 @@ const RestaurateurProfilForm = ({
       await submitProfile(formData);
       await refreshUser();
       setToast({ visible: true, message: "Informations enregistrées avec succès." });
-      if (!docsAlreadySent) {
+      if (canOpenDossier) {
         onCompanyFormStepChange?.(2);
       }
     } catch (_) {
@@ -203,6 +208,16 @@ const RestaurateurProfilForm = ({
       onCompanyFormStepChange?.(1);
       return;
     }
+    if (!hasNewFiles) {
+      try {
+        await submitProfile(formData);
+        await refreshUser();
+        setToast({ visible: true, message: "Informations enregistrées avec succès." });
+      } catch (_) {
+        // erreur gérée dans le hook
+      }
+      return;
+    }
     const usage = (formData.twilioNumberUsage || "").trim();
     if (usage.length < 15) {
       setDossierLocalError(
@@ -231,6 +246,7 @@ const RestaurateurProfilForm = ({
       });
       clearPaidPendingDossier();
       await refreshUser();
+      await loadProfile();
       setIdRectoFile(null);
       setIdVersoFile(null);
       setAddrDocFile(null);
@@ -262,6 +278,7 @@ const RestaurateurProfilForm = ({
         autoHide={4000}
         type="success"
       />
+      <DossierDocumentCopies documents={profile?.documents} />
       {!showDossierStep ? (
       <form onSubmit={handleSubmit} className="restaurateur-profil-form">
       <div className="form-row">
@@ -465,7 +482,7 @@ const RestaurateurProfilForm = ({
         </div>
       )}
 
-      {!docsAlreadySent && (
+      {canOpenDossier && (
         <button
           type="button"
           className="btn btn-primary submit-btn"
@@ -512,7 +529,6 @@ const RestaurateurProfilForm = ({
           className="form-input"
           rows={4}
           maxLength={2000}
-          required
           placeholder="Ex : réception des appels clients pour réservations et informations sur la carte et les horaires."
           disabled={isSubmittingOnboarding}
         />
@@ -531,7 +547,6 @@ const RestaurateurProfilForm = ({
               inputMode="numeric"
               autoComplete="off"
               maxLength={17}
-              required
               placeholder="14 chiffres, ou 9 chiffres pour le SIREN"
               disabled={isSubmittingOnboarding}
             />
@@ -602,8 +617,13 @@ const RestaurateurProfilForm = ({
                 <div className="spinner" />
                 Envoi du dossier...
               </>
-            ) : (
+            ) : hasNewFiles ? (
               <>Transmettre le dossier Twilio</>
+            ) : (
+              <>
+                <Save className="icon" />
+                Enregistrer les informations
+              </>
             )}
           </button>
     </form>

@@ -8,7 +8,7 @@ import {
   registerApi,
   loginWithGoogle,
 } from "../../../services/authService";
-import { followSiteAuthPath, isPlatformAdminUser } from "@shared/postSiteAuthPath";
+import { followSiteAuthPath } from "@shared/postSiteAuthPath";
 import AuthSuccessModal from "../AuthSuccessModal/AuthSuccessModal";
 import "./LoginModal.scss";
 
@@ -124,11 +124,6 @@ const LoginModal = ({ isOpen, onClose }) => {
         ? await registerApi(email.trim(), password)
         : await loginWithEmailPassword(email.trim(), password);
       setAuth(user);
-      if (isPlatformAdminUser(user)) {
-        onClose();
-        followSiteAuthPath(navigate, user, loginIntent);
-        return;
-      }
       setSuccessUser(user);
     } catch (err) {
       setError(err.message || (isRegisterMode ? "Inscription impossible." : "Connexion impossible."));

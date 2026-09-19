@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { CreditCard, LayoutDashboard } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { PageContainer, Hero, Section } from "../components";
 import RestaurateurProfilForm from "../components/RestaurateurProfil/RestaurateurProfilForm";
 import OnboardingNoticeModal from "../components/Shared/OnboardingNoticeModal/OnboardingNoticeModal";
@@ -10,34 +10,36 @@ import { usePricingData } from "../hooks/usePricingData";
 import { canOpenDashboard } from "../services/syncDashboardSession";
 import { dashboardHomeHref } from "../utils/dashboardPath";
 import {
+  canOpenCompanyDossierForm,
   canResumeCompanyDossier,
   clearPaidPendingDossier,
+  isDeveloperUser,
   markPaidPendingDossier,
   stillNeedsPayment,
 } from "@shared/companyOnboarding";
+import { getAccountStatus } from "../utils/accountStatus";
 import "./MonEspace.scss";
 
 const MonEspace = () => {
   const { user, refreshUser } = useAuth();
-  const { syncState, error: billingError } = useMonEspaceBilling();
-  const { plans } = usePricingData();
+  const { syncState, error: billingError, startBetaCheckout, isLoading: isPaying } =
+    useMonEspaceBilling();
+  const { visiblePlans } = usePricingData();
   const [searchParams, setSearchParams] = useSearchParams();
   const checkoutSuccess = searchParams.get("checkout") === "success";
   const paymentConfirmed = Boolean(user?.hasActiveSubscription);
+  const isDeveloper = isDeveloperUser(user);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
 
-  const subscriptionLabel =
-    user?.planName ||
-    (user?.planId ? plans.find((p) => p.id === user.planId)?.name : null) ||
-    user?.subscriptionPlan ||
-    null;
-  const displaySubscription = subscriptionLabel || "Aucun abonnement actif";
+  const accountStatus = getAccountStatus(user);
   const hasAppAccess = canOpenDashboard(user);
-  const needsPayment = stillNeedsPayment(user) && !paymentConfirmed;
+  const needsPayment = !isDeveloper && stillNeedsPayment(user) && !paymentConfirmed;
   const needsDossier = canResumeCompanyDossier(user);
   const pendingReview =
-    user?.onboardingStatus === "pending_review" ||
-    (Boolean(user?.twilioDocsSubmittedAt) && !hasAppAccess);
+    !isDeveloper &&
+    (user?.onboardingStatus === "pending_review" ||
+      (Boolean(user?.twilioDocsSubmittedAt) && !hasAppAccess));
+  const showCompanySteps = Boolean(user);
 
   const [companyFormStep, setCompanyFormStep] = useState(1);
   const [establishmentReady, setEstablishmentReady] = useState(false);
@@ -48,13 +50,17 @@ const MonEspace = () => {
   }, [refreshUser]);
 
   useEffect(() => {
+    if (isDeveloper) {
+      clearPaidPendingDossier();
+      return;
+    }
     if (checkoutSuccess && user?.id) {
       markPaidPendingDossier(user.id);
     }
-  }, [checkoutSuccess, user?.id]);
+  }, [checkoutSuccess, isDeveloper, user?.id]);
 
   useEffect(() => {
-    if (user?.twilioDocsSubmittedAt || hasAppAccess) {
+    if (isDeveloper || user?.twilioDocsSubmittedAt || hasAppAccess) {
       clearPaidPendingDossier();
       return;
     }
@@ -62,6 +68,7 @@ const MonEspace = () => {
       markPaidPendingDossier(user.id);
     }
   }, [
+    isDeveloper,
     user?.id,
     user?.hasActiveSubscription,
     user?.onboardingStatus,
@@ -89,12 +96,12 @@ const MonEspace = () => {
   }, [companyFormStep, scrollToId]);
 
   useEffect(() => {
-    if (!user?.id || !user?.hasActiveSubscription) return;
+    if (isDeveloper || !user?.id || !user?.hasActiveSubscription) return;
     markPaidPendingDossier(user.id);
     if (checkoutSuccess || syncState === "ok") {
       setShowCheckoutModal(true);
     }
-  }, [syncState, user?.hasActiveSubscription, user?.id, checkoutSuccess]);
+  }, [isDeveloper, syncState, user?.hasActiveSubscription, user?.id, checkoutSuccess]);
 
   const closeCheckoutModal = () => {
     setShowCheckoutModal(false);
@@ -106,66 +113,88 @@ const MonEspace = () => {
     goToCompanyStep(establishmentReady ? 2 : 1);
   };
 
+  const payBeta = async () => {
+    const planId = visiblePlans[0]?.id || 6;
+    try {
+      await startBetaCheckout(planId);
+    } catch {
+      // error already exposed by useMonEspaceBilling
+    }
+  };
+
   return (
     <PageContainer>
       <Hero
         title="Mon "
         gradientText="espace"
-        description="Le tableau de bord s'ouvre après paiement, dépôt du formulaire d'entreprise, puis validation de votre dossier."
+        description={
+          isDeveloper
+            ? "Compte développeur : le paiement et la validation client ne sont pas exigés. Vous pouvez renseigner l'établissement et le dossier entreprise pour utiliser les fonctionnalités."
+            : "Le tableau de bord s'ouvre après paiement, dépôt du formulaire d'entreprise, puis validation de votre dossier."
+        }
       />
       <Section variant="alt">
         <div className="mon-espace-form-wrapper">
-          <ol className="mon-espace-steps">
-            <li
-              className={!needsPayment ? "is-done" : "is-current"}
-              role="button"
-              tabIndex={0}
-              onClick={() => scrollToId("mon-espace-paiement")}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  scrollToId("mon-espace-paiement");
+          {showCompanySteps ? (
+            <ol className="mon-espace-steps">
+              <li
+                className={!needsPayment ? "is-done" : "is-current"}
+                role="button"
+                tabIndex={0}
+                onClick={() => scrollToId("mon-espace-paiement")}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    scrollToId("mon-espace-paiement");
+                  }
+                }}
+              >
+                Paiement
+              </li>
+              <li
+                className={
+                  pendingReview || hasAppAccess
+                    ? "is-done"
+                    : companyFormStep === 2 || needsDossier
+                      ? "is-current"
+                      : ""
                 }
-              }}
-            >
-              Paiement
-            </li>
-            <li
-              className={
-                pendingReview || hasAppAccess
-                  ? "is-done"
-                  : companyFormStep === 2 || needsDossier
-                    ? "is-current"
-                    : ""
-              }
-              role="button"
-              tabIndex={0}
-              onClick={() => goToCompanyStep(establishmentReady ? 2 : 1)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  goToCompanyStep(establishmentReady ? 2 : 1);
-                }
-              }}
-            >
-              Formulaire d&apos;entreprise
-            </li>
-            <li className={hasAppAccess ? "is-done" : pendingReview ? "is-current" : ""}>
-              Validation
-            </li>
-            <li className={hasAppAccess ? "is-done" : ""}>Tableau de bord</li>
-          </ol>
+                role="button"
+                tabIndex={0}
+                onClick={() => goToCompanyStep(2)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    goToCompanyStep(2);
+                  }
+                }}
+              >
+                Formulaire d&apos;entreprise
+              </li>
+              <li className={hasAppAccess ? "is-done" : pendingReview ? "is-current" : ""}>
+                Validation
+              </li>
+              <li className={hasAppAccess ? "is-done" : ""}>Tableau de bord</li>
+            </ol>
+          ) : null}
 
           <div id="mon-espace-paiement" className="mon-espace-subscription">
             <CreditCard className="mon-espace-subscription-icon" />
             <div>
-              <h3 className="mon-espace-subscription-title">
-                Votre abonnement
-              </h3>
-              <p className="mon-espace-subscription-value">
-                {displaySubscription}
-              </p>
+              <h3 className="mon-espace-subscription-title">Votre statut</h3>
+              <p className="mon-espace-subscription-value">{accountStatus.label}</p>
+              <p className="mon-espace-subscription-detail">{accountStatus.detail}</p>
             </div>
+            {needsPayment ? (
+              <button
+                type="button"
+                className="mon-espace-instance-required-btn"
+                disabled={isPaying}
+                onClick={payBeta}
+              >
+                {isPaying ? "Redirection..." : "Payer la beta"}
+              </button>
+            ) : null}
           </div>
 
           {hasAppAccess && (
@@ -176,8 +205,9 @@ const MonEspace = () => {
                   Application mySmartFood
                 </h3>
                 <p className="mon-espace-app-access-desc">
-                  Votre dossier a été validé. Accédez au tableau de bord,
-                  commandes et réservations.
+                  {isDeveloper
+                    ? "Votre accès développeur est ouvert. Accédez au tableau de bord, commandes et réservations."
+                    : "Votre dossier a été validé. Accédez au tableau de bord, commandes et réservations."}
                 </p>
                 <a href={dashboardHomeHref()} className="mon-espace-app-access-link">
                   Ouvrir l&apos;application
@@ -194,13 +224,21 @@ const MonEspace = () => {
                   Paiement requis
                 </h3>
                 <p className="mon-espace-instance-required-desc">
-                  Réglez l&apos;abonnement Stripe. Ensuite, remplissez le
+                  Réglez l&apos;abonnement beta Stripe (150 €/mois). Ensuite, remplissez le
                   formulaire ci-dessous. Le tableau de bord reste fermé tant
                   que le dossier n&apos;est pas validé.
                 </p>
                 {billingError ? (
                   <p className="mon-espace-instance-required-desc">{billingError}</p>
                 ) : null}
+                <button
+                  type="button"
+                  className="mon-espace-instance-required-btn"
+                  disabled={isPaying}
+                  onClick={payBeta}
+                >
+                  {isPaying ? "Redirection..." : "Payer la beta — 150 €/mois"}
+                </button>
               </div>
             </div>
           )}
@@ -213,11 +251,9 @@ const MonEspace = () => {
                   Formulaire d&apos;inscription d&apos;entreprise
                 </h3>
                 <p className="mon-espace-instance-required-desc">
-                  Reprenez le formulaire ci-dessous : établissement, SIRET (ou
-                  SIREN), pièce d&apos;identité recto/verso et justificatif
-                  d&apos;adresse. Vous pouvez quitter et revenir, les champs
-                  déjà enregistrés sont conservés. Sans ce dossier validé, le
-                  tableau de bord n&apos;apparaît pas.
+                  {isDeveloper
+                    ? "Renseignez l'établissement, le SIRET (ou SIREN) et les pièces ci-dessous. Le paiement et la validation client ne sont pas exigés, mais ces champs sont nécessaires pour exercer les fonctionnalités restaurant."
+                    : "Reprenez le formulaire ci-dessous : établissement, SIRET (ou SIREN), pièce d'identité recto/verso et justificatif d'adresse. Vous pouvez quitter et revenir, les champs déjà enregistrés sont conservés. Sans ce dossier validé, le tableau de bord n'apparaît pas."}
                 </p>
               </div>
             </div>
@@ -232,21 +268,29 @@ const MonEspace = () => {
                 </h3>
                 <p className="mon-espace-instance-required-desc">
                   Vos pièces ont bien été transmises. L&apos;équipe vérifie que
-                  les informations correspondent. Le lien Tableau de bord
-                  s&apos;affichera ici dès que le dossier est accepté.
+                  les informations correspondent. En attendant, vous pouvez
+                  prendre rendez-vous pour une démonstration via le formulaire
+                  de contact.
                 </p>
+                <Link
+                  to="/contact?intent=demo#contact-form"
+                  className="mon-espace-instance-required-btn"
+                >
+                  Prendre rendez-vous pour une démo
+                </Link>
               </div>
             </div>
           )}
 
           <h2 id="etablissement-form" className="mon-espace-form-title">
-            {companyFormStep === 2
+            {companyFormStep === 2 && canOpenCompanyDossierForm(user)
               ? "Pièces du dossier entreprise"
               : "Informations de l'établissement"}
           </h2>
           <p className="mon-espace-form-intro">
-            Ces données et pièces sont contrôlées avant l&apos;ouverture du
-            tableau de bord et l&apos;achat du numéro Twilio.
+            {isDeveloper
+              ? "Consultez et mettez à jour les informations de l'établissement, le SIRET et les pièces. Aucune validation de dossier n'est requise."
+              : "Consultez et mettez à jour les informations de l'établissement, le SIRET et les pièces. Vous pouvez les enregistrer avant le paiement."}
           </p>
           <RestaurateurProfilForm
             companyFormStep={companyFormStep}

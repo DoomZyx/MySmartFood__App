@@ -14,6 +14,7 @@
   border: 1px solid $border-primary;
   border-radius: 12px;
   margin-bottom: 1.5rem;
+  flex-wrap: wrap;
 }
 
 .mon-espace-subscription-icon {
@@ -35,6 +36,12 @@
   font-weight: 600;
   color: $text-primary;
   margin: 0;
+}
+
+.mon-espace-subscription-detail {
+  font-size: 0.8125rem;
+  color: $text-muted;
+  margin: 0.35rem 0 0;
 }
 
 .mon-espace-app-access {
@@ -124,13 +131,26 @@
   font-weight: 500;
   padding: 0.5rem 1rem;
   background: $accent-primary;
-  color: #fff;
+  color: #061018;
   border: none;
   border-radius: 8px;
   cursor: pointer;
+  text-decoration: none;
+  text-align: center;
+
   &:hover {
     opacity: 0.9;
   }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.mon-espace-subscription .mon-espace-instance-required-btn {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .mon-espace-form-title {

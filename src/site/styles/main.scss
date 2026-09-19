@@ -46,10 +46,6 @@ html[data-app="website"] body {
     box-shadow: inherit !important;
   }
 
-  // Optimisation des animations de scroll
-  html {
-    scroll-behavior: auto;
-  }
 }
 
 // Optimisations spécifiques pour mobile uniquement
@@ -113,15 +109,15 @@ html[data-app="website"] body {
   overflow: hidden !important;
 }
 
-// Scroll fluide global optimisé
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 80px; // Pour éviter que le header cache le contenu lors du scroll vers les ancres
+  scroll-padding-top: 80px;
 }
 
+html[data-app="website"],
 html[data-app="website"] body {
   scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch; // Pour un scroll fluide sur iOS
+  -webkit-overflow-scrolling: touch;
 }
 
 // Scrollbar personnalisée optimisée
@@ -774,6 +770,7 @@ h6 {
 @import "../components/Header/Header";
 @import "../components/Navigation/Navigation";
 @import "../components/Header/HeaderActions/HeaderActions";
+@import "../components/Header/UserIdentity/UserIdentity";
 @import "../components/Header/Logo/Logo";
 @import "../components/Shared/Hero/Hero";
 @import "../components/Shared/Section/Section";

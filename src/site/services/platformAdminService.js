@@ -154,6 +154,29 @@ export function fetchPlatformTenants(status, queue) {
   return platformRequest(`/api/platform/tenants${query}`);
 }
 
+export function fetchPlatformTenant(tenantId, { includeClosed = false } = {}) {
+  const query = includeClosed ? "?includeClosed=true" : "";
+  return platformRequest(`/api/platform/tenants/${tenantId}${query}`);
+}
+
+export function fetchPlatformTenantOps(tenantId) {
+  return platformRequest(`/api/platform/tenants/${tenantId}/ops`);
+}
+
+export function updatePlatformTenantHours(tenantId, horairesOuverture) {
+  return platformMutate(`/api/platform/tenants/${tenantId}/hours`, {
+    method: "PATCH",
+    body: JSON.stringify({ horairesOuverture }),
+  });
+}
+
+export function updatePlatformTenantMenuItem(tenantId, itemId, payload) {
+  return platformMutate(`/api/platform/tenants/${tenantId}/menu-items/${itemId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function assignPlatformPhone(tenantId, { phoneNumber, phoneNumberSid }) {
   return platformMutate(`/api/platform/tenants/${tenantId}/assign-phone`, {
     method: "POST",
@@ -248,10 +271,10 @@ export function fetchPlatformStaff() {
   return platformRequest("/api/platform/staff");
 }
 
-export function createPlatformStaff({ email, password, name }) {
+export function createPlatformStaff({ email, password, name, role }) {
   return platformMutate("/api/platform/staff", {
     method: "POST",
-    body: JSON.stringify({ email, password, name }),
+    body: JSON.stringify({ email, password, name, role }),
   });
 }
 
@@ -264,6 +287,71 @@ export function updatePlatformStaff(userId, payload) {
 
 export function revokePlatformStaff(userId) {
   return platformMutate(`/api/platform/staff/${userId}/revoke`, {
+    method: "POST",
+  });
+}
+
+export function fetchPlatformUsers(search, { limit, offset } = {}) {
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  if (limit != null) params.set("limit", String(limit));
+  if (offset != null) params.set("offset", String(offset));
+  const query = params.toString() ? `?${params}` : "";
+  return platformRequest(`/api/platform/users${query}`);
+}
+
+export function fetchPlatformUser(userId) {
+  return platformRequest(`/api/platform/users/${encodeURIComponent(userId)}`);
+}
+
+export function addPlatformTenantUser(tenantId, payload) {
+  return platformMutate(`/api/platform/tenants/${tenantId}/users`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function removePlatformTenantUser(tenantId, userId) {
+  return platformMutate(`/api/platform/tenants/${tenantId}/users/${userId}`, {
+    method: "DELETE",
+  });
+}
+
+export function updatePlatformLeadNote(kind, leadId, internalNote) {
+  return platformMutate(`/api/platform/leads/${kind}/${leadId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ internalNote }),
+  });
+}
+
+export function convertPlatformLead(kind, leadId) {
+  return platformMutate(`/api/platform/leads/${kind}/${leadId}/convert`, {
+    method: "POST",
+  });
+}
+
+export function updatePlatformUser(userId, payload) {
+  return platformMutate(`/api/platform/users/${userId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deletePlatformUser(userId) {
+  return platformMutate(`/api/platform/users/${encodeURIComponent(userId)}`, {
+    method: "DELETE",
+  });
+}
+
+export function startPlatformImpersonation({ userId, tenantId }) {
+  return platformMutate("/api/platform/impersonate", {
+    method: "POST",
+    body: JSON.stringify({ userId, tenantId }),
+  });
+}
+
+export function stopPlatformImpersonation() {
+  return platformMutate("/api/platform/impersonate/stop", {
     method: "POST",
   });
 }

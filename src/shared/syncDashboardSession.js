@@ -1,3 +1,5 @@
+import { isDeveloperUser } from "./companyOnboarding";
+
 /** Aligne le localStorage dashboard avec la session vitrine (même cookie). */
 export function syncDashboardSession(user) {
   if (!user) {
@@ -22,8 +24,9 @@ export function syncDashboardSession(user) {
         user.isPlatformAdmin || user.role === "admin" || user.role === "owner" || user.appRole === "admin"
           ? "admin"
           : "user",
-      isPlatformAdmin: Boolean(user.isPlatformAdmin),
-      isPlatformOwner: Boolean(user.isPlatformOwner),
+      isPlatformAdmin: Boolean(user.isPlatformAdmin) && !user.impersonation,
+      isPlatformOwner: Boolean(user.isPlatformOwner) && !user.impersonation,
+      impersonation: user.impersonation || null,
       planId: user.planId || null,
       planSlug: user.planSlug || null,
       planName: user.planName || null,
@@ -37,5 +40,11 @@ export function syncDashboardSession(user) {
 }
 
 export function canOpenDashboard(user) {
-  return Boolean(user?.accessUnlocked);
+  if (Boolean(user?.accessUnlocked)) return true;
+  if (!isDeveloperUser(user)) return false;
+  return Boolean(
+    user.smartcrmInstanceId ||
+      user.tenants?.some((item) => item.status === "active") ||
+      user.tenants?.[0]?.id
+  );
 }

@@ -1,6 +1,5 @@
 import { hasDashboardAccess } from "../API/auth";
 import { DASHBOARD_PATH, dashboardHomeHref } from "@shared/dashboardPath";
-import { PLATFORM_ADMIN_PATH } from "@shared/platformAdminPath";
 
 const APP_PREFIXES = [
   "/app",
@@ -17,7 +16,6 @@ function isAppPath(pathname) {
 }
 
 export function postAuthPath(session, from) {
-  if (session?.isPlatformAdmin) return PLATFORM_ADMIN_PATH;
   const fallback = hasDashboardAccess(session) ? dashboardHomeHref() : "/mon-espace";
   if (!from || typeof from.pathname !== "string") return fallback;
 

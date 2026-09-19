@@ -6,7 +6,14 @@ import { stillNeedsPayment } from "@shared/companyOnboarding";
 
 export function useMonEspaceBilling() {
   const { user, refreshUser } = useAuth();
-  const { syncCheckoutSession, createPortalSession, isLoading, error } = useCheckout();
+  const {
+    syncCheckoutSession,
+    createPortalSession,
+    createCheckoutSession,
+    startBetaAccess,
+    isLoading,
+    error,
+  } = useCheckout();
   const [searchParams, setSearchParams] = useSearchParams();
   const [syncState, setSyncState] = useState(null);
 
@@ -41,10 +48,17 @@ export function useMonEspaceBilling() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  const startBetaCheckout = async (planId) => {
+    await startBetaAccess();
+    await refreshUser();
+    await createCheckoutSession(planId);
+  };
+
   return {
     user,
     syncState,
     openPortal: createPortalSession,
+    startBetaCheckout,
     isLoading,
     error,
     hasBillingPortal: Boolean(user?.hasBillingPortal || user?.stripeCustomerId),

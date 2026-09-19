@@ -73,6 +73,10 @@ export const AuthProvider = ({ children }) => {
         }
       })();
 
+      if (storedUser && !cancelled) {
+        setUser(storedUser);
+      }
+
       try {
         const apiUser = await getCurrentUser();
         if (cancelled) return;

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { getCurrentUser } from "../services/authService";
-import { followSiteAuthPath, isPlatformAdminUser } from "@shared/postSiteAuthPath";
+import { followSiteAuthPath } from "@shared/postSiteAuthPath";
 import AuthSuccessModal from "../components/Shared/AuthSuccessModal/AuthSuccessModal";
 import "./AuthCallback.scss";
 
@@ -25,10 +25,6 @@ const AuthCallback = () => {
       if (cancelled) return;
       if (apiUser) {
         setAuth(apiUser);
-        if (isPlatformAdminUser(apiUser)) {
-          followSiteAuthPath(navigate, apiUser);
-          return;
-        }
         setSuccessUser(apiUser);
       } else {
         setError("Échec de la connexion ou session expirée. Réessayez.");

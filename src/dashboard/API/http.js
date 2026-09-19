@@ -1,5 +1,3 @@
-import { getApiKey } from "./apiKey.js";
-
 const VITE_API_URL = import.meta.env.VITE_API_URL || "/";
 const TENANT_KEY = "tenantId";
 const USER_KEY = "user";
@@ -17,8 +15,6 @@ export function sessionHeaders(extra = {}) {
   const headers = { ...extra };
   const tenantId = getStoredTenantId();
   if (tenantId) headers["x-tenant-id"] = tenantId;
-  const key = getApiKey();
-  if (key) headers["x-api-key"] = key;
   return headers;
 }
 
@@ -58,8 +54,9 @@ export function persistSession({ user, tenants }) {
       username: user.name || user.email || "",
       avatar: user.avatarUrl || user.avatar || null,
       role,
-      isPlatformAdmin: Boolean(user.isPlatformAdmin),
-      isPlatformOwner: Boolean(user.isPlatformOwner),
+      isPlatformAdmin: Boolean(user.isPlatformAdmin) && !user.impersonation,
+      isPlatformOwner: Boolean(user.isPlatformOwner) && !user.impersonation,
+      impersonation: user.impersonation || null,
       planId: user.planId || null,
       planSlug: user.planSlug || null,
       planName: user.planName || null,
