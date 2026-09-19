@@ -1,8 +1,44 @@
 import { PricingService } from "../../Business/services/PricingService.js";
-import {
-  formatAmenitiesForPrompt,
-  formatOptionChoices,
-} from "../../Business/mappers/menuOptions.js";
+import { formatAmenitiesForPrompt } from "../../Business/mappers/menuOptions.js";
+
+const DESC_MAX = 80;
+
+export function packMenuForVoice(menuPricing) {
+  const menu = {};
+  for (const [slug, category] of Object.entries(menuPricing || {})) {
+    const produits = (category.produits || [])
+      .filter((item) => item.disponible)
+      .map((item) => {
+        const packed = {
+          nom: item.nom,
+          prix: item.prixBase,
+        };
+        const desc = String(item.description || "").trim();
+        if (desc) {
+          packed.description =
+            desc.length <= DESC_MAX ? desc : `${desc.slice(0, DESC_MAX - 1)}…`;
+        }
+        return packed;
+      });
+    if (produits.length === 0) continue;
+    menu[slug] = {
+      nom: category.nom,
+      produits,
+    };
+  }
+  return menu;
+}
+
+function packMenuLine(produit) {
+  const nom = produit?.nom;
+  if (nom == null || String(nom).trim() === "") return null;
+  const prix = produit.prix;
+  const desc = String(produit.description || "").trim();
+  const shortDesc =
+    desc.length <= DESC_MAX ? desc : `${desc.slice(0, DESC_MAX - 1)}…`;
+  if (shortDesc) return `- ${nom} : ${prix}€ - ${shortDesc}`;
+  return `- ${nom} : ${prix}€`;
+}
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -108,30 +144,18 @@ MENU ET TARIFS :
 IMPORTANT : Tous les prix affichés sont TTC (prix finaux).
 
 MENU :
-${Object.keys(pricing.menu).map(categorie => {
+${Object.keys(pricing.menu || {}).map(categorie => {
   const category = pricing.menu[categorie];
   return `
 ${category.nom.toUpperCase()} :
-${category.produits.map(produit => {
-  let productLine = `- ${produit.nom} : ${produit.prix}€ - ${produit.description}`;
-  
-  // Ajouter les options si elles existent
-  if (produit.options && Object.keys(produit.options).length > 0) {
-    productLine += '\n  OPTIONS PERSONNALISABLES :';
-    Object.entries(produit.options).forEach(([key, optionData]) => {
-      productLine += `\n  • ${optionData.nom} : ${formatOptionChoices(optionData.choix)}`;
-    });
-  }
-  
-  return productLine;
-}).join('\n')}`;
+${(category.produits || []).map((produit) => packMenuLine(produit)).filter(Boolean).join('\n')}`;
 }).join('\n')}
 
 ========================================
 INSTRUCTIONS IMPORTANTES :
 ========================================
 1. Les prix affichés sont les prix finaux TTC
-2. Si une option a un supplément (+X.XX€), ajoute-le au prix du plat et annonce-le au client
+2. N'invente pas de supplement d'option ni de prix hors menu
 3. Si l'heure est hors horaires, propose UNE prochaine dispo, sans lister tous les créneaux
 4. Tu peux donner l'adresse, le téléphone ou l'email si le client le demande
 5. Ne donne un délai de préparation que s'il figure dans les données. N'invente jamais un délai

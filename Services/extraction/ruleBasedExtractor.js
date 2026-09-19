@@ -83,18 +83,7 @@ export function extractTime(transcription) {
       const match = matches[0];
       let hours = parseInt(match[1] || match[2] || 0);
       const minutes = parseInt(match[2] || match[3] || 0);
-      
-      // Normaliser heures (si "8h" sans contexte, supposer soir pour fast-food)
-      if (hours < 10 && !transcription.toLowerCase().includes("matin")) {
-        // Fast-food ouvert midi (11h-15h) et soir (18h-23h)
-        // Si heure < 10 sans "matin", probablement 20h (soir)
-        if (hours === 8) {
-          hours = 20;
-        } else if (hours === 9) {
-          hours = 21;
-        }
-      }
-      
+
       if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
       }

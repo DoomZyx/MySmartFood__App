@@ -3,7 +3,7 @@
  */
 
 import { getSystemMessage } from "./prompts.js";
-import { generateEnrichedPromptWithPricing } from "../Services/gptServices/pricingService.js";
+import { generateEnrichedPromptWithPricing, packMenuForVoice } from "../Services/gptServices/pricingService.js";
 import { getSessionUpdatePayload } from "../Services/gptServices/gptServices.js";
 import { callLogger } from "../Services/logging/logger.js";
 import { ensureDefaults } from "../Business/services/MenuCatalogService.js";
@@ -25,23 +25,7 @@ export async function getVoiceRuntimeConfig(instanceId) {
   const gptPricing = pricing
     ? {
         restaurantInfo,
-        menu: Object.fromEntries(
-          Object.entries(pricing.menuPricing || {}).map(([slug, category]) => [
-            slug,
-            {
-              nom: category.nom,
-              produits: (category.produits || [])
-                .filter((item) => item.disponible)
-                .map((item) => ({
-                  nom: item.nom,
-                  description: item.description,
-                  prix: item.prixBase,
-                  options: item.options,
-                  composition: item.composition,
-                })),
-            },
-          ])
-        ),
+        menu: packMenuForVoice(pricing.menuPricing),
         amenities: pricing.amenities,
         settings: pricing.settings,
       }
@@ -62,7 +46,11 @@ export async function getVoiceRuntimeConfig(instanceId) {
   });
   const sessionUpdatePayload = {
     type: "session.update",
-    session: getSessionUpdatePayload(voice, enrichedInstructions),
+    session: getSessionUpdatePayload(
+      voice,
+      enrichedInstructions,
+      restaurantInfo?.horairesOuverture,
+    ),
   };
   return {
     instance: { instanceId: id },

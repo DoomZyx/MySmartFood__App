@@ -64,10 +64,6 @@ function extractTime(transcription) {
 
       // Validation
       if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
-        // Si "8h" sans contexte, supposer soir (20:00) pour restaurant
-        if (hours === 8 && minutes === 0 && !match[0].includes('matin')) {
-          hours = 20;
-        }
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
       }
     }

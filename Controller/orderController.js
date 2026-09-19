@@ -1,6 +1,7 @@
 import { OrderService } from "../Business/services/OrderService.js";
 import * as Booking from "../Business/services/TenantBookingService.js";
 import { getOrderSlots } from "../Business/services/AvailabilityService.js";
+import { assertAiAppointmentHours } from "../Business/services/OpeningHoursPolicy.js";
 import { assertPhone, BusinessRuleError, digitsOnly } from "../Business/validators/businessRules.js";
 import { normalizeHhmm, toYmd } from "../utils/timeZone.js";
 import logger from "../Services/logging/logger.js";
@@ -155,6 +156,7 @@ export async function createOrderFromAI(request, reply) {
     if (!heureNormalized) throw new BusinessRuleError("Heure invalide ou manquante.");
     const orderDate = toYmd(orderData.date);
     if (!orderDate) throw new BusinessRuleError("Date invalide ou manquante.");
+    await assertAiAppointmentHours(tenantIdOf(request), orderDate, heureNormalized);
     const existing = await OrderService.findRecentOrder({
       instanceId: tenantIdOf(request),
       telephone: rawPhone,
