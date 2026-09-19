@@ -7,6 +7,7 @@ import {
 } from "../../Business/services/PlatformAdminAuthService.js";
 import { sessionPayload } from "../../Business/services/AccountAuthService.js";
 import {
+  clearImpersonateCookie,
   clearPlatformPendingCookie,
   clearPlatformSessionCookie,
   setPlatformPendingCookie,
@@ -116,6 +117,7 @@ export const PlatformAdminAuthController = {
   async logout(_request, reply) {
     clearPlatformSessionCookie(reply);
     clearPlatformPendingCookie(reply);
+    clearImpersonateCookie(reply);
     return reply.code(204).send();
   },
 };

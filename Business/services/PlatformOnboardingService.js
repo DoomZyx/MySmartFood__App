@@ -22,6 +22,12 @@ import {
   voiceWebhookUrl,
 } from "../../utils/voiceWebhookUrl.js";
 import { persistOnboardingDocument } from "./OnboardingDocumentStorage.js";
+import { notifyOwnerDossierAccepted } from "./DossierAcceptedNoticeService.js";
+import {
+  PLATFORM_UPLOAD_DOC_KINDS,
+  requireTenantForDocuments,
+} from "./platformTenantDocuments.js";
+import { ensureDefaults } from "./MenuCatalogService.js";
 import { encrypt } from "../../utils/encryption.js";
 import { readEncryptedDocument } from "../../utils/documentCrypto.js";
 import { hasCompanyRegistration, parseCompanyRegistration } from "../../utils/companyRegistration.js";
@@ -31,6 +37,7 @@ import {
   sanitizeOpenAiKey,
   sanitizeOpenAiModel,
 } from "../../Config/openaiModels.js";
+import { recordPlatformAudit } from "./PlatformAuditService.js";
 
 const E164 = /^\+[1-9]\d{7,14}$/;
 const PHONE_SID = /^PN[a-f0-9]{32}$/i;
@@ -85,6 +92,20 @@ function documentKindsFrom(row) {
     .filter(Boolean);
   if (fromDocs.length) return fromDocs;
   return Array.isArray(row?.documentKinds) ? row.documentKinds : [];
+}
+
+const REVIEWED_PROVISIONING = new Set([
+  "completed",
+  "bundle_approved",
+  "bundle_rejected",
+]);
+
+export function isDossierAwaitingReview(row) {
+  if (!row?.documentsSubmittedAt) return false;
+  if (row.status === "suspended") return false;
+  const state = String(row.provisioningState || "");
+  if (state && REVIEWED_PROVISIONING.has(state)) return false;
+  return true;
 }
 
 export function isCompanyDossierComplete(row) {
@@ -184,12 +205,22 @@ function serializeTenant(row, publicHost) {
     openaiChatModel: OPENAI_CHAT_MODEL,
     bundleStatus: row.bundleStatus || null,
     checklist: buildValidationChecklist({ ...row, documentKinds }),
-    needsReview: Boolean(
-      row.documentsSubmittedAt && row.status !== "active" && row.status !== "closed"
-    ),
+    needsReview: isDossierAwaitingReview(row),
     voiceWebhookUrl: voiceWebhookUrl(row.slug, publicHost),
     createdAt: row.createdAt,
     activatedAt: row.activatedAt,
+    internalNote: row.internalNote || "",
+    stripeCustomerId: row.stripeCustomerId || null,
+    stripeSubscriptionId: row.stripeSubscriptionId || null,
+    subscriptionPeriodEnd: row.subscriptionPeriodEnd || null,
+    cancelAtPeriodEnd: Boolean(row.cancelAtPeriodEnd),
+    hasStripeCustomer: Boolean(row.stripeCustomerId || row.stripeSubscriptionId),
+    isManualGrant: Boolean(row.onboardedBy === "platform" && !row.stripeSubscriptionId),
+    billingOk: ["active", "trialing"].includes(row.subscriptionStatus),
+    billingUnpaid: ["past_due", "unpaid", "incomplete", "incomplete_expired"].includes(
+      row.subscriptionStatus
+    ),
+    billingCanceled: row.subscriptionStatus === "canceled",
   };
 }
 
@@ -205,7 +236,7 @@ async function presentTenant(row) {
 }
 
 export async function listTenants({ status, queue, limit } = {}) {
-  if (status && !TENANT_STATUSES.has(status)) {
+  if (status && !TENANT_STATUSES.has(status) && status !== "closed") {
     const err = new Error("Statut invalide");
     err.statusCode = 400;
     throw err;
@@ -215,7 +246,9 @@ export async function listTenants({ status, queue, limit } = {}) {
       ? await Tenant.listPendingForPlatform({ limit })
       : queue === "fleet"
         ? await Tenant.listFleetForPlatform({ limit })
-        : await Tenant.listForPlatform({ status, limit });
+        : queue === "closed"
+          ? await Tenant.listClosedForPlatform({ limit })
+          : await Tenant.listForPlatform({ status, limit });
   return presentTenants(rows);
 }
 
@@ -233,8 +266,8 @@ export async function getInbox() {
   };
 }
 
-export async function getTenant(tenantId) {
-  const row = await Tenant.findForPlatform(tenantId);
+export async function getTenant(tenantId, { includeClosed = false } = {}) {
+  const row = await Tenant.findForPlatform(tenantId, { includeClosed });
   if (!row) {
     const err = new Error("Établissement introuvable");
     err.statusCode = 404;
@@ -262,11 +295,7 @@ export async function loadTenantDocumentFile(tenantId, kind) {
     throw err;
   }
   const tenant = await Tenant.findById(tenantId);
-  if (!tenant || tenant.status === "closed") {
-    const err = new Error("Établissement introuvable");
-    err.statusCode = 404;
-    throw err;
-  }
+  requireTenantForDocuments(tenant);
   const record = await OnboardingDocument.findActiveByTenantAndKind(tenantId, kind);
   if (!record) {
     const err = new Error("Pièce introuvable");
@@ -473,6 +502,8 @@ export async function createPlatformTenant({
   siren,
   openaiApiKey,
   openaiModel,
+  actor,
+  preservePassword = false,
 } = {}) {
   const emailNorm = String(email || "").trim().toLowerCase();
   const plainPassword = String(password || "").trim();
@@ -482,9 +513,6 @@ export async function createPlatformTenant({
   const restoPhone = String(restaurantPhone || "").trim() || null;
 
   if (!EMAIL.test(emailNorm)) httpError("Adresse e-mail invalide", 400);
-  if (plainPassword.length < 8) {
-    httpError("Le mot de passe doit contenir au moins 8 caractères", 400);
-  }
   if (!businessName) httpError("Nom de l'établissement requis", 400);
 
   const inbound = parseOptionalInboundPhone({ phoneNumber, phoneNumberSid });
@@ -515,8 +543,16 @@ export async function createPlatformTenant({
     if (hasOpenTenant(memberships)) {
       httpError("Ce compte possède déjà un établissement", 409);
     }
-    await User.setPassword(user.id, plainPassword);
+    if (!preservePassword) {
+      if (plainPassword.length < 8) {
+        httpError("Le mot de passe doit contenir au moins 8 caractères", 400);
+      }
+      await User.setPassword(user.id, plainPassword);
+    }
   } else {
+    if (plainPassword.length < 8) {
+      httpError("Le mot de passe doit contenir au moins 8 caractères", 400);
+    }
     user = await User.create({
       email: emailNorm,
       name: ownerLabel,
@@ -555,12 +591,7 @@ export async function createPlatformTenant({
     await EstablishmentProfile.upsert(tenantId, profile, client);
   });
 
-  await withTenant(tenantId, (tenantClient) =>
-    tenantClient.query(
-      `INSERT INTO tenant_settings (tenant_id) VALUES ($1) ON CONFLICT DO NOTHING`,
-      [tenantId]
-    )
-  );
+  await ensureDefaults(tenantId);
   await markCompleted(tenantId);
   await User.markDashboardUnlocked(user.id);
 
@@ -569,9 +600,16 @@ export async function createPlatformTenant({
   }
   await persistOpenAiFallback(tenantId, { openaiApiKey, openaiModel });
 
+  await recordPlatformAudit({
+    actorId: actor?.id || null,
+    action: "tenant.create",
+    targetType: "tenant",
+    targetId: tenantId,
+    metadata: { email: true },
+  });
+
   return {
     tenant: await getTenant(tenantId),
-    temporaryPassword: plainPassword,
   };
 }
 
@@ -622,23 +660,44 @@ export async function updatePlatformTenant(tenantId, body = {}) {
     await assignInboundNumber(tenantId, inbound);
   }
   await persistOpenAiFallback(tenantId, body);
+  if (body.internalNote !== undefined) {
+    await Tenant.updateInternalNote(tenantId, body.internalNote);
+  }
 
   return {
-    tenant: await getTenant(tenantId),
-    temporaryPassword: nextPassword || undefined,
+    tenant: await getTenant(tenantId, { includeClosed: true }),
   };
 }
 
 export async function listPlatformTenantUsers(tenantId) {
   const tenant = await Tenant.findById(tenantId);
-  if (!tenant || tenant.status === "closed") {
+  if (!tenant) {
     httpError("Établissement introuvable", 404);
   }
   const rows = await User.listByTenantId(tenantId);
   return rows.map(serializePlatformUser);
 }
 
-export async function updatePlatformTenantUser(tenantId, userId, body = {}) {
+async function assertCanEditAccount(actor, userId) {
+  const target = await User.findById(userId);
+  if (!target) httpError("Utilisateur introuvable", 404);
+  if (target.isPlatformOwner && !actor?.isPlatformOwner) {
+    httpError("Le compte propriétaire se gère dans Équipe", 403);
+  }
+  if (target.isPlatformAdmin && !actor?.isPlatformOwner) {
+    httpError("Les comptes back-office se gèrent dans Équipe", 403);
+  }
+  return target;
+}
+
+function normalizeMembershipRole(role) {
+  const value = String(role || "").trim();
+  if (value === "admin") return "admin";
+  if (value === "member" || value === "user") return "member";
+  return null;
+}
+
+export async function updatePlatformTenantUser(tenantId, userId, body = {}, actor = null) {
   const tenant = await Tenant.findById(tenantId);
   if (!tenant || tenant.status === "closed") {
     httpError("Établissement introuvable", 404);
@@ -647,24 +706,169 @@ export async function updatePlatformTenantUser(tenantId, userId, body = {}) {
   if (!membership) {
     httpError("Utilisateur introuvable", 404);
   }
-  await applyAccountUpdate(userId, body);
+  await assertCanEditAccount(actor, userId);
+  const hasAccount =
+    body.name !== undefined || body.email !== undefined || String(body.password || "").trim();
+  if (hasAccount) {
+    await applyAccountUpdate(userId, body);
+  }
+  if (body.role !== undefined) {
+    const nextRole = normalizeMembershipRole(body.role);
+    if (!nextRole) httpError("Rôle invalide", 400);
+    if (membership.role === "owner" || nextRole === "owner") {
+      httpError("Le rôle propriétaire se gère ailleurs", 400);
+    }
+    await Membership.updateRole(userId, tenantId, nextRole);
+    await recordPlatformAudit({
+      actorId: actor?.id || null,
+      action: "membership.role",
+      targetType: "user",
+      targetId: userId,
+      metadata: { tenantId, role: nextRole },
+    });
+  } else if (!hasAccount) {
+    httpError("Aucun champ à modifier", 400);
+  }
+  if (hasAccount) {
+    await recordPlatformAudit({
+      actorId: actor?.id || null,
+      action: String(body.password || "").trim() ? "user.password" : "user.update",
+      targetType: "user",
+      targetId: userId,
+      metadata: {
+        tenantId,
+        email: body.email !== undefined,
+        password: Boolean(String(body.password || "").trim()),
+      },
+    });
+  }
   const rows = await User.listByTenantId(tenantId);
   return {
     user: serializePlatformUser(rows.find((row) => row.id === userId)),
+    users: rows.map(serializePlatformUser),
+    tenant: await getTenant(tenantId, { includeClosed: tenant.status === "closed" }),
+  };
+}
+
+export async function addPlatformTenantMember(tenantId, body = {}, actor = null) {
+  const tenant = await Tenant.findById(tenantId);
+  if (!tenant || tenant.status === "closed") {
+    httpError("Établissement introuvable", 404);
+  }
+  const emailNorm = String(body.email || "").trim().toLowerCase();
+  const name = String(body.name || "").trim();
+  const password = String(body.password || "").trim();
+  const role = normalizeMembershipRole(body.role) || "member";
+  if (!EMAIL.test(emailNorm)) httpError("Adresse e-mail invalide", 400);
+  if (role === "owner") httpError("Impossible d'ajouter un propriétaire depuis cette action", 400);
+
+  let user = await User.findByEmail(emailNorm);
+  if (!user) {
+    if (name.length < 2) httpError("Le nom doit contenir au moins 2 caractères", 400);
+    if (password.length < 8) {
+      httpError("Le mot de passe doit contenir au moins 8 caractères", 400);
+    }
+    user = await User.create({
+      email: emailNorm,
+      name,
+      password,
+      emailVerified: false,
+    });
+  }
+  const existing = await Membership.findMembership(user.id, tenantId);
+  if (existing) {
+    httpError("Cet utilisateur appartient déjà à l'établissement", 409);
+  }
+  await Membership.createMembership(null, {
+    tenantId,
+    userId: user.id,
+    role,
+  });
+  await recordPlatformAudit({
+    actorId: actor?.id || null,
+    action: "membership.add",
+    targetType: "user",
+    targetId: user.id,
+    metadata: { tenantId, role },
+  });
+  const rows = await User.listByTenantId(tenantId);
+  return {
+    user: serializePlatformUser(rows.find((row) => row.id === user.id)),
     users: rows.map(serializePlatformUser),
     tenant: await getTenant(tenantId),
   };
 }
 
-const IDENTITY_DOC_KINDS = new Set(["id_recto", "id_verso"]);
-
-export async function uploadPlatformTenantDocument(tenantId, { kind, buffer, mimeType, filename, userId }) {
+export async function removePlatformTenantMember(tenantId, userId, actor = null) {
   const tenant = await Tenant.findById(tenantId);
   if (!tenant || tenant.status === "closed") {
     httpError("Établissement introuvable", 404);
   }
-  if (!IDENTITY_DOC_KINDS.has(kind)) {
-    httpError("Seules les photos de pièce d'identité (recto / verso) sont acceptées", 400);
+  const membership = await Membership.findMembership(userId, tenantId);
+  if (!membership) httpError("Utilisateur introuvable", 404);
+  if (membership.role === "owner") {
+    httpError("Impossible de retirer le propriétaire", 400);
+  }
+  await Membership.removeMembership(userId, tenantId);
+  await recordPlatformAudit({
+    actorId: actor?.id || null,
+    action: "membership.remove",
+    targetType: "user",
+    targetId: userId,
+    metadata: { tenantId },
+  });
+  const rows = await User.listByTenantId(tenantId);
+  return {
+    users: rows.map(serializePlatformUser),
+    tenant: await getTenant(tenantId),
+  };
+}
+
+export async function updateLeadNote(kind, leadId, note) {
+  const Model = kind === "demo" ? Demo : Contact;
+  const lead = await Model.findById(leadId);
+  if (!lead) httpError("Élément introuvable", 404);
+  const updated = await Model.updateNote(leadId, note);
+  return { [kind]: updated };
+}
+
+export async function convertLeadToTenant(kind, leadId, actor = null) {
+  const Model = kind === "demo" ? Demo : Contact;
+  const lead = await Model.findById(leadId);
+  if (!lead) httpError("Élément introuvable", 404);
+  if (lead.convertedTenantId) {
+    httpError("Ce lead est déjà converti", 409);
+  }
+  const existing = await User.findByEmail(lead.email);
+  const password = existing ? "" : crypto.randomBytes(9).toString("base64url");
+  const created = await createPlatformTenant({
+    email: lead.email,
+    password: existing ? "unused" : password,
+    name: lead.company || lead.name || "Nouveau restaurant",
+    ownerName: lead.name,
+    actor,
+    preservePassword: Boolean(existing),
+  });
+  await Model.markConverted(leadId, created.tenant.id);
+  await recordPlatformAudit({
+    actorId: actor?.id || null,
+    action: "lead.convert",
+    targetType: kind,
+    targetId: leadId,
+    metadata: { tenantId: created.tenant.id, existingUser: Boolean(existing) },
+  });
+  return {
+    tenant: created.tenant,
+    [kind]: await Model.findById(leadId),
+    temporaryPassword: existing ? undefined : password,
+  };
+}
+
+export async function uploadPlatformTenantDocument(tenantId, { kind, buffer, mimeType, filename, userId }) {
+  const tenant = await Tenant.findById(tenantId);
+  requireTenantForDocuments(tenant);
+  if (!PLATFORM_UPLOAD_DOC_KINDS.has(kind)) {
+    httpError("Seules les photos d'identité (recto / verso) et le justificatif d'adresse sont acceptés", 400);
   }
   if (!buffer?.length) {
     httpError("Fichier manquant", 400);
@@ -677,7 +881,7 @@ export async function uploadPlatformTenantDocument(tenantId, { kind, buffer, mim
     mimeType,
     filename,
   });
-  return { tenant: await getTenant(tenantId) };
+  return { tenant: await getTenant(tenantId, { includeClosed: true }) };
 }
 
 async function fetchIncomingNumber(client, { phoneNumber, phoneNumberSid }) {
@@ -776,15 +980,15 @@ async function setPhoneLineEnabled(tenantId, enabled) {
   );
 }
 
-export async function activateTenant(tenantId) {
+export async function activateTenant(tenantId, actor = null) {
   const tenant = await Tenant.findById(tenantId);
-  if (!tenant || tenant.status === "closed") {
+  if (!tenant) {
     const err = new Error("Établissement introuvable");
     err.statusCode = 404;
     throw err;
   }
 
-  const presented = await Tenant.findForPlatform(tenantId);
+  const presented = await Tenant.findForPlatform(tenantId, { includeClosed: true });
   if (!isCompanyDossierComplete(presented)) {
     const err = new Error(
       "Dossier incomplet. Vérifiez les informations et les pièces avant d'accepter."
@@ -795,15 +999,26 @@ export async function activateTenant(tenantId) {
 
   await Tenant.updateStatus(null, tenantId, "active");
   await User.markDashboardUnlocked(tenant.ownerUserId);
+  await createProvisioningJob(null, tenantId);
   await markCompleted(tenantId);
   const bundle = await TwilioBundle.findByTenantId(tenantId);
   if (bundle?.phoneNumberSid) {
     await setPhoneLineEnabled(tenantId, true);
   }
+  await recordPlatformAudit({
+    actorId: actor?.id || null,
+    action: "tenant.activate",
+    targetType: "tenant",
+    targetId: tenantId,
+  });
+  await notifyOwnerDossierAccepted({
+    ownerUserId: tenant.ownerUserId,
+    businessName: presented.businessName || presented.name || tenant.name,
+  });
   return getTenant(tenantId);
 }
 
-export async function suspendTenant(tenantId) {
+export async function suspendTenant(tenantId, actor = null) {
   const tenant = await Tenant.findById(tenantId);
   if (!tenant || tenant.status === "closed") {
     const err = new Error("Établissement introuvable");
@@ -818,10 +1033,16 @@ export async function suspendTenant(tenantId) {
 
   await Tenant.updateStatus(null, tenantId, "suspended");
   await setPhoneLineEnabled(tenantId, false);
+  await recordPlatformAudit({
+    actorId: actor?.id || null,
+    action: "tenant.suspend",
+    targetType: "tenant",
+    targetId: tenantId,
+  });
   return getTenant(tenantId);
 }
 
-export async function rejectTenant(tenantId, reason) {
+export async function rejectTenant(tenantId, reason, actor = null) {
   const tenant = await Tenant.findById(tenantId);
   if (!tenant || tenant.status === "closed") {
     const err = new Error("Établissement introuvable");
@@ -836,10 +1057,17 @@ export async function rejectTenant(tenantId, reason) {
   const note = String(reason || "").trim().slice(0, 500) || "Dossier refuse par le back-office";
   await Tenant.updateStatus(null, tenantId, "suspended");
   await markRejected(tenantId, note);
+  await recordPlatformAudit({
+    actorId: actor?.id || null,
+    action: "tenant.reject",
+    targetType: "tenant",
+    targetId: tenantId,
+    metadata: { reason: Boolean(reason) },
+  });
   return getTenant(tenantId);
 }
 
-export async function closeTenant(tenantId) {
+export async function closeTenant(tenantId, actor = null) {
   const tenant = await Tenant.findById(tenantId);
   if (!tenant || tenant.status === "closed") {
     const err = new Error("Établissement introuvable");
@@ -851,5 +1079,11 @@ export async function closeTenant(tenantId) {
   await TwilioBundle.releaseNumber(tenantId);
   await setPhoneLineEnabled(tenantId, false);
   await markRejected(tenantId, "Établissement supprimé par le back-office");
+  await recordPlatformAudit({
+    actorId: actor?.id || null,
+    action: "tenant.close",
+    targetType: "tenant",
+    targetId: tenantId,
+  });
   return { id: tenantId, status: "closed" };
 }

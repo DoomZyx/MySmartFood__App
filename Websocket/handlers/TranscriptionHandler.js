@@ -185,7 +185,7 @@ export class TranscriptionHandler {
       try {
         notificationService.notifyCallError(
           new Error(`Erreur API: ${response.status}`),
-          { streamSid: this.streamSid }
+          { streamSid: this.streamSid, instanceId: this.instanceId }
         );
       } catch (notificationError) {
         this.callLogger.error(this.streamSid, notificationError, {

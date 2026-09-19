@@ -1,13 +1,17 @@
 import {
   activateTenant,
+  addPlatformTenantMember,
   assignInboundNumber,
   closeTenant,
+  convertLeadToTenant,
   createPlatformTenant,
   getInbox,
   updatePlatformTenant,
   getTenant,
   listPlatformTenantUsers,
   listTenants,
+  removePlatformTenantMember,
+  updateLeadNote,
   updatePlatformTenantUser,
   loadTenantDocumentFile,
   rejectTenant,
@@ -40,7 +44,10 @@ export const PlatformOnboardingController = {
 
   async get(request, reply) {
     try {
-      const tenant = await getTenant(request.params.tenantId);
+      const includeClosed =
+        request.query?.includeClosed === true ||
+        request.query?.includeClosed === "true";
+      const tenant = await getTenant(request.params.tenantId, { includeClosed });
       return reply.send({ tenant });
     } catch (error) {
       return handleError(error, reply);
@@ -99,7 +106,10 @@ export const PlatformOnboardingController = {
 
   async create(request, reply) {
     try {
-      const result = await createPlatformTenant(request.body);
+      const result = await createPlatformTenant({
+        ...request.body,
+        actor: request.user,
+      });
       return reply.code(201).send(result);
     } catch (error) {
       return handleError(error, reply);
@@ -129,7 +139,60 @@ export const PlatformOnboardingController = {
       const result = await updatePlatformTenantUser(
         request.params.tenantId,
         request.params.userId,
-        request.body
+        request.body,
+        request.user
+      );
+      return reply.send(result);
+    } catch (error) {
+      return handleError(error, reply);
+    }
+  },
+
+  async addUser(request, reply) {
+    try {
+      const result = await addPlatformTenantMember(
+        request.params.tenantId,
+        request.body,
+        request.user
+      );
+      return reply.code(201).send(result);
+    } catch (error) {
+      return handleError(error, reply);
+    }
+  },
+
+  async removeUser(request, reply) {
+    try {
+      const result = await removePlatformTenantMember(
+        request.params.tenantId,
+        request.params.userId,
+        request.user
+      );
+      return reply.send(result);
+    } catch (error) {
+      return handleError(error, reply);
+    }
+  },
+
+  async updateLeadNote(request, reply) {
+    try {
+      const result = await updateLeadNote(
+        request.params.kind,
+        request.params.leadId,
+        request.body?.internalNote
+      );
+      return reply.send(result);
+    } catch (error) {
+      return handleError(error, reply);
+    }
+  },
+
+  async convertLead(request, reply) {
+    try {
+      const result = await convertLeadToTenant(
+        request.params.kind,
+        request.params.leadId,
+        request.user
       );
       return reply.send(result);
     } catch (error) {
@@ -151,7 +214,7 @@ export const PlatformOnboardingController = {
 
   async activate(request, reply) {
     try {
-      const tenant = await activateTenant(request.params.tenantId);
+      const tenant = await activateTenant(request.params.tenantId, request.user);
       return reply.send({ tenant });
     } catch (error) {
       return handleError(error, reply);
@@ -162,7 +225,8 @@ export const PlatformOnboardingController = {
     try {
       const tenant = await rejectTenant(
         request.params.tenantId,
-        request.body?.reason
+        request.body?.reason,
+        request.user
       );
       return reply.send({ tenant });
     } catch (error) {
@@ -172,7 +236,7 @@ export const PlatformOnboardingController = {
 
   async suspend(request, reply) {
     try {
-      const tenant = await suspendTenant(request.params.tenantId);
+      const tenant = await suspendTenant(request.params.tenantId, request.user);
       return reply.send({ tenant });
     } catch (error) {
       return handleError(error, reply);
@@ -181,7 +245,7 @@ export const PlatformOnboardingController = {
 
   async close(request, reply) {
     try {
-      const tenant = await closeTenant(request.params.tenantId);
+      const tenant = await closeTenant(request.params.tenantId, request.user);
       return reply.send({ tenant });
     } catch (error) {
       return handleError(error, reply);

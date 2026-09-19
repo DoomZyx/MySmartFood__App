@@ -158,10 +158,7 @@ export async function list(client, tenantId, filters = {}) {
     `SELECT COUNT(*)::int AS total FROM orders o WHERE ${clauses.join(" AND ")}`,
     values.slice(0, values.length - 2)
   );
-  const rows = [];
-  for (const row of result.rows) {
-    rows.push(await hydrateOrder(client, tenantId, row));
-  }
+  const rows = await hydrateOrders(client, tenantId, result.rows);
   return { rows, total: count.rows[0].total };
 }
 
@@ -256,25 +253,58 @@ export async function findRecentDuplicate(client, tenantId, { phone, from, to, s
   return hydrateOrder(client, tenantId, result.rows[0]);
 }
 
-async function hydrateOrder(client, tenantId, row) {
-  const order = toCamelCase(row);
-  const items = await client.query(
-    `SELECT * FROM order_items WHERE tenant_id = $1 AND order_id = $2 ORDER BY created_at`,
-    [tenantId, order.id]
+async function hydrateOrders(client, tenantId, rows) {
+  if (!rows.length) return [];
+  const orders = rows.map(toCamelCase);
+  const orderIds = orders.map((order) => order.id);
+
+  const itemsResult = await client.query(
+    `SELECT * FROM order_items
+      WHERE tenant_id = $1 AND order_id = ANY($2::uuid[])
+      ORDER BY created_at`,
+    [tenantId, orderIds]
   );
-  const hydrated = [];
-  for (const item of items.rows) {
-    const mapped = toCamelCase(item);
-    const options = await client.query(
-      `SELECT group_name AS "groupName", option_name AS "optionName", price_cents AS "priceCents"
+  const items = itemsResult.rows.map(toCamelCase);
+  const itemIds = items.map((item) => item.id);
+
+  const optionsByItemId = new Map();
+  if (itemIds.length) {
+    const optionsResult = await client.query(
+      `SELECT order_item_id AS "orderItemId",
+              group_name AS "groupName",
+              option_name AS "optionName",
+              price_cents AS "priceCents"
          FROM order_item_options
-        WHERE tenant_id = $1 AND order_item_id = $2`,
-      [tenantId, mapped.id]
+        WHERE tenant_id = $1 AND order_item_id = ANY($2::uuid[])`,
+      [tenantId, itemIds]
     );
-    mapped.options = options.rows;
-    hydrated.push(mapped);
+    for (const option of optionsResult.rows) {
+      const list = optionsByItemId.get(option.orderItemId) || [];
+      list.push({
+        groupName: option.groupName,
+        optionName: option.optionName,
+        priceCents: option.priceCents,
+      });
+      optionsByItemId.set(option.orderItemId, list);
+    }
   }
-  order.items = hydrated;
+
+  const itemsByOrderId = new Map();
+  for (const item of items) {
+    item.options = optionsByItemId.get(item.id) || [];
+    const list = itemsByOrderId.get(item.orderId) || [];
+    list.push(item);
+    itemsByOrderId.set(item.orderId, list);
+  }
+
+  for (const order of orders) {
+    order.items = itemsByOrderId.get(order.id) || [];
+  }
+  return orders;
+}
+
+async function hydrateOrder(client, tenantId, row) {
+  const [order] = await hydrateOrders(client, tenantId, [row]);
   return order;
 }
 

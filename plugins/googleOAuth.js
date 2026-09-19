@@ -13,7 +13,11 @@ import {
   setPlatformSessionCookie,
   setSessionCookie,
 } from "../middleware/sessionAuth.js";
-import { frontendUrlFromRequest, platformAdminPath, siteUrl } from "../utils/publicUrls.js";
+import {
+  frontendUrlFromRequest,
+  oauthReturnTo,
+  platformAdminPath,
+} from "../utils/publicUrls.js";
 
 const OAUTH_RETURN_COOKIE = "oauth_return";
 const OAUTH_STATE_COOKIE = "oauth2-redirect-state";
@@ -149,7 +153,7 @@ export async function registerGoogleOAuth(fastify) {
   });
 
   const handleGoogleCallback = async (request, reply) => {
-    const returnTo = readCookie(request, OAUTH_RETURN_COOKIE) || siteUrl();
+    const returnTo = oauthReturnTo(request, readCookie(request, OAUTH_RETURN_COOKIE));
     const fail = (reason) => {
       logger.error({ err: reason }, "Callback Google");
       const intent = readCookie(request, OAUTH_INTENT_COOKIE);

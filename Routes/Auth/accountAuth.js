@@ -50,8 +50,20 @@ export default async function accountAuthRoutes(fastify) {
     handler: AccountAuthController.me,
   });
 
+  fastify.post("/dossier-notice/ack", {
+    ...authLimit,
+    preHandler: [requireAuth],
+    handler: AccountAuthController.ackDossierNotice,
+  });
+
   fastify.post("/logout", {
     handler: AccountAuthController.logout,
+  });
+
+  fastify.post("/impersonate/stop", {
+    preHandler: [requireAuth],
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    handler: AccountAuthController.stopImpersonation,
   });
 
   fastify.post("/redeem-access", {
@@ -87,6 +99,29 @@ export default async function accountAuthRoutes(fastify) {
   fastify.get("/profile", {
     preHandler: [requireAuth],
     handler: AccountAuthController.getWebsiteProfile,
+  });
+
+  fastify.get("/profile/documents/:kind", {
+    preHandler: [requireAuth],
+    config: {
+      rateLimit: {
+        max: 30,
+        timeWindow: "1 minute",
+      },
+    },
+    schema: {
+      params: {
+        type: "object",
+        required: ["kind"],
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["kbis", "id_recto", "id_verso", "address_proof"],
+          },
+        },
+      },
+    },
+    handler: AccountAuthController.getWebsiteDocument,
   });
 
   fastify.put("/profile", {

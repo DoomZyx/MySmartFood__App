@@ -57,7 +57,7 @@ describe("VoiceHangupService", () => {
     expect(process).not.toHaveBeenCalled();
     expect(notifyCallEnded).toHaveBeenCalledWith(
       expect.objectContaining({ type_demande: "Réservation de table" }),
-      { orderId: "resa1", appointmentType: "reservation" },
+      { orderId: "resa1", appointmentType: "reservation", tenantId: TENANT_ID },
     );
   });
 
@@ -82,7 +82,7 @@ describe("VoiceHangupService", () => {
     expect(process).not.toHaveBeenCalled();
     expect(notifyCallEnded).toHaveBeenCalledWith(
       expect.objectContaining({ nom: "Ada" }),
-      { orderId: null, appointmentType: null },
+      { orderId: null, appointmentType: null, tenantId: TENANT_ID },
     );
   });
 });

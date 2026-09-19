@@ -1,12 +1,18 @@
 import jwt from "jsonwebtoken";
 import * as User from "../models/pg/User.js";
 import logger from "../Services/logging/logger.js";
+import {
+  capabilityForPlatformRoute,
+  hasPlatformCapability,
+} from "../Business/services/PlatformAccess.js";
 
 export const JWT_COOKIE_NAME = process.env.JWT_COOKIE_NAME || "smartcrm_token";
 export const PLATFORM_ADMIN_COOKIE_NAME =
   process.env.PLATFORM_ADMIN_COOKIE_NAME || "smartcrm_platform";
 export const PLATFORM_PENDING_COOKIE_NAME =
   process.env.PLATFORM_PENDING_COOKIE_NAME || "smartcrm_platform_pending";
+export const IMPERSONATE_COOKIE_NAME =
+  process.env.IMPERSONATE_COOKIE_NAME || "smartcrm_impersonate";
 
 function jwtSecret() {
   const secret = process.env.JWT_SECRET;
@@ -32,7 +38,11 @@ export function cookieOptions() {
 
 export function signSessionToken(user) {
   return jwt.sign(
-    { userId: user.id, email: user.email },
+    {
+      userId: user.id,
+      email: user.email,
+      sessionVersion: Number(user.sessionVersion || 1),
+    },
     jwtSecret(),
     { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
   );
@@ -53,7 +63,11 @@ export function platformCookieOptions() {
 
 export function signPlatformToken(user) {
   return jwt.sign(
-    { userId: user.id, scope: "platform-admin" },
+    {
+      userId: user.id,
+      scope: "platform-admin",
+      sessionVersion: Number(user.sessionVersion || 1),
+    },
     jwtSecret(),
     { expiresIn: process.env.PLATFORM_ADMIN_EXPIRES_IN || "4h" }
   );
@@ -98,10 +112,61 @@ export function clearPlatformPendingCookie(reply) {
   });
 }
 
+export function impersonateCookieOptions() {
+  const isProduction = process.env.NODE_ENV === "production";
+  return {
+    ...cookieOptions(),
+    sameSite: isProduction ? "strict" : "lax",
+    maxAge: 20 * 60,
+  };
+}
+
+export function signImpersonateToken({ actorId, targetUserId, tenantId, sessionVersion }) {
+  return jwt.sign(
+    {
+      scope: "impersonate",
+      actorId,
+      targetUserId,
+      tenantId,
+      sessionVersion: Number(sessionVersion || 1),
+    },
+    jwtSecret(),
+    { expiresIn: process.env.IMPERSONATE_EXPIRES_IN || "20m" }
+  );
+}
+
+export function setImpersonateCookie(reply, payload) {
+  reply.setCookie(
+    IMPERSONATE_COOKIE_NAME,
+    signImpersonateToken(payload),
+    impersonateCookieOptions()
+  );
+}
+
+export function clearImpersonateCookie(reply) {
+  reply.clearCookie(IMPERSONATE_COOKIE_NAME, {
+    ...impersonateCookieOptions(),
+    maxAge: 0,
+  });
+}
+
+export function readImpersonateToken(request) {
+  const token = readNamedCookieToken(request, IMPERSONATE_COOKIE_NAME);
+  if (!token) return null;
+  try {
+    const decoded = jwt.verify(token, jwtSecret());
+    if (decoded.scope !== "impersonate") return null;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
 export function clearSessionCookie(reply) {
   reply.clearCookie(JWT_COOKIE_NAME, { ...cookieOptions(), maxAge: 0 });
   clearPlatformSessionCookie(reply);
   clearPlatformPendingCookie(reply);
+  clearImpersonateCookie(reply);
 }
 
 function readNamedCookieToken(request, name) {
@@ -145,6 +210,11 @@ export async function requireAuth(request, reply) {
     const user = await User.findById(decoded.userId);
     if (!user) {
       return reply.code(401).send({ error: "Utilisateur invalide" });
+    }
+    const tokenVersion = Number(decoded.sessionVersion || 1);
+    const userVersion = Number(user.sessionVersion || 1);
+    if (tokenVersion !== userVersion) {
+      return reply.code(401).send({ error: "Session expirée, veuillez vous reconnecter." });
     }
     request.user = user;
   } catch (err) {
@@ -203,5 +273,28 @@ export async function requirePlatformOwner(request, reply) {
   if (reply.sent) return;
   if (!request.user.isPlatformOwner) {
     return reply.code(403).send({ error: "Gestion des comptes réservée au propriétaire" });
+  }
+}
+
+export function requirePlatformCapability(capability) {
+  return async function requirePlatformCapabilityHandler(request, reply) {
+    await requirePlatformAdmin(request, reply);
+    if (reply.sent) return;
+    if (!hasPlatformCapability(request.user, capability)) {
+      return reply.code(403).send({ error: "Droits insuffisants" });
+    }
+  };
+}
+
+export async function requirePlatformRouteCapability(request, reply) {
+  const url = request.routeOptions?.url || request.routerPath;
+  if (String(url || "").endsWith("/impersonate/stop")) return;
+  const cap = capabilityForPlatformRoute(request.method, url);
+  if (!cap) {
+    if (request.method === "GET") return;
+    return reply.code(403).send({ error: "Droits insuffisants" });
+  }
+  if (!hasPlatformCapability(request.user, cap)) {
+    return reply.code(403).send({ error: "Droits insuffisants" });
   }
 }

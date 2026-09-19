@@ -1,4 +1,5 @@
 import {
+  canBypassDossierLock,
   hasActiveRestaurantAccess,
   isPaidSubscription,
   isPlatformProvisionedAccess,
@@ -58,5 +59,35 @@ describe("RestaurantDashboardAccess", () => {
         unlocked
       )
     ).toBe(false);
+  });
+
+  test("abonnement développeur : dashboard sans Stripe ni dossier", () => {
+    const tenant = { onboardedBy: "self", status: "active" };
+    const sub = { status: "active" };
+    const plan = { slug: "developpeur" };
+    expect(hasActiveRestaurantAccess(sub, tenant, plan)).toBe(true);
+    expect(isRestaurantDashboardReady(sub, null, tenant, {}, plan)).toBe(true);
+  });
+
+  test("propriétaire plateforme : dashboard sans parcours client", () => {
+    const tenant = { onboardedBy: "self", status: "active" };
+    const owner = { isPlatformOwner: true };
+    expect(hasActiveRestaurantAccess({ status: "incomplete" }, tenant, null, owner)).toBe(true);
+    expect(isRestaurantDashboardReady({ status: "incomplete" }, null, tenant, owner)).toBe(true);
+  });
+
+  test("propriétaire et plan développeur peuvent renvoyer un dossier verrouillé", () => {
+    expect(canBypassDossierLock({ isPlatformOwner: true }, null)).toBe(true);
+    expect(canBypassDossierLock({}, { slug: "developpeur" })).toBe(true);
+    expect(canBypassDossierLock({}, { slug: "beta" })).toBe(false);
+    expect(canBypassDossierLock({ isPlatformAdmin: true }, { slug: "beta" })).toBe(false);
+  });
+
+  test("admin plateforme sans plan développeur : pas d'accès dashboard", () => {
+    const tenant = { onboardedBy: "self", status: "active" };
+    const admin = { isPlatformAdmin: true };
+    const beta = { slug: "beta" };
+    expect(hasActiveRestaurantAccess({ status: "incomplete" }, tenant, beta, admin)).toBe(false);
+    expect(isRestaurantDashboardReady({ status: "incomplete" }, null, tenant, admin, beta)).toBe(false);
   });
 });

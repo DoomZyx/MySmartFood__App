@@ -1,6 +1,11 @@
 // Services/notificationService.js
 import { callLogger } from "./logging/logger.js";
 import { notifDebugLog } from "./logging/notifDebugLog.js";
+import { withTenant } from "../database/transaction.js";
+import * as DashboardNotification from "../models/pg/DashboardNotification.js";
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 class NotificationService {
   constructor() {
@@ -8,12 +13,15 @@ class NotificationService {
   }
 
   // Ajouter une connexion WebSocket
-  addConnection(connection) {
+  addConnection(connection, { tenantIds = [], userId } = {}) {
+    connection.tenantIds = Array.isArray(tenantIds) ? tenantIds.filter((id) => UUID_PATTERN.test(id)) : [];
+    connection.userId = userId || null;
     this.connections.add(connection);
     notifDebugLog("Connexion ajoutee total=" + this.connections.size);
     callLogger.info(null, "Nouvelle connexion notification ajoutée", {
       totalConnections: this.connections.size,
       connectionId: connection.id || "unknown",
+      tenantCount: connection.tenantIds.length,
     });
   }
 
@@ -40,64 +48,109 @@ class NotificationService {
     return socket?.readyState === 1;
   }
 
-  // Envoyer une notification à tous les clients connectés
-  sendNotification(type, data) {
+  _connectionAcceptsTenant(connection, tenantId) {
+    if (!tenantId) return true;
+    const ids = Array.isArray(connection?.tenantIds) ? connection.tenantIds : [];
+    return ids.includes(tenantId);
+  }
+
+  async _persist(type, data, tenantId) {
+    if (!UUID_PATTERN.test(String(tenantId || ""))) return null;
+    try {
+      return await withTenant(tenantId, (client) =>
+        DashboardNotification.insert(client, tenantId, {
+          notificationType: type,
+          payload: data || {},
+        })
+      );
+    } catch (error) {
+      callLogger.error(null, error, {
+        source: "notificationService.js",
+        context: "persist_notification",
+        type,
+        tenantId,
+      });
+      return null;
+    }
+  }
+
+  // Envoyer une notification aux dashboards du tenant. Persistée même sans WebSocket.
+  sendNotification(type, data, tenantId) {
     notifDebugLog("sendNotification appele type=" + type + " connexions=" + this.connections.size);
-    this.cleanupConnections();
+    const persistPromise = this._persist(type, data, tenantId);
 
-    const notification = {
-      type: "notification",
-      notificationType: type,
-      data: data,
-      timestamp: new Date().toISOString(),
-    };
-
-    const payload = JSON.stringify(notification);
-    let sentCount = 0;
-    let idx = 0;
-    this.connections.forEach((connection) => {
-      const socket = this._getSocket(connection);
-      const state = socket?.readyState;
-      const hasSend = typeof socket?.send === "function";
-      if (state === 1 && hasSend) {
-        try {
-          socket.send(payload);
-          sentCount++;
-        } catch (error) {
-          callLogger.error(null, error, {
-            source: "notificationService.js",
-            context: "sendNotification_websocket",
+    const broadcast = (row) => {
+      this.cleanupConnections();
+      const payloadData = {
+        ...(data && typeof data === "object" ? data : {}),
+        id: row?.id || data?.id || null,
+      };
+      const notification = {
+        type: "notification",
+        notificationType: type,
+        data: payloadData,
+        timestamp: row?.createdAt || new Date().toISOString(),
+      };
+      const payload = JSON.stringify(notification);
+      let sentCount = 0;
+      let idx = 0;
+      this.connections.forEach((connection) => {
+        if (!this._connectionAcceptsTenant(connection, tenantId)) {
+          idx++;
+          return;
+        }
+        const socket = this._getSocket(connection);
+        const state = socket?.readyState;
+        const hasSend = typeof socket?.send === "function";
+        if (state === 1 && hasSend) {
+          try {
+            socket.send(payload);
+            sentCount++;
+          } catch (error) {
+            callLogger.error(null, error, {
+              source: "notificationService.js",
+              context: "sendNotification_websocket",
+              connectionIndex: idx,
+            });
+          }
+        } else {
+          notifDebugLog("Connexion ignoree idx=" + idx + " readyState=" + state + " hasSend=" + hasSend);
+          callLogger.info(null, "Connexion ignoree (pas prête pour envoi)", {
             connectionIndex: idx,
+            readyState: state,
+            hasSend,
           });
         }
-      } else {
-        notifDebugLog("Connexion ignoree idx=" + idx + " readyState=" + state + " hasSend=" + hasSend);
-        callLogger.info(null, "Connexion ignoree (pas prête pour envoi)", {
-          connectionIndex: idx,
-          readyState: state,
-          hasSend,
-        });
-      }
-      idx++;
-    });
-
-    notifDebugLog("Notification envoyee sentCount=" + sentCount + " totalConnections=" + this.connections.size);
-    callLogger.info(null, "Notification envoyée", {
-      type,
-      sentCount,
-      totalConnections: this.connections.size,
-      notificationData: data,
-    });
-    if (sentCount === 0 && this.connections.size > 0) {
-      callLogger.warn(null, "Notification envoyée a 0 client (connexions peut-etre fermees)", {
-        type,
-        totalConnections: this.connections.size,
+        idx++;
       });
-    } else if (this.connections.size === 0) {
-      callLogger.warn(null, "Aucun client WebSocket connecte pour les notifications", { type });
-    }
 
-    return sentCount;
+      notifDebugLog("Notification envoyee sentCount=" + sentCount + " totalConnections=" + this.connections.size);
+      callLogger.info(null, "Notification envoyée", {
+        type,
+        sentCount,
+        totalConnections: this.connections.size,
+        persisted: Boolean(row?.id),
+        notificationData: payloadData,
+      });
+      if (sentCount === 0 && this.connections.size > 0) {
+        callLogger.warn(null, "Notification envoyée a 0 client (connexions peut-etre fermees)", {
+          type,
+          totalConnections: this.connections.size,
+        });
+      } else if (this.connections.size === 0) {
+        callLogger.warn(null, "Aucun client WebSocket connecte pour les notifications", { type });
+      }
+      return sentCount;
+    };
+
+    return persistPromise.then(broadcast).catch((error) => {
+      callLogger.error(null, error, {
+        source: "notificationService.js",
+        context: "sendNotification",
+        type,
+      });
+      return broadcast(null);
+    });
   }
 
   /**
@@ -125,8 +178,10 @@ class NotificationService {
    */
   notifyCallEnded(extractedData, options = {}) {
     const label = NotificationService.getCallTypeLabel(extractedData);
-    const orderId = options.orderId != null ? String(options.orderId) : null;
-    const hasCreated = orderId != null && orderId.trim() !== "";
+    const createdId = options.orderId != null ? String(options.orderId).trim() : "";
+    const hasCreated = createdId !== "";
+    const appointmentType = options.appointmentType || null;
+    const isReservation = appointmentType === "reservation";
     const nom = extractedData.nom || "Client";
     const now = new Date();
     const heureStr = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
@@ -144,8 +199,9 @@ class NotificationService {
       hasOrder: hasCreated,
       details: {
         callId: extractedData.callId || null,
-        orderId,
-        appointmentType: options.appointmentType || null,
+        orderId: hasCreated && !isReservation ? createdId : null,
+        reservationId: hasCreated && isReservation ? createdId : null,
+        appointmentType,
         client: nom,
         telephone: extractedData.telephone || "Non spécifié",
         type_demande: extractedData.type_demande || "Non spécifié",
@@ -158,7 +214,11 @@ class NotificationService {
       priority: hasCreated ? "success" : "info",
     };
 
-    return this.sendNotification("call_completed", notificationData);
+    return this.sendNotification(
+      "call_completed",
+      notificationData,
+      options.tenantId || options.instanceId
+    );
   }
 
   /** @deprecated Utiliser notifyCallEnded. Conservé pour compatibilité (ex. route test). */
@@ -187,7 +247,28 @@ class NotificationService {
       priority: hasOrder ? "success" : "info",
     };
 
-    return this.sendNotification("call_completed", notificationData);
+    return this.sendNotification(
+      "call_completed",
+      notificationData,
+      callData.tenantId || callData.instanceId
+    );
+  }
+
+  notifyMissedCall({ tenantId, caller, transferred } = {}) {
+    const who = caller || "Numéro inconnu";
+    const notificationData = {
+      title: transferred ? "Appel transféré (ligne coupée)" : "Appel manqué (ligne coupée)",
+      message: transferred
+        ? `Appel de ${who} transféré vers le restaurant.`
+        : `Appel de ${who} rejeté : la ligne IA était coupée.`,
+      details: {
+        caller: who,
+        telephone: who,
+        transferred: Boolean(transferred),
+      },
+      priority: "warning",
+    };
+    return this.sendNotification("call_missed", notificationData, tenantId);
   }
 
   // Notification d'erreur d'appel
@@ -204,7 +285,11 @@ class NotificationService {
       priority: "error",
     };
 
-    return this.sendNotification("call_error", notificationData);
+    return this.sendNotification(
+      "call_error",
+      notificationData,
+      callData.tenantId || callData.instanceId
+    );
   }
 
   // Notification de nouveau client
@@ -220,7 +305,11 @@ class NotificationService {
       priority: "info",
     };
 
-    return this.sendNotification("new_client", notificationData);
+    return this.sendNotification(
+      "new_client",
+      notificationData,
+      clientData.tenantId || clientData.instanceId
+    );
   }
 
   // Notification de statut mis à jour
@@ -237,7 +326,11 @@ class NotificationService {
       priority: "info",
     };
 
-    return this.sendNotification("status_update", notificationData);
+    return this.sendNotification(
+      "status_update",
+      notificationData,
+      callData.tenantId || callData.instanceId
+    );
   }
 
   // Notification d'appel en cours (quand quelqu'un téléphone)
@@ -253,7 +346,11 @@ class NotificationService {
       priority: "high",
     };
 
-    return this.sendNotification("call_in_progress", notificationData);
+    return this.sendNotification(
+      "call_in_progress",
+      notificationData,
+      callData.tenantId || callData.instanceId
+    );
   }
 
   /**

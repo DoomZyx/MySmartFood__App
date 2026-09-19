@@ -4,6 +4,7 @@ import { callLogger } from "../../Services/logging/logger.js";
 import { notifDebugLog } from "../../Services/logging/notifDebugLog.js";
 import { requireAuth } from "../../middleware/sessionAuth.js";
 import { buildCorsOrigin } from "../../plugins/security.js";
+import * as Membership from "../../models/pg/Membership.js";
 
 export async function requireAllowedNotificationOrigin(request, reply) {
   const origin = request.headers.origin;
@@ -43,7 +44,7 @@ function requireApiKey(request, reply, done) {
   done();
 }
 
-function attachNotificationWebSocket(connection, req, routeLabel) {
+async function attachNotificationWebSocket(connection, req, routeLabel) {
   const socket = connection?.socket ?? connection;
 
   const readyState = socket?.readyState;
@@ -63,7 +64,20 @@ function attachNotificationWebSocket(connection, req, routeLabel) {
     hasSend,
     totalConnectionsAvant: notificationService.connections.size,
   });
-  notificationService.addConnection(connection);
+
+  let tenantIds = [];
+  try {
+    const memberships = req.user?.id ? await Membership.listByUserId(req.user.id) : [];
+    tenantIds = memberships
+      .filter((item) => item.status && item.status !== "closed")
+      .map((item) => item.tenantId);
+  } catch (error) {
+    callLogger.error(null, error, { context: "ws_notifications_tenants" });
+  }
+  notificationService.addConnection(connection, {
+    tenantIds,
+    userId: req.user?.id,
+  });
 
   connection.on("error", (err) => {
     callLogger.error(null, err, { context: "ws_notifications_error" });

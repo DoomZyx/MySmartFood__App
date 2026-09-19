@@ -26,6 +26,28 @@ export default async function voiceContextRoutes(fastify) {
     VoiceContextController.getContext,
   );
 
+  fastify.get(
+    "/context/:instanceId/snapshot",
+    {
+      preHandler: requireInternalApiKey,
+      schema: {
+        params: {
+          type: "object",
+          required: ["instanceId"],
+          properties: {
+            instanceId: {
+              type: "string",
+              minLength: 1,
+              maxLength: 128,
+              pattern: "^[A-Za-z0-9_.:-]+$",
+            },
+          },
+        },
+      },
+    },
+    VoiceContextController.getSnapshot,
+  );
+
   fastify.post(
     "/usage",
     {

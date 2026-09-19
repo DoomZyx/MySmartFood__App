@@ -17,6 +17,7 @@ function isSensitiveMetaKey(k) {
     n === "x-api-key" ||
     n === "authorization" ||
     n === "password" ||
+    n === "temporarypassword" ||
     n === "token" ||
     n === "secret" ||
     n === "twilioauthtoken" ||

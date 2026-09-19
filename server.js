@@ -12,7 +12,8 @@ import {
 } from "./Services/monitoring/monitoringService.js";
 
 const PORT = config.PORT;
-const HOST = "0.0.0.0";
+const HOST =
+  process.env.HOST || (config.APP_ENV === "dev" ? "0.0.0.0" : "127.0.0.1");
 
 let closing = false;
 

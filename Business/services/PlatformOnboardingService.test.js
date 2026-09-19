@@ -2,6 +2,7 @@
 import { jest } from "@jest/globals";
 
 const findByEmail = jest.fn();
+const findUserById = jest.fn();
 const createUser = jest.fn();
 const setPassword = jest.fn();
 const updateAccount = jest.fn();
@@ -43,6 +44,7 @@ jest.unstable_mockModule("twilio", () => ({
 
 jest.unstable_mockModule("../../models/pg/User.js", () => ({
   findByEmail,
+  findById: findUserById,
   create: createUser,
   setPassword,
   updateAccount,
@@ -54,6 +56,9 @@ jest.unstable_mockModule("../../models/pg/Membership.js", () => ({
   listByUserId,
   createMembership,
   findMembership,
+  updateRole: jest.fn(),
+  removeMembership: jest.fn(),
+  countOwners: jest.fn(),
 }));
 
 jest.unstable_mockModule("../../models/pg/Tenant.js", () => ({
@@ -62,6 +67,7 @@ jest.unstable_mockModule("../../models/pg/Tenant.js", () => ({
   findById,
   updateDetails,
   updateOpenAi,
+  updateInternalNote: jest.fn(),
   slugFromName: (name, suffix) => `slug-${suffix}`,
 }));
 
@@ -106,13 +112,22 @@ jest.unstable_mockModule("../../database/transaction.js", () => ({
   withTenant: async (_id, fn) => fn({ query: jest.fn() }),
 }));
 
+const ensureDefaults = jest.fn();
+jest.unstable_mockModule("./MenuCatalogService.js", () => ({
+  ensureDefaults,
+}));
+
 jest.unstable_mockModule("../../utils/voiceWebhookUrl.js", () => ({
   incomingNumberVoiceUpdate,
   resolveVoicePublicHost,
   voiceWebhookUrl,
 }));
 
-const { createPlatformTenant, updatePlatformTenant, updatePlatformTenantUser, parseOptionalInboundPhone, buildValidationChecklist, isCompanyDossierComplete } = await import(
+jest.unstable_mockModule("./PlatformAuditService.js", () => ({
+  recordPlatformAudit: jest.fn(),
+}));
+
+const { createPlatformTenant, updatePlatformTenant, updatePlatformTenantUser, parseOptionalInboundPhone, buildValidationChecklist, isCompanyDossierComplete, isDossierAwaitingReview } = await import(
   "./PlatformOnboardingService.js"
 );
 
@@ -132,6 +147,7 @@ const platformRow = {
 
 function resetMocks() {
   findByEmail.mockReset();
+  findUserById.mockReset();
   createUser.mockReset();
   setPassword.mockReset();
   updateAccount.mockReset();
@@ -159,6 +175,8 @@ function resetMocks() {
   incomingUpdate.mockReset();
   incomingList.mockReset();
   incomingFetch.mockReset();
+  ensureDefaults.mockReset();
+  ensureDefaults.mockResolvedValue({});
 
   findBySlugPlan.mockResolvedValue({ id: "plan-beta", slug: "beta" });
   createTenantModel.mockResolvedValue({
@@ -229,9 +247,10 @@ describe("createPlatformTenant", () => {
       })
     );
     expect(markCompleted).toHaveBeenCalledWith(TENANT_ID);
+    expect(ensureDefaults).toHaveBeenCalledWith(TENANT_ID);
     expect(markDashboardUnlocked).toHaveBeenCalledWith(USER_ID);
     expect(incomingNumberVoiceUpdate).not.toHaveBeenCalled();
-    expect(result.temporaryPassword).toBe("motdepasse");
+    expect(result.temporaryPassword).toBeUndefined();
     expect(result.tenant.id).toBe(TENANT_ID);
   });
 
@@ -349,6 +368,45 @@ describe("buildValidationChecklist", () => {
   });
 });
 
+describe("isDossierAwaitingReview", () => {
+  test("un tenant actif avec pièces envoyées reste à traiter", () => {
+    expect(
+      isDossierAwaitingReview({
+        status: "active",
+        documentsSubmittedAt: "2026-09-19",
+        provisioningState: "bundle_submitted",
+      })
+    ).toBe(true);
+    expect(
+      isDossierAwaitingReview({
+        status: "active",
+        documentsSubmittedAt: "2026-09-19",
+        provisioningState: null,
+      })
+    ).toBe(true);
+  });
+
+  test("un dossier déjà validé sort de la file", () => {
+    expect(
+      isDossierAwaitingReview({
+        status: "active",
+        documentsSubmittedAt: "2026-09-19",
+        provisioningState: "completed",
+      })
+    ).toBe(false);
+  });
+
+  test("un restaurant fermé avec pièces non traitées reste à traiter", () => {
+    expect(
+      isDossierAwaitingReview({
+        status: "closed",
+        documentsSubmittedAt: "2026-09-19",
+        provisioningState: "bundle_submitted",
+      })
+    ).toBe(true);
+  });
+});
+
 describe("updatePlatformTenant", () => {
   beforeEach(() => {
     resetMocks();
@@ -452,6 +510,11 @@ describe("updatePlatformTenantUser", () => {
       ownerUserId: USER_ID,
     });
     findMembership.mockResolvedValue({ userId: USER_ID, tenantId: TENANT_ID, role: "owner" });
+    findUserById.mockResolvedValue({
+      id: USER_ID,
+      isPlatformAdmin: false,
+      isPlatformOwner: false,
+    });
     updateAccount.mockResolvedValue({ id: USER_ID });
     setPassword.mockResolvedValue(true);
     listByTenantId.mockResolvedValue([

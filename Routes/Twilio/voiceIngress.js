@@ -14,6 +14,7 @@ import {
 import { routeVoiceConnection } from "../Ws/ws.js";
 import * as TwilioBundle from "../../models/pg/TwilioBundle.js";
 import { recordCallFlow } from "../../Services/monitoring/callFlowTrace.js";
+import notificationService from "../../Services/notificationService.js";
 
 function publicWebhookUrl(request) {
   const protocol = request.headers["x-forwarded-proto"] || "https";
@@ -47,7 +48,7 @@ function callMeta(request) {
   };
 }
 
-async function handleIncomingCall(request, reply) {
+export async function handleIncomingCall(request, reply) {
   const meta = callMeta(request);
   if (!isValidTwilioWebhook(request)) {
     recordCallFlow({
@@ -113,6 +114,11 @@ async function handleIncomingCall(request, reply) {
         ? "ligne off, transfert restaurant"
         : "ligne off, Reject busy (pas de numero de transfert)",
     });
+    notificationService.notifyMissedCall({
+      tenantId: instanceId,
+      caller: meta.from,
+      transferred: hasTransfer,
+    }).catch(() => {});
     return reply
       .type("text/xml")
       .send(generateTwimlTransferToRestaurant(settings?.transfer_phone));

@@ -3,6 +3,16 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import csrfProtection from "@fastify/csrf-protection";
 
+const PROD_RATE_LIMIT_MAX = 200;
+const DEV_RATE_LIMIT_MAX = 2000;
+
+export function resolveRateLimitMax(env = process.env) {
+  const fromEnv = Number(env.RATE_LIMIT_MAX);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv;
+  const isProd = env.NODE_ENV === "production" || env.APP_ENV === "prod";
+  return isProd ? PROD_RATE_LIMIT_MAX : DEV_RATE_LIMIT_MAX;
+}
+
 export async function registerSecurityPlugins(fastify) {
   await fastify.register(helmet, {
     contentSecurityPolicy: false,
@@ -14,7 +24,7 @@ export async function registerSecurityPlugins(fastify) {
 
   await fastify.register(rateLimit, {
     global: true,
-    max: Number(process.env.RATE_LIMIT_MAX) || 200,
+    max: resolveRateLimitMax(),
     timeWindow: "1 minute",
   });
 

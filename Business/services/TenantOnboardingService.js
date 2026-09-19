@@ -3,7 +3,8 @@ import * as Tenant from "../../models/pg/Tenant.js";
 import * as Membership from "../../models/pg/Membership.js";
 import * as Subscription from "../../models/pg/Subscription.js";
 import { createProvisioningJob } from "../../models/pg/ProvisioningJob.js";
-import { withTenant, withTransaction } from "../../database/transaction.js";
+import { withTransaction } from "../../database/transaction.js";
+import { ensureDefaults } from "./MenuCatalogService.js";
 
 const COUNTRY_CODES = {
   France: "FR",
@@ -17,7 +18,8 @@ export function countryCodeFromLabel(country) {
 
 export async function firstTenantId(userId) {
   const memberships = await Membership.listByUserId(userId);
-  return memberships[0]?.tenantId || null;
+  const open = memberships.find((item) => item.status && item.status !== "closed");
+  return open?.tenantId || null;
 }
 
 /**
@@ -62,11 +64,6 @@ export async function ensureBetaTenant(user, { name, countryCode } = {}) {
     });
   });
 
-  await withTenant(tenantId, (tenantClient) =>
-    tenantClient.query(
-      `INSERT INTO tenant_settings (tenant_id) VALUES ($1) ON CONFLICT DO NOTHING`,
-      [tenantId]
-    )
-  );
+  await ensureDefaults(tenantId);
   return tenantId;
 }

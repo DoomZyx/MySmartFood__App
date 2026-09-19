@@ -5,9 +5,11 @@ import { callLogger } from "../../Services/logging/logger.js";
 import { notifDebugLog } from "../../Services/logging/notifDebugLog.js";
 import { retryWithBackoff } from "../../Services/utils/retryWithBackoff.js";
 import { resolveRuntimeTenantId } from "../../utils/runtimeTenant.js";
+import { requireInternalApiKey } from "../../middleware/requireInternalApiKey.js";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_TRANSCRIPTION_CHARS = 50_000;
 
 function tenantIdFromProcessCallRequest(request) {
   return resolveRuntimeTenantId(
@@ -40,7 +42,7 @@ function isUselessCall(extractedData) {
 }
 
 export default async function processCallRoutes(fastify, options) {
-  fastify.post("/process-call", async (request, reply) => {
+  fastify.post("/process-call", { preHandler: requireInternalApiKey }, async (request, reply) => {
     const startTime = Date.now();
     const streamSid = request.headers["x-stream-sid"] || "unknown";
 
@@ -53,6 +55,10 @@ export default async function processCallRoutes(fastify, options) {
         logStep(streamSid, "ERREUR: transcription manquante ou invalide");
         callLogger.error(streamSid, new Error("Transcription manquante"), { context: "validation" });
         return reply.code(400).send({ error: "Transcription manquante" });
+      }
+      if (transcription.length > MAX_TRANSCRIPTION_CHARS) {
+        logStep(streamSid, "ERREUR: transcription trop longue", String(transcription.length));
+        return reply.code(400).send({ error: "Transcription trop longue" });
       }
 
       const transcriptionLen = transcription.trim().length;
@@ -90,7 +96,7 @@ export default async function processCallRoutes(fastify, options) {
           type_demande: extractedData.type_demande,
         });
         try {
-          notificationService.notifyCallEnded(extractedData, {});
+          notificationService.notifyCallEnded(extractedData, { tenantId: instanceId });
         } catch (notifError) {
           callLogger.error(streamSid, notifError, { context: "notifyCallEnded_ignored" });
         }
@@ -145,6 +151,7 @@ export default async function processCallRoutes(fastify, options) {
         notificationService.notifyCallEnded(extractedData, {
           orderId,
           appointmentType,
+          tenantId: instanceId,
           createdReservation: result.reservation,
           createdOrder: result.order,
         });
@@ -166,7 +173,6 @@ export default async function processCallRoutes(fastify, options) {
       });
       return reply.code(500).send({
         error: "Erreur lors du traitement de l'appel",
-        details: error?.message ?? "Erreur inconnue",
       });
     }
   });

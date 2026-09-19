@@ -66,6 +66,7 @@ export default async function wsRoutes(fastify) {
       connection,
       request,
       getInstanceIdFromEnv(),
+      { requireStreamToken: true },
     );
   });
 }

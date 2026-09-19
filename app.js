@@ -34,6 +34,8 @@ import pricingRoutes from "./Routes/Pricing/pricing.js";
 import orderRoutes from "./Routes/Appointments/order.js";
 import reservationRoutes from "./Routes/Appointments/reservation.js";
 import phoneLineRoutes from "./Routes/PhoneLine/phoneLine.js";
+import dashboardRoutes from "./Routes/Dashboard/dashboard.js";
+import notificationInboxRoutes from "./Routes/Notifications/inbox.js";
 import callClientRoutes from "./Routes/Calls/callClient.js";
 import callRoutes from "./Routes/Calls/call.js";
 import processCallRoutes from "./Routes/CallData/processCall.js";
@@ -69,7 +71,7 @@ for (const { name, minLen } of requiredEnv) {
   }
 }
 
-const fastify = Fastify();
+const fastify = Fastify({ trustProxy: true });
 
 fastify.addHook("onRequest", async (request) => {
   request._monitorStartedAt = Date.now();
@@ -88,7 +90,11 @@ fastify.addHook("onResponse", async (request, reply) => {
   });
   const pathOnly = url.split("?")[0];
   const isUpgrade = String(request.headers.upgrade || "").toLowerCase() === "websocket";
-  if (!isProbePath(url) && !isUpgrade && !pathOnly.startsWith("/api/monitoring")) {
+  if (
+    !isProbePath(url) &&
+    !isUpgrade &&
+    !pathOnly.startsWith("/api/monitoring")
+  ) {
     logger.info(
       {
         method: request.method,
@@ -256,7 +262,10 @@ fastify.register(tenantDataRoutes, { prefix: "/api/tenant" });
 fastify.register(pricingRoutes, { prefix: "/api" });
 fastify.register(orderRoutes, { prefix: "/api" });
 fastify.register(reservationRoutes, { prefix: "/api" });
+fastify.register(dashboardRoutes, { prefix: "/api" });
 fastify.register(phoneLineRoutes, { prefix: "/api" });
+// Inbox persisté : rattrapage des notifs si le dashboard était fermé.
+fastify.register(notificationInboxRoutes, { prefix: "/api" });
 fastify.register(callClientRoutes, { prefix: "/api" });
 fastify.register(callRoutes, { prefix: "/api" });
 fastify.register(processCallRoutes, { prefix: "/api" });

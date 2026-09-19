@@ -1,6 +1,7 @@
 import "../Config/env.js";
 import { connectDatabase, closeDatabase } from "../database/pool.js";
-import { withTenant, withTransaction } from "../database/transaction.js";
+import { withTransaction } from "../database/transaction.js";
+import { ensureDefaults } from "../Business/services/MenuCatalogService.js";
 import * as User from "../models/pg/User.js";
 import * as Tenant from "../models/pg/Tenant.js";
 import * as Membership from "../models/pg/Membership.js";
@@ -72,12 +73,7 @@ async function ensureResto(spec, plan) {
     });
   }
 
-  await withTenant(tenant.id, (client) =>
-    client.query(
-      `INSERT INTO tenant_settings (tenant_id) VALUES ($1) ON CONFLICT DO NOTHING`,
-      [tenant.id]
-    )
-  );
+  await ensureDefaults(tenant.id);
 
   return {
     slug: tenant.slug,

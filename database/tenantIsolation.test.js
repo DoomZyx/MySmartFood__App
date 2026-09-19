@@ -45,6 +45,8 @@ const TENANT_TABLES = [
   "order_item_options",
   "legacy_id_refs",
   "migration_rejections",
+  "llm_usage_events",
+  "dashboard_notifications",
 ];
 
 const RUNTIME_ROLE = "app_runtime_test";

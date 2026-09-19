@@ -1,12 +1,15 @@
 import * as Membership from "../models/pg/Membership.js";
+import * as Plan from "../models/pg/Plan.js";
 import * as Subscription from "../models/pg/Subscription.js";
 import * as EstablishmentProfile from "../models/pg/EstablishmentProfile.js";
 import {
+  hasDeveloperAccess,
   isBoValidatedAccess,
   isPaidSubscription,
   isPlatformProvisionedAccess,
   isRestaurantDashboardReady,
 } from "../Business/services/RestaurantDashboardAccess.js";
+import { loadImpersonation } from "../Business/services/PlatformImpersonationService.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -17,6 +20,21 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 export async function resolveTenant(request, reply) {
   if (!request.user) {
     return reply.code(401).send({ error: "Non authentifié" });
+  }
+
+  const impersonation = await loadImpersonation(request);
+  if (impersonation) {
+    const membership = impersonation.membership;
+    request.tenant = {
+      id: membership.tenantId,
+      slug: membership.slug,
+      name: membership.name,
+      status: membership.status,
+      role: membership.role,
+      onboardedBy: membership.onboardedBy || "self",
+    };
+    request.instanceId = membership.tenantId;
+    return;
   }
 
   const memberships = await Membership.listByUserId(request.user.id);
@@ -75,12 +93,18 @@ export function requireRole(...roles) {
 }
 
 export async function requireActiveSubscription(request, reply) {
+  if (request.impersonation) return;
   if (!request.tenant) {
     return reply.code(403).send({ error: "Contexte établissement manquant" });
   }
   const subscription = await Subscription.findCurrentByTenant(request.tenant.id);
   request.subscription = subscription || null;
+  const plan = subscription?.planId ? await Plan.findById(subscription.planId) : null;
+  request.plan = plan;
   if (subscription && Subscription.isAccessGranted(subscription.status)) {
+    return;
+  }
+  if (hasDeveloperAccess(subscription, plan, request.user)) {
     return;
   }
   if (isPlatformProvisionedAccess(request.tenant)) {
@@ -94,6 +118,7 @@ export async function requireActiveSubscription(request, reply) {
 
 export async function requireRestaurantDashboard(request, reply) {
   if (request.internalCall) return;
+  if (request.impersonation) return;
   if (!request.tenant) {
     return reply.code(403).send({ error: "Contexte établissement manquant" });
   }
@@ -102,11 +127,15 @@ export async function requireRestaurantDashboard(request, reply) {
     if (reply.sent) return;
   }
   const profile = await EstablishmentProfile.findByTenantId(request.tenant.id);
+  const plan =
+    request.plan ||
+    (request.subscription?.planId ? await Plan.findById(request.subscription.planId) : null);
   if (isRestaurantDashboardReady(
     request.subscription,
     profile?.documentsSubmittedAt,
     request.tenant,
-    request.user
+    request.user,
+    plan
   )) {
     return;
   }

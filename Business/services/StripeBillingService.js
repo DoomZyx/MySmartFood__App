@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { getPool } from "../../database/pool.js";
-import { withTenant, withTransaction } from "../../database/transaction.js";
+import { withTransaction } from "../../database/transaction.js";
+import { ensureDefaults } from "./MenuCatalogService.js";
 import * as Plan from "../../models/pg/Plan.js";
 import * as Tenant from "../../models/pg/Tenant.js";
 import * as Membership from "../../models/pg/Membership.js";
@@ -496,14 +497,8 @@ async function onCheckoutCompleted(stripe, session) {
     });
   });
 
-  await withTenant(tenantId, (tenantClient) =>
-    tenantClient.query(
-      `INSERT INTO tenant_settings (tenant_id) VALUES ($1) ON CONFLICT DO NOTHING`,
-      [tenantId]
-    )
-  );
-
   if (tenantId) {
+    await ensureDefaults(tenantId);
     try {
       await stripe.subscriptions.update(subscriptionId, {
         metadata: {

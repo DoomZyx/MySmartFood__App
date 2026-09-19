@@ -70,6 +70,12 @@ export async function requireTenantStaffAdmin(request, reply) {
   if (reply.sent) return;
   await resolveTenant(request, reply);
   if (reply.sent) return;
+  if (request.impersonation) {
+    if (!["owner", "admin"].includes(request.tenant?.role)) {
+      return reply.code(403).send({ error: "Accès refusé" });
+    }
+    return;
+  }
   if (request.user.isPlatformAdmin) return;
   await requireActiveSubscription(request, reply);
   if (reply.sent) return;

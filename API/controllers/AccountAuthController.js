@@ -16,17 +16,23 @@ import {
 } from "../../middleware/sessionAuth.js";
 import * as User from "../../models/pg/User.js";
 import {
+  loadWebsiteDocumentFile,
   loadWebsiteProfile,
   saveProfile,
   submitOnboardingDossier,
 } from "../../Business/services/DocumentComplianceService.js";
-import { AccountProfileService } from "../../Business/services/AccountProfileService.js";
 import {
-  countryCodeFromLabel,
-  ensureBetaTenant,
-  firstTenantId,
-} from "../../Business/services/TenantOnboardingService.js";
+  websiteTenantIdForRequest,
+  websiteWriteTenantIdForRequest,
+} from "../../Business/services/websiteProfileTenant.js";
+import { AccountProfileService } from "../../Business/services/AccountProfileService.js";
+import { countryCodeFromLabel } from "../../Business/services/TenantOnboardingService.js";
 import logger from "../../Services/logging/logger.js";
+import {
+  loadImpersonation,
+  stopImpersonation as clearImpersonationSession,
+} from "../../Business/services/PlatformImpersonationService.js";
+import { acknowledgeDossierNotice } from "../../Business/services/DossierAcceptedNoticeService.js";
 
 function handleAuthError(error, reply) {
   if (error instanceof AccountAuthError) {
@@ -57,9 +63,42 @@ export const AccountAuthController = {
     }
   },
 
+  async ackDossierNotice(request, reply) {
+    try {
+      const user = await acknowledgeDossierNotice(request.user);
+      return reply.send(await sessionPayload(user || request.user));
+    } catch (error) {
+      return handleAuthError(error, reply);
+    }
+  },
+
   async me(request, reply) {
+    const impersonation = await loadImpersonation(request);
+    if (impersonation) {
+      const payload = await sessionPayload(impersonation.target, {
+        tenantId: impersonation.tenantId,
+      });
+      payload.user.isPlatformAdmin = false;
+      payload.user.isPlatformOwner = false;
+      payload.user.platformRole = null;
+      payload.user.platformCapabilities = [];
+      payload.user.accessUnlocked = true;
+      payload.user.hasActiveSubscription = true;
+      payload.user.impersonation = {
+        actorId: impersonation.actorId,
+        actorEmail: impersonation.actorEmail,
+        tenantId: impersonation.tenantId,
+        expiresAt: impersonation.expiresAt,
+      };
+      return reply.send({ ...payload.user, ...payload });
+    }
     const payload = await sessionPayload(request.user);
     return reply.send({ ...payload.user, ...payload });
+  },
+
+  async stopImpersonation(request, reply) {
+    await clearImpersonationSession(reply, request.user, request);
+    return reply.code(204).send();
   },
 
   async logout(_request, reply) {
@@ -115,15 +154,32 @@ export const AccountAuthController = {
   },
 
   async getWebsiteProfile(request, reply) {
-    const tenantId = await firstTenantId(request.user.id);
-    if (!tenantId) return reply.send({});
+    const tenantId = await websiteTenantIdForRequest(request);
+    if (!tenantId) return reply.send({ documents: [] });
     return reply.send(await loadWebsiteProfile(tenantId));
+  },
+
+  async getWebsiteDocument(request, reply) {
+    try {
+      const tenantId = await websiteTenantIdForRequest(request);
+      const file = await loadWebsiteDocumentFile(tenantId, request.params.kind);
+      return reply
+        .header("Cache-Control", "private, no-store")
+        .header("Content-Disposition", `inline; filename="${file.filename}"`)
+        .type(file.mimeType)
+        .send(file.buffer);
+    } catch (error) {
+      return reply.code(error.statusCode || 500).send({
+        error: error.message,
+        message: error.message,
+      });
+    }
   },
 
   async updateWebsiteProfile(request, reply) {
     try {
       const body = request.body || {};
-      const tenantId = await ensureBetaTenant(request.user, {
+      const tenantId = await websiteWriteTenantIdForRequest(request, {
         name: body.nomEtablissement || body.businessName,
         countryCode: countryCodeFromLabel(body.pays || body.country),
       });
@@ -139,7 +195,7 @@ export const AccountAuthController = {
 
   async submitWebsiteOnboarding(request, reply) {
     try {
-      const tenantId = await ensureBetaTenant(request.user, {
+      const tenantId = await websiteWriteTenantIdForRequest(request, {
         name: request.user.name || request.user.email,
       });
       const files = {};

@@ -12,6 +12,7 @@ import {
   hasActiveRestaurantAccess,
   isRestaurantDashboardReady,
 } from "./RestaurantDashboardAccess.js";
+import { capabilitiesForRole, resolvePlatformRole } from "./PlatformAccess.js";
 
 export class AccountAuthError extends Error {
   constructor(message, statusCode = 400) {
@@ -135,8 +136,11 @@ export async function confirmGoogleLink({ userId, token }) {
   return user;
 }
 
-export async function sessionPayload(user) {
-  const memberships = await Membership.listByUserId(user.id);
+export async function sessionPayload(user, { tenantId } = {}) {
+  let memberships = await Membership.listByUserId(user.id);
+  if (tenantId) {
+    memberships = memberships.filter((item) => item.tenantId === tenantId);
+  }
   const tenants = memberships.map((item) => ({
     id: item.tenantId,
     slug: item.slug,
@@ -146,6 +150,7 @@ export async function sessionPayload(user) {
     onboardedBy: item.onboardedBy || "self",
   }));
   const first = tenants.find((item) => item.status === "active") || tenants[0] || null;
+  let plan = null;
   let planSlug = null;
   let planId = null;
   let planName = null;
@@ -154,7 +159,7 @@ export async function sessionPayload(user) {
   if (first) {
     subscription = await Subscription.findCurrentByTenant(first.id);
     if (subscription?.planId) {
-      const plan = await Plan.findById(subscription.planId);
+      plan = await Plan.findById(subscription.planId);
       planSlug = plan?.slug || null;
       planName = plan?.name || null;
       planId = websitePlanIdFromSlug(planSlug);
@@ -162,17 +167,24 @@ export async function sessionPayload(user) {
     const profile = await EstablishmentProfile.findByTenantId(first.id);
     twilioDocsSubmittedAt = profile?.documentsSubmittedAt || null;
   }
-  const hasActiveSubscription = hasActiveRestaurantAccess(subscription, first);
+  const hasActiveSubscription = hasActiveRestaurantAccess(subscription, first, plan, user);
   const accessUnlocked = isRestaurantDashboardReady(
     subscription,
     twilioDocsSubmittedAt,
     first,
-    user
+    user,
+    plan
   );
   const publicUser = User.publicUser(user);
+  const platformRole = resolvePlatformRole(user);
+  const dossierNoticePendingAt =
+    user.dossierNoticePendingAt || (await User.findDossierNoticePendingAt(user.id));
   return {
     user: {
       ...publicUser,
+      dossierNoticePending: Boolean(dossierNoticePendingAt),
+      platformRole,
+      platformCapabilities: capabilitiesForRole(platformRole),
       avatar: publicUser.avatarUrl,
       planId,
       planSlug,

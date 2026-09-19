@@ -3,8 +3,13 @@ import * as EstablishmentProfile from "../../models/pg/EstablishmentProfile.js";
 import * as Amenity from "../../models/pg/Amenity.js";
 import { withTenant } from "../../database/transaction.js";
 import { profileToWebsite } from "../mappers/websiteProfile.js";
-import { transition } from "../../models/pg/ProvisioningJob.js";
+import { documentsToWebsite } from "../mappers/websiteDocuments.js";
 import { persistOnboardingDocument } from "./OnboardingDocumentStorage.js";
+import {
+  assertViewableWebsiteDocumentKind,
+  websiteDocumentFilename,
+} from "./websiteProfileTenant.js";
+import { createProvisioningJob, transition } from "../../models/pg/ProvisioningJob.js";
 import {
   purgeDocumentFile,
   readEncryptedDocument,
@@ -12,7 +17,14 @@ import {
 import {
   isTwilioBundleLocked,
 } from "./TwilioProvisioningService.js";
-import { refreshDashboardUnlock } from "./RestaurantDashboardAccess.js";
+import {
+  canBypassDossierLock,
+  refreshDashboardUnlock,
+} from "./RestaurantDashboardAccess.js";
+import * as User from "../../models/pg/User.js";
+import * as Plan from "../../models/pg/Plan.js";
+import * as Subscription from "../../models/pg/Subscription.js";
+import { invalidateVoiceContextCache } from "../../utils/voiceContextCache.js";
 import * as TwilioBundle from "../../models/pg/TwilioBundle.js";
 import { parseCompanyRegistration } from "../../utils/companyRegistration.js";
 
@@ -115,18 +127,46 @@ async function persistWebsiteAmenities(tenantId, body) {
 }
 
 export async function loadWebsiteProfile(tenantId) {
+  const documents = documentsToWebsite(
+    await OnboardingDocument.listActiveByTenant(tenantId)
+  );
   const profile = await EstablishmentProfile.findByTenantId(tenantId);
-  if (!profile) return {};
+  if (!profile) return { documents };
   const amenities = await withTenant(tenantId, (client) =>
     Amenity.listForTenant(client, tenantId)
   );
-  return profileToWebsite(profile, amenities);
+  return {
+    ...profileToWebsite(profile, amenities),
+    documents,
+  };
+}
+
+export async function loadWebsiteDocumentFile(tenantId, kind) {
+  assertViewableWebsiteDocumentKind(kind);
+  if (!tenantId) {
+    const err = new Error("Établissement introuvable");
+    err.statusCode = 404;
+    throw err;
+  }
+  const record = await OnboardingDocument.findActiveByTenantAndKind(tenantId, kind);
+  if (!record) {
+    const err = new Error("Pièce introuvable");
+    err.statusCode = 404;
+    throw err;
+  }
+  const buffer = await loadDocumentPlain(record);
+  return {
+    buffer,
+    mimeType: record.mimeType || "application/octet-stream",
+    filename: websiteDocumentFilename(kind, record.mimeType),
+  };
 }
 
 export async function saveProfile(tenantId, body) {
   const profile = validateEstablishmentBody(body);
   await EstablishmentProfile.upsert(tenantId, profile);
   await persistWebsiteAmenities(tenantId, body);
+  invalidateVoiceContextCache(tenantId);
   return EstablishmentProfile.findByTenantId(tenantId);
 }
 
@@ -149,9 +189,14 @@ export async function submitOnboardingDossier({ tenantId, userId, body, files })
   const existing = await EstablishmentProfile.findByTenantId(tenantId);
   const existingBundle = await TwilioBundle.findByTenantId(tenantId);
   if (existing?.documentsSubmittedAt && isTwilioBundleLocked(existingBundle)) {
-    const err = new Error("Le dossier a déjà été transmis");
-    err.statusCode = 409;
-    throw err;
+    const actor = await User.findById(userId);
+    const subscription = await Subscription.findCurrentByTenant(tenantId);
+    const plan = subscription?.planId ? await Plan.findById(subscription.planId) : null;
+    if (!canBypassDossierLock(actor, plan)) {
+      const err = new Error("Le dossier a déjà été transmis");
+      err.statusCode = 409;
+      throw err;
+    }
   }
 
   const required = ["idDocumentRecto", "idDocumentVerso", "addressDocument"];
@@ -180,7 +225,19 @@ export async function submitOnboardingDossier({ tenantId, userId, body, files })
   }
 
   await EstablishmentProfile.markDocumentsSubmitted(tenantId);
-  await transition(tenantId, ["pending", "awaiting_documents", "bundle_submitted"], "bundle_submitted");
+  await createProvisioningJob(null, tenantId);
+  await transition(
+    tenantId,
+    [
+      "pending",
+      "awaiting_documents",
+      "bundle_submitted",
+      "completed",
+      "bundle_approved",
+      "bundle_rejected",
+    ],
+    "bundle_submitted"
+  );
   await refreshDashboardUnlock(userId, tenantId);
 
   return { message: "Dossier enregistré. Le numéro Twilio se relie depuis le back-office." };

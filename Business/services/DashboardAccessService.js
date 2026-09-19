@@ -5,6 +5,7 @@ import * as Membership from "../../models/pg/Membership.js";
 import * as Subscription from "../../models/pg/Subscription.js";
 import * as EstablishmentProfile from "../../models/pg/EstablishmentProfile.js";
 import * as Tenant from "../../models/pg/Tenant.js";
+import * as Plan from "../../models/pg/Plan.js";
 import { isPaidSubscription, isRestaurantDashboardReady } from "./RestaurantDashboardAccess.js";
 import { sendDashboardAccessEmail } from "../../utils/emailService.js";
 import { siteUrl } from "../../utils/publicUrls.js";
@@ -60,7 +61,8 @@ export async function redeemDashboardAccessToken(rawToken) {
       EstablishmentProfile.findByTenantId(row.tenantId),
       Tenant.findById(row.tenantId),
     ]);
-    if (!isRestaurantDashboardReady(subscription, profile?.documentsSubmittedAt, tenant, user)) {
+    const plan = subscription?.planId ? await Plan.findById(subscription.planId) : null;
+    if (!isRestaurantDashboardReady(subscription, profile?.documentsSubmittedAt, tenant, user, plan)) {
       if (!isPaidSubscription(subscription)) {
         throw new AccountAuthError("Aucun abonnement réglé", 403);
       }

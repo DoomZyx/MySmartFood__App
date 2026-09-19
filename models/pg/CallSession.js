@@ -101,6 +101,58 @@ export async function completeAllActive(client, tenantId, clientRef) {
   );
 }
 
+export async function listRecent(client, tenantId, { limit = 50 } = {}) {
+  const cap = Math.min(Math.max(Number(limit) || 50, 1), 200);
+  const result = await client.query(
+    `SELECT id, tenant_id AS "tenantId", call_sid AS "callSid",
+            from_number AS "fromNumber", to_number AS "toNumber",
+            status, started_at AS "startedAt", ended_at AS "endedAt",
+            duration_seconds AS "durationSeconds", client_ref AS "clientRef"
+       FROM call_sessions
+      WHERE tenant_id = $1
+      ORDER BY started_at DESC
+      LIMIT $2`,
+    [tenantId, cap]
+  );
+  return mapRows(result.rows);
+}
+
+const DURATION_SECONDS = `
+  GREATEST(
+    COALESCE(
+      duration_seconds,
+      CASE
+        WHEN ended_at IS NULL THEN EXTRACT(EPOCH FROM (NOW() - started_at))
+        ELSE EXTRACT(EPOCH FROM (ended_at - started_at))
+      END
+    ),
+    0
+  )
+`;
+
+export async function summarizeUsage(client, tenantId, { since } = {}) {
+  const params = [tenantId];
+  let sinceClause = "";
+  if (since) {
+    params.push(since);
+    sinceClause = ` AND started_at >= $${params.length}`;
+  }
+  const result = await client.query(
+    `SELECT COALESCE(SUM(${DURATION_SECONDS}), 0)::bigint AS seconds,
+            COALESCE(SUM(CEIL(${DURATION_SECONDS} / 60.0)), 0)::int AS "billedMinutes",
+            COUNT(*)::int AS "callCount"
+       FROM call_sessions
+      WHERE tenant_id = $1${sinceClause}`,
+    params
+  );
+  const row = result.rows[0] || {};
+  return {
+    seconds: Number(row.seconds) || 0,
+    billedMinutes: Number(row.billedMinutes) || 0,
+    callCount: Number(row.callCount) || 0,
+  };
+}
+
 export async function listForClient(client, tenantId, clientRef, { limit = 50, offset = 0 } = {}) {
   const result = await client.query(
     `SELECT id, tenant_id AS "tenantId", call_sid AS "callSid",

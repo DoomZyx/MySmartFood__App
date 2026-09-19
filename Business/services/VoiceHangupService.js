@@ -77,9 +77,10 @@ export class VoiceHangupService {
     }
 
     // Creation = tool live. Jamais ProcessCallService.process ici.
-    notificationService.notifyCallEnded(extractedData, {
+    await notificationService.notifyCallEnded(extractedData, {
       orderId: liveCreate?.id || null,
       appointmentType: liveCreate?.type || null,
+      tenantId,
     });
 
     return {

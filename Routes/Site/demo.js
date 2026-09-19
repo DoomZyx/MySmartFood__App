@@ -1,6 +1,9 @@
 import * as Demo from "../../models/pg/Demo.js";
 import { sendDemoEmails } from "../../utils/emailService.js";
-import { requirePlatformAdmin } from "../../middleware/sessionAuth.js";
+import {
+  requirePlatformAdmin,
+  requirePlatformCapability,
+} from "../../middleware/sessionAuth.js";
 
 const TEAM_SIZES = ["1-5", "6-10", "11-25", "26-50", "50+"];
 const TIMES = ["Matin (9h-12h)", "Après-midi (14h-17h)", "Soirée (18h-20h)", "Flexible"];
@@ -51,7 +54,7 @@ export default async function demoRoutes(fastify) {
 
   fastify.patch("/:id/status", {
     onRequest: fastify.csrfProtection ? [fastify.csrfProtection] : [],
-    preHandler: [requirePlatformAdmin],
+    preHandler: [requirePlatformCapability("lead.write")],
     config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
     schema: {
       params: {

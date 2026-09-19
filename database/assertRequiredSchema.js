@@ -1,6 +1,6 @@
 import { getPool } from "./pool.js";
 
-const REQUIRED_RELATIONS = ["twilio_bundles", "llm_usage_events"];
+const REQUIRED_RELATIONS = ["twilio_bundles", "llm_usage_events", "dashboard_notifications"];
 
 /**
  * Échoue au démarrage si le schéma attendu n'est pas présent.

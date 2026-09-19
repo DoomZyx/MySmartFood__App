@@ -8,17 +8,16 @@ describe("Route /incoming-call", () => {
     await fastify.register(callRoutes);
   });
 
-  it("devrait retourner du XML TwiML", async () => {
+  it("refuse un appel sans signature Twilio", async () => {
     const response = await fastify.inject({
       method: "POST",
       url: "/incoming-call",
       headers: { host: "localhost" }
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.headers["content-type"]).toContain("xml");
-    expect(response.body).toContain("<Response>");
-    expect(response.body).toContain("<Play>");
-    expect(response.body).toContain("<Stream");
+    expect(response.statusCode).toBe(403);
+    expect(response.json().error).toBe("Signature Twilio invalide");
+    expect(response.body).not.toContain("<Stream");
   });
+
 });

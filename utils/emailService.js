@@ -69,6 +69,47 @@ export async function sendDashboardAccessEmail({ email, name, accessUrl }) {
   });
 }
 
+export function buildDossierAcceptedEmail({
+  name,
+  businessName,
+  siteUrl,
+  dashboardUrl,
+} = {}) {
+  const greeting = name ? `Bonjour ${name}` : "Bonjour";
+  const place = businessName || "votre établissement";
+  const text = `${greeting},\n\nBonne nouvelle : le dossier de ${place} a été accepté.\n\nVotre espace : ${siteUrl}\nTableau de bord : ${dashboardUrl}\n`;
+  return {
+    subject: "Votre dossier restaurant a été validé",
+    text,
+    html: `<p>${escapeHtml(greeting)},</p><p>Bonne nouvelle : le dossier de ${escapeHtml(place)} a été accepté.</p><p><a href="${escapeHtml(siteUrl)}">Ouvrir Mon espace</a></p><p><a href="${escapeHtml(dashboardUrl)}">Ouvrir le tableau de bord</a></p>`,
+  };
+}
+
+export async function sendDossierAcceptedEmail({
+  email,
+  name,
+  businessName,
+  siteUrl,
+  dashboardUrl,
+}) {
+  if (!email) return false;
+  const mailer = transporter();
+  const from = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+  const mail = buildDossierAcceptedEmail({ name, businessName, siteUrl, dashboardUrl });
+  if (!mailer) {
+    logger.warn({ to: email }, "SMTP absent : e-mail d'acceptation de dossier non envoyé");
+    return false;
+  }
+  await mailer.sendMail({
+    from,
+    to: email,
+    subject: mail.subject,
+    text: mail.text,
+    html: mail.html,
+  });
+  return true;
+}
+
 export async function sendContactEmails(contact) {
   const mailer = transporter();
   if (!mailer) {

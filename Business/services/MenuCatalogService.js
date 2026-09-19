@@ -20,6 +20,7 @@ import {
 } from "../mappers/menuOptions.js";
 import { assertProduct, BusinessRuleError } from "../validators/businessRules.js";
 import * as TwilioBundle from "../../models/pg/TwilioBundle.js";
+import { invalidateVoiceContextCache } from "../../utils/voiceContextCache.js";
 
 export async function loadLegacyPricing(tenantId) {
   return withTenant(tenantId, (client) => loadLegacyPricingWithClient(client, tenantId));
@@ -52,12 +53,26 @@ export async function loadLegacyPricingWithClient(client, tenantId) {
 }
 
 export async function ensureDefaultsWithClient(client, tenantId) {
-  await TenantSettings.upsert(client, tenantId, {});
+  const settings = await TenantSettings.find(client, tenantId);
+  if (!settings) {
+    await TenantSettings.upsert(client, tenantId, {});
+  }
   await Amenity.ensureDefaults(client, tenantId);
   const existing = await Menu.listCategories(client, tenantId);
   if (existing.length === 0) {
     const defaults = getDefaultPricingConfig();
-    await persistPricing(client, tenantId, defaults);
+    const profile = await EstablishmentProfile.findByTenantId(tenantId, client);
+    const restaurantInfo = profile
+      ? {
+          ...defaults.restaurantInfo,
+          ...restaurantInfoFromProfile(
+            profile,
+            defaults.restaurantInfo.horairesOuverture,
+            []
+          ),
+        }
+      : defaults.restaurantInfo;
+    await persistPricing(client, tenantId, { ...defaults, restaurantInfo });
   } else {
     const hours = await OpeningHours.list(client, tenantId);
     if (hours.length === 0) {
@@ -139,6 +154,7 @@ export async function persistPricing(client, tenantId, payload) {
   if (payload.menuPricing) {
     await replaceMenu(client, tenantId, payload.menuPricing);
   }
+  invalidateVoiceContextCache(tenantId);
 }
 
 async function replaceMenu(client, tenantId, menuPricing) {
@@ -250,7 +266,7 @@ export async function persistProductRelations(client, tenantId, itemId, product)
 
 export async function addProduct(tenantId, categorySlug, product) {
   assertProduct(product, categorySlug);
-  return withTenant(tenantId, async (client) => {
+  const result = await withTenant(tenantId, async (client) => {
     let category = await Menu.findCategoryBySlug(client, tenantId, categorySlug);
     if (!category) {
       category = await Menu.upsertCategory(client, tenantId, {
@@ -261,10 +277,12 @@ export async function addProduct(tenantId, categorySlug, product) {
     const item = await persistProduct(client, tenantId, category, product);
     return itemToResponse(item, product);
   });
+  invalidateVoiceContextCache(tenantId);
+  return result;
 }
 
 export async function updateProduct(tenantId, categorySlug, productId, productData) {
-  return withTenant(tenantId, async (client) => {
+  const result = await withTenant(tenantId, async (client) => {
     const existing = await Menu.findItemById(client, tenantId, productId);
     if (!existing) throw new BusinessRuleError("Produit non trouvé", 404);
     const merged = {
@@ -299,13 +317,16 @@ export async function updateProduct(tenantId, categorySlug, productId, productDa
     }
     return itemToResponse(updated, merged);
   });
+  invalidateVoiceContextCache(tenantId);
+  return result;
 }
 
 export async function deleteProduct(tenantId, productId) {
-  return withTenant(tenantId, async (client) => {
+  await withTenant(tenantId, async (client) => {
     const deleted = await Menu.deleteItem(client, tenantId, productId);
     if (!deleted) throw new BusinessRuleError("Produit non trouvé", 404);
   });
+  invalidateVoiceContextCache(tenantId);
 }
 
 function itemToResponse(item, product) {

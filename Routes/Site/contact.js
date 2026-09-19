@@ -1,6 +1,9 @@
 import * as Contact from "../../models/pg/Contact.js";
 import { sendContactEmails } from "../../utils/emailService.js";
-import { requirePlatformAdmin } from "../../middleware/sessionAuth.js";
+import {
+  requirePlatformAdmin,
+  requirePlatformCapability,
+} from "../../middleware/sessionAuth.js";
 
 export default async function contactRoutes(fastify) {
   fastify.post("/", {
@@ -53,7 +56,7 @@ export default async function contactRoutes(fastify) {
 
   fastify.patch("/:id/status", {
     onRequest: fastify.csrfProtection ? [fastify.csrfProtection] : [],
-    preHandler: [requirePlatformAdmin],
+    preHandler: [requirePlatformCapability("lead.write")],
     config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
     schema: {
       params: {

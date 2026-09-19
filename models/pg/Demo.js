@@ -41,7 +41,9 @@ export async function findWithFilter({ status, statuses, limit = 50 } = {}) {
   const cap = Math.min(Math.max(Number(limit) || 50, 1), 100);
   const result = await getPool().query(
     `SELECT id, name, email, company, team_size AS "teamSize", needs,
-            preferred_time AS "preferredTime", duration, status, created_at AS "createdAt"
+            preferred_time AS "preferredTime", duration, status,
+            internal_note AS "internalNote", converted_tenant_id AS "convertedTenantId",
+            created_at AS "createdAt"
        FROM demos ${where}
       ORDER BY created_at DESC
       LIMIT $${params.length + 1}`,
@@ -55,7 +57,9 @@ export async function updateStatus(id, status) {
   const result = await getPool().query(
     `UPDATE demos SET status = $2 WHERE id = $1
      RETURNING id, name, email, company, team_size AS "teamSize", needs,
-               preferred_time AS "preferredTime", duration, status, created_at AS "createdAt"`,
+               preferred_time AS "preferredTime", duration, status,
+               internal_note AS "internalNote", converted_tenant_id AS "convertedTenantId",
+               created_at AS "createdAt"`,
     [id, status]
   );
   return result.rows[0] ? toCamelCase(result.rows[0]) : null;
@@ -64,9 +68,38 @@ export async function updateStatus(id, status) {
 export async function findById(id) {
   const result = await getPool().query(
     `SELECT id, name, email, company, team_size AS "teamSize", needs,
-            preferred_time AS "preferredTime", duration, status, created_at AS "createdAt"
+            preferred_time AS "preferredTime", duration, status,
+            internal_note AS "internalNote", converted_tenant_id AS "convertedTenantId",
+            created_at AS "createdAt"
        FROM demos WHERE id = $1`,
     [id]
+  );
+  return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+}
+
+export async function updateNote(id, note) {
+  const result = await getPool().query(
+    `UPDATE demos SET internal_note = $2 WHERE id = $1
+     RETURNING id, name, email, company, team_size AS "teamSize", needs,
+               preferred_time AS "preferredTime", duration, status,
+               internal_note AS "internalNote", converted_tenant_id AS "convertedTenantId",
+               created_at AS "createdAt"`,
+    [id, note == null ? null : String(note).trim().slice(0, 2000) || null]
+  );
+  return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+}
+
+export async function markConverted(id, tenantId) {
+  const result = await getPool().query(
+    `UPDATE demos
+        SET status = 'traite',
+            converted_tenant_id = $2
+      WHERE id = $1
+     RETURNING id, name, email, company, team_size AS "teamSize", needs,
+               preferred_time AS "preferredTime", duration, status,
+               internal_note AS "internalNote", converted_tenant_id AS "convertedTenantId",
+               created_at AS "createdAt"`,
+    [id, tenantId]
   );
   return result.rows[0] ? toCamelCase(result.rows[0]) : null;
 }

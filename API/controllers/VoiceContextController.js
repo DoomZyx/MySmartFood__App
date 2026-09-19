@@ -25,4 +25,29 @@ export class VoiceContextController {
       });
     }
   }
+
+  /** Snapshot live (ouvert + produits) pour gate mid-call avant create_appointment. */
+  static async getSnapshot(request, reply) {
+    try {
+      const snapshot = await PricingService.getVoiceSnapshot(
+        request.params.instanceId,
+      );
+      return reply.send({
+        success: true,
+        data: snapshot,
+      });
+    } catch (error) {
+      logger.error(
+        {
+          err: error?.message,
+          instanceId: request.params.instanceId,
+        },
+        "Erreur snapshot Voice Service",
+      );
+      return reply.code(404).send({
+        success: false,
+        error: "Configuration vocale introuvable",
+      });
+    }
+  }
 }

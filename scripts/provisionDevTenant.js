@@ -6,6 +6,7 @@ import * as Tenant from "../models/pg/Tenant.js";
 import * as Membership from "../models/pg/Membership.js";
 import * as Plan from "../models/pg/Plan.js";
 import * as Subscription from "../models/pg/Subscription.js";
+import { ensureDefaults } from "../Business/services/MenuCatalogService.js";
 
 /**
  * Compte admin local + tenant réel + abonnement développeur (sans plafond pratique).
@@ -89,6 +90,8 @@ async function main() {
       currentPeriodEnd: periodEnd,
     });
   }
+
+  await ensureDefaults(tenant.id);
 
   await closeDatabase();
 

@@ -29,7 +29,9 @@ export async function findWithFilter({ status, statuses, limit, offset }) {
     where = "WHERE status = $1";
   }
   const result = await getPool().query(
-    `SELECT id, name, email, company, subject, message, status, created_at AS "createdAt"
+    `SELECT id, name, email, company, subject, message, status,
+            internal_note AS "internalNote", converted_tenant_id AS "convertedTenantId",
+            created_at AS "createdAt"
        FROM contacts ${where}
       ORDER BY created_at DESC
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
@@ -51,7 +53,9 @@ export async function countFilter(status) {
 
 export async function findById(id) {
   const result = await getPool().query(
-    `SELECT id, name, email, company, subject, message, status, created_at AS "createdAt"
+    `SELECT id, name, email, company, subject, message, status,
+            internal_note AS "internalNote", converted_tenant_id AS "convertedTenantId",
+            created_at AS "createdAt"
        FROM contacts WHERE id = $1`,
     [id]
   );
@@ -62,8 +66,34 @@ export async function updateStatus(id, status) {
   if (!isValidStatus(status)) return null;
   const result = await getPool().query(
     `UPDATE contacts SET status = $2 WHERE id = $1
-     RETURNING id, name, email, company, subject, message, status`,
+     RETURNING id, name, email, company, subject, message, status,
+               internal_note AS "internalNote", converted_tenant_id AS "convertedTenantId"`,
     [id, status]
+  );
+  return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+}
+
+export async function updateNote(id, note) {
+  const result = await getPool().query(
+    `UPDATE contacts SET internal_note = $2 WHERE id = $1
+     RETURNING id, name, email, company, subject, message, status,
+               internal_note AS "internalNote", converted_tenant_id AS "convertedTenantId",
+               created_at AS "createdAt"`,
+    [id, note == null ? null : String(note).trim().slice(0, 2000) || null]
+  );
+  return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+}
+
+export async function markConverted(id, tenantId) {
+  const result = await getPool().query(
+    `UPDATE contacts
+        SET status = 'traite',
+            converted_tenant_id = $2
+      WHERE id = $1
+     RETURNING id, name, email, company, subject, message, status,
+               internal_note AS "internalNote", converted_tenant_id AS "convertedTenantId",
+               created_at AS "createdAt"`,
+    [id, tenantId]
   );
   return result.rows[0] ? toCamelCase(result.rows[0]) : null;
 }
