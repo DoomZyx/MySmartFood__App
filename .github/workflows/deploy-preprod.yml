@@ -1,0 +1,43 @@
+name: Deploy preprod frontend
+
+on:
+  push:
+    branches:
+      - frontend-preprod
+
+concurrency:
+  group: preprod-frontend
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run build:preprod
+
+      - name: Sync dist to VPS preprod
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PREPROD_SSH_KEY }}
+        run: |
+          set -eu
+          test -n "${SSH_PRIVATE_KEY:-}"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 54.37.231.243 >> ~/.ssh/known_hosts
+          rsync -az --delete \
+            dist/ \
+            deploy@54.37.231.243:/home/deploy/apps/mysmartfood-preprod/frontend/dist/
