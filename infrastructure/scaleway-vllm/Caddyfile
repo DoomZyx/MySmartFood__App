@@ -1,4 +1,9 @@
-http://{$VOICE_DOMAIN} {
+{
+	email {$ACME_EMAIL}
+}
+
+# Reverse proxy Voice Server (+ vLLM protégé). Uniquement sur le FQDN TLS.
+(voice_proxy) {
 	@llm path /v1/models /v1/models/* /v1/chat/completions
 	handle @llm {
 		@unauthorized not header Authorization "Bearer {$VLLM_API_KEY}"
@@ -9,4 +14,18 @@ http://{$VOICE_DOMAIN} {
 	handle {
 		reverse_proxy voice:8090
 	}
+}
+
+# FQDN public : TLS Let's Encrypt (80 ACME + 443).
+{$VOICE_DOMAIN} {
+	import voice_proxy
+}
+
+# IP HTTP : health only (pas de media-stream / vLLM en clair).
+http://{$VOICE_IP} {
+	@health path /health /live /ready
+	handle @health {
+		reverse_proxy voice:8090
+	}
+	respond 404
 }

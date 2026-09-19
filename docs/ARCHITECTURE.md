@@ -36,7 +36,7 @@ Mafrashop / WM Performance tournent **sur le même VPS**, dans d’autres dossie
        |                    |
        |                    |  si Voice Server pret
        |                    v
-       |              GPU Caddy :80
+       |              GPU Caddy :443 (voice.mysmartfood.fr)
        |              Voice Server :8090
        |                 |
        |                 +-- vLLM (interne Docker, port 8000 ferme)
@@ -52,6 +52,7 @@ DNS (zone OVH `mysmartfood.fr`) :
 - **A** `www` → `54.37.231.243` (vitrine / dashboard)
 - **A** `@` (`mysmartfood.fr`) → `54.37.231.243`
 - **A** `dashboard` → `54.37.231.243` (même SPA)
+- **A** `voice` → `51.159.149.110` (GPU Voice Server, TLS Caddy)
 
 | Piece | Emplacement | Isolation |
 |---|---|---|
@@ -74,27 +75,42 @@ Variables importantes (fichier `backend/.env` **sur le VPS**, jamais dans git) :
 - `DATABASE_URL` : rôle applicatif (sans BYPASSRLS)
 - `DATABASE_URL_OWNER` : migrations / bootstrap uniquement
 - `VOICE_PROVIDER=python`
-- `VOICE_HEALTH_URL=http://51.159.149.110/health`
-- `VOICE_WS_URL=ws://51.159.149.110/media-stream`
+- `VOICE_HEALTH_URL=https://voice.mysmartfood.fr/health`
+- `VOICE_WS_URL=wss://voice.mysmartfood.fr/media-stream`
 - `X_API_KEY` : même valeur que `NODE_API_KEY` sur le GPU
 
 TLS Postgres : la base est en local. Le pool Fastify n’exige pas de certificat pour `127.0.0.1` (`backend/database/pool.js`). Un Postgres distant en production doit garder TLS.
 
-## GPU voix (`51.159.149.110`)
+## GPU voix (`voice.mysmartfood.fr` → `51.159.149.110`)
 
 Compose : `/home/ubuntu/mysmartfood/infrastructure/scaleway-vllm/`
+
+DNS (zone OVH `mysmartfood.fr`) :
+
+- **A** `voice` → `51.159.149.110`
 
 | Service | Réseau | Public |
 |---|---|---|
 | `vllm` | Docker interne, `:8000` | non |
 | `voice` | interne, `:8090` | non |
-| `caddy` | `:80` | oui (Voice Server uniquement) |
+| `caddy` | `:80` + `:443` | oui (Voice Server ; TLS Let’s Encrypt sur le FQDN) |
 
 vLLM sert le modèle sous l’alias `restaurant-assistant`. Le Voice Server fait VAD, STT, LLM, TTS. Il charge le menu / les résas via Fastify (`GET /api/voice/context/...`, outils).
 
 `NODE_BASE_URL=https://app.api.mysmartfood.fr`
 
-Santé : `http://51.159.149.110/health` — `engines.ready` et `components.node` doivent être sains.
+Santé : `https://voice.mysmartfood.fr/health` — `engines.ready` et `components.node` doivent être sains.  
+Fallback IP (HTTP only) : `http://51.159.149.110/health`.
+
+**Un seul GPU** pour prod, préprod et local. Les tools voix suivent `NODE_BASE_URL` (défaut `https://app.api.mysmartfood.fr`). Pour tester les tools contre la préprod :
+
+```bash
+# sur le GPU
+cd /home/ubuntu/mysmartfood/infrastructure/scaleway-vllm
+./set-node-target.sh preprod
+# … tests …
+./set-node-target.sh prod
+```
 
 ## Flux d’un appel
 
@@ -128,6 +144,7 @@ La préprod MySmartFood est un **second arbre** sur le même VPS. Ne pas la conf
 | Postgres | `mysmartfood` | `mysmartfood_preprod` |
 | SPA | `https://www.mysmartfood.fr`, `https://dashboard.mysmartfood.fr` | `https://preprod.mysmartfood.fr` |
 | API | `https://app.api.mysmartfood.fr` | `https://preprod.api.mysmartfood.fr` |
+| Voix | `https://voice.mysmartfood.fr` | Même FQDN (GPU partagé, option A) |
 | Dist SPA | `.../mysmartfood/frontend/dist` | `.../mysmartfood-preprod/frontend/dist` |
 | Build SPA | `pnpm build` (`VITE_*` → app.api) | `pnpm run build:preprod` |
 
@@ -168,7 +185,7 @@ sudo certbot --nginx -d preprod.api.mysmartfood.fr
 | Front | `frontend/` Vite `:5174` | nginx + `dist/` |
 | API | `pnpm dev` `:8080` | PM2 `:8080` derrière nginx |
 | Postgres | Docker `pg-test` `:5433` | instance hôte, base `mysmartfood` |
-| Voix | ngrok + GPU, ou OpenAI | GPU + `VOICE_PROVIDER=python` |
+| Voix | GPU `voice.mysmartfood.fr` (+ tunnel ngrok pour Twilio) | Même GPU `voice.mysmartfood.fr` |
 
 ## Commandes utiles
 
@@ -185,6 +202,8 @@ GPU :
 ```bash
 cd /home/ubuntu/mysmartfood/infrastructure/scaleway-vllm
 docker compose ps
+curl -sS https://voice.mysmartfood.fr/health
+# fallback IP :
 curl -sS -H "Host: 51.159.149.110" http://127.0.0.1/health
 ```
 

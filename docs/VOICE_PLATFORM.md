@@ -30,9 +30,20 @@ Le Voice Server lit `instanceId` dans l'événement `start` de Twilio, puis appe
 `GET /api/voice/context/:instanceId`. Cet endpoint :
 
 - exige `x-api-key` ;
-- charge les informations et le menu par `PricingService` ;
+- charge les informations et le menu par `PricingService.getPricingForGPT` ;
+- applique un **cache mémoire TTL 45s** invalidé sur écriture menu / horaires / amenities ;
+- **compacte** le menu (nom + prix, descriptions courtes) pour le prompt ;
 - ne renvoie aucun secret ;
 - est la source unique du contexte restaurant pour le prompt Python.
+
+Si le contexte est indisponible (timeout / menu vide), le Voice Server bascule en
+**fail soft** : message d'excuse, outils désactivés, pas de prise de commande inventée.
+
+Avant `create_appointment`, le dispatcher rappelle
+`GET /api/voice/context/:instanceId/snapshot` pour revalider ouverture et produits
+disponibles (anti-stale mid-call).
+
+Les plages MIDI/SOIR du prompt sont dérivées de `horairesOuverture`, plus hardcodées.
 
 Le numéro Twilio est normalisé et imposé aux arguments de
 `create_appointment`. Le LLM ne peut pas le remplacer. Si Twilio fournit un

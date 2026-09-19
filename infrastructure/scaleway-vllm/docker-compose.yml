@@ -94,10 +94,14 @@ services:
       voice:
         condition: service_healthy
     environment:
-      VOICE_DOMAIN: ${VOICE_DOMAIN}
+      VOICE_DOMAIN: ${VOICE_DOMAIN:?VOICE_DOMAIN must be set}
+      VOICE_IP: ${VOICE_IP:?VOICE_IP must be set}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL must be set}
       VLLM_API_KEY: ${VLLM_API_KEY}
     ports:
       - "80:80"
+      - "443:443"
+      - "443:443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

@@ -11,8 +11,8 @@ Il ne crée aucune ressource Scaleway automatiquement.
 - Une instance GPU Scaleway (L40S ou équivalent) héberge le realtime maison.
 - vLLM sert `Qwen/Qwen2.5-3B-Instruct` sous l'alias `restaurant-assistant`.
 - Le Voice Server exécute VAD, STT (Whisper CUDA), LLM (vLLM) et TTS.
-- Caddy est le seul service exposé. Avec un FQDN il termine TLS sur `443`.
-  Avec une IP publique seulement, le proxy reste en HTTP sur `80`.
+- Caddy est le seul service exposé : FQDN `voice.mysmartfood.fr` en TLS sur
+  `443`, et l’IP publique en HTTP sur `80` (fallback / ACME).
 - Le cache Hugging Face doit être placé sur un Block Storage persistant.
 - OpenAI reste le fallback tant que la capacité et la qualité ne sont pas validées.
 
@@ -39,7 +39,8 @@ doit être décidé à partir du benchmark, pas uniquement de la mémoire GPU.
 
 Copier `.env.example` vers `.env`, puis renseigner :
 
-- `VOICE_DOMAIN` : FQDN public du Voice Server ;
+- `VOICE_DOMAIN` : FQDN public (`voice.mysmartfood.fr`) ;
+- `VOICE_IP` : IP publique Scaleway (accès HTTP de secours) ;
 - `ACME_EMAIL` ;
 - `VLLM_API_KEY` : secret dédié vLLM, interne au Docker ;
 - `NODE_BASE_URL` : URL publique Fastify (ngrok en local) ;
@@ -110,6 +111,16 @@ Ce benchmark ne couvre pas Twilio, Whisper ou Kokoro. Le test d'appel complet
 reste obligatoire avant une bascule de trafic.
 
 ## Exploitation et rotation
+
+- Une seule instance GPU pour prod, préprod et local (`voice.mysmartfood.fr`).
+- `NODE_BASE_URL` décide quelle API reçoit les tools voix. Défaut : prod.
+  Bascule manuelle sur le GPU :
+
+```bash
+cd /home/ubuntu/mysmartfood/infrastructure/scaleway-vllm
+./set-node-target.sh preprod   # tools → preprod.api
+./set-node-target.sh prod      # tools → app.api (remettre ensuite)
+```
 
 - Ne jamais committer `.env`, les clés IAM ou le token Hugging Face.
 - Faire tourner `VLLM_API_KEY` côté vLLM puis côté Voice Server.
